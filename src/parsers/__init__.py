@@ -1,2 +1,0 @@
-# Platform and netlist parsers
-
