@@ -2,8 +2,8 @@
     Merges fabric_cells.yaml db and fabric.yaml db into a dataframe.
 """
 import pandas as pd
-from fabric_parser import parse_fabric_file
-from fabric_cells_parser import parse_fabric_cells_file
+from src.parsers.fabric_parser import parse_fabric_file, Fabric
+from src.parsers.fabric_cells_parser import parse_fabric_cells_file
 
 def get_fabric_db(file_path_fabric: str, file_path_fabric_cells: str) -> pd.DataFrame:
     _, df_fabric = parse_fabric_file(file_path_fabric)

@@ -99,7 +99,7 @@ class NetlistParser:
             # Add record to logical_db
             logical_db_records.append({
                 'cell_type': cell_type,
-                'cell_instance': cell_name
+                'cell_name': cell_name
             })
         
         # Create DataFrame from records
@@ -170,7 +170,7 @@ class NetlistParser:
             DataFrame with cell instances of the specified type
         """
         if self.logical_db_df is None:
-            return pd.DataFrame(columns=['cell_type', 'cell_instance'])
+            return pd.DataFrame(columns=['cell_type', 'cell_name'])
         return self.logical_db_df[self.logical_db_df['cell_type'] == cell_type]
     
     def get_cell_connections(self, cell_name: str) -> pd.DataFrame:
@@ -238,7 +238,7 @@ class NetlistParser:
         for cell_type in self.logical_db_df['cell_type'].unique():
             result[cell_type] = self.logical_db_df[
                 self.logical_db_df['cell_type'] == cell_type
-            ]['cell_instance'].tolist()
+            ]['cell_name'].tolist()
         
         return result
 
@@ -283,19 +283,19 @@ if __name__ == "__main__":
     print(f"Unique nets: {netlist_graph['net_bit'].nunique()}")
     print(f"Unique cells: {netlist_graph['cell_name'].nunique()}")
     
-    # # Show sample of DataFrames
-    # print("\n" + "=" * 60)
-    # print("Sample logical_db:")
-    # print(logical_db)
+    # Show sample of DataFrames
+    print("\n" + "=" * 60)
+    print("Sample logical_db:")
+    print(logical_db)
     
     print("\n" + "=" * 60)
     print("Sample netlist_graph:")
     print(netlist_graph)
     
-    # Save netlist_graph to CSV in the parser folder
-    parser_dir = Path(__file__).parent
-    json_file = Path(json_path)
-    csv_filename = parser_dir / f"{json_file.stem}_netlist_graph.csv"
-    netlist_graph.to_csv(csv_filename, index=False)
-    print(f"\n✓ Netlist graph saved to: {csv_filename}")
+    # # Save netlist_graph to CSV in the parser folder
+    # parser_dir = Path(__file__).parent
+    # json_file = Path(json_path)
+    # csv_filename = parser_dir / f"{json_file.stem}_netlist_graph.csv"
+    # netlist_graph.to_csv(csv_filename, index=False)
+    # print(f"\n✓ Netlist graph saved to: {csv_filename}")
 
