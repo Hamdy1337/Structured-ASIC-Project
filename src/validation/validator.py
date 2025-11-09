@@ -10,7 +10,7 @@ sys.path.insert(0, str(project_root))
 
 # Import the parsers
 from src.parsers.fabric_db import get_fabric_db
-from src.parsers.netlist_parser import parse_netlist
+from src.parsers.netlist_parser import get_logical_db
 
 
 @dataclass
@@ -148,12 +148,12 @@ if __name__ == "__main__":
     # Load logical database (required cells)
     if len(sys.argv) > 1:
         design_name = sys.argv[1]
-        logical_db, netlist_graph = parse_netlist(
+        logical_db = get_logical_db(
             str(project_root / "inputs" / "designs" / f"{design_name}_mapped.json")
         )
     else:
         # Default to aes_128 for testing
-        logical_db, netlist_graph = parse_netlist(
+        logical_db = get_logical_db(
             str(project_root / "inputs" / "designs" / "aes_128_mapped.json")
         )
     
