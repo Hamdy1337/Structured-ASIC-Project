@@ -3,11 +3,12 @@ Parser JSON netlist files.
 
 This module parses [design_name]_mapped.json files to create:
 1. logical_db: A pandas DataFrame of logical cells grouped by type
-2. netlist_graph: A pandas DataFrame representation of the netlist connectivity
+2. ports_df: A pandas DataFrame of module ports with netnames
+3. netlist_graph_db: A pandas DataFrame of cell connections with netnames
 """
 
 import json
-from typing import Dict, List, Set, Tuple, Any
+from typing import Dict, Tuple
 import pandas as pd
 
 
@@ -24,19 +25,20 @@ class NetlistParser:
         self.json_file_path = json_file_path
         self.data = None
         self.top_module = None
-        self.logical_db_df = None  # DataFrame: [cell_type, cell_instance] - returned as logical_db
-        self.cell_connections_df = None  # DataFrame: [cell_name, cell_type, port, net_bit, direction] - returned as netlist_graph
-        self.net_to_cells_df = None  # DataFrame: [net_bit, cell_name] - optional, accessible via parser instance
+        self.logical_db_df = None  # DataFrame: [cell_type, cell_name]
+        self.ports_df = None  # DataFrame: [port_name, direction, net_bit, net_name]
+        self.netlist_graph_db = None  # DataFrame: [cell_name, cell_type, port, net_bit, net_name, direction]
+        self.net_bit_to_name = {}  # Mapping: net_bit -> net_name
         
-    def parse(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    def parse(self) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
-        Parse the JSON file and create logical_db and netlist_graph.
+        Parse the JSON file and create logical_db, ports_df, and netlist_graph_db.
         
         Returns:
-            Tuple of (logical_db, netlist_graph) where:
-            - logical_db: DataFrame with columns [cell_type, cell_instance]
-            - netlist_graph: DataFrame with columns [cell_name, cell_type, port, net_bit, direction]
-                            representing all cell-port-net connections
+            Tuple of (logical_db, ports_df, netlist_graph_db) where:
+            - logical_db: DataFrame with columns [cell_type, cell_name]
+            - ports_df: DataFrame with columns [port_name, direction, net_bit, net_name]
+            - netlist_graph_db: DataFrame with columns [cell_name, cell_type, port, net_bit, net_name, direction]
         """
         # Load JSON file
         with open(self.json_file_path, 'r') as f:
@@ -51,15 +53,19 @@ class NetlistParser:
         # Get the top module data
         top_module_data = self.data['modules'][self.top_module]
         
+        # Parse netnames to create net_bit -> net_name mapping
+        self._parse_netnames(top_module_data)
+        
         # Parse cells to create logical_db DataFrame
         self._parse_cells(top_module_data)
         
-        # Build netlist graph DataFrames
-        self._build_netlist_graph(top_module_data)
+        # Parse ports to create ports_df DataFrame
+        self._parse_ports(top_module_data)
         
-        # logical_db: DataFrame with [cell_type, cell_instance]
-        # netlist_graph: DataFrame with [cell_name, cell_type, port, net_bit, direction]
-        return self.logical_db_df, self.cell_connections_df
+        # Build netlist_graph_db DataFrame with netnames
+        self._build_netlist_graph_db(top_module_data)
+        
+        return self.logical_db_df, self.ports_df, self.netlist_graph_db
     
     def _find_top_module(self) -> str:
         """Find the top module in the JSON file."""
@@ -80,6 +86,29 @@ class NetlistParser:
             return modules[0]
         
         return None
+    
+    def _parse_netnames(self, module_data: Dict):
+        """
+        Parse netnames from the module to create net_bit -> net_name mapping.
+        
+        Args:
+            module_data: The data dictionary for the top module
+        """
+        netnames = module_data.get('netnames', {})
+        self.net_bit_to_name = {}
+        
+        for net_name, net_data in netnames.items():
+            bits = net_data.get('bits', [])
+            if not isinstance(bits, list):
+                bits = [bits]
+            
+            # Map each net bit to the net name
+            for net_bit in bits:
+                if net_bit is not None:
+                    # If multiple netnames map to same bit, keep the first one
+                    # (or you could concatenate them, but typically one netname per bit)
+                    if net_bit not in self.net_bit_to_name:
+                        self.net_bit_to_name[net_bit] = net_name
     
     def _parse_cells(self, module_data: Dict):
         """
@@ -105,22 +134,47 @@ class NetlistParser:
         # Create DataFrame from records
         self.logical_db_df = pd.DataFrame(logical_db_records)
     
-    def _build_netlist_graph(self, module_data: Dict):
+    def _parse_ports(self, module_data: Dict):
         """
-        Build graph representation of the netlist using pandas DataFrames.
+        Parse ports from the module and create ports_df DataFrame with netnames.
         
-        This creates:
-        1. cell_connections_df: DataFrame with all cell-port-net connections
-        2. net_to_cells_df: DataFrame mapping nets to connected cells
+        Args:
+            module_data: The data dictionary for the top module
+        """
+        ports = module_data.get('ports', {})
+        port_records = []
+        
+        for port_name, port_data in ports.items():
+            direction = port_data.get('direction', 'unknown')
+            bits = port_data.get('bits', [])
+            if not isinstance(bits, list):
+                bits = [bits]
+            
+            # For each bit of the port
+            for net_bit in bits:
+                if net_bit is not None:
+                    # Get net name from mapping, or use None if not found
+                    net_name = self.net_bit_to_name.get(net_bit, None)
+                    
+                    port_records.append({
+                        'port_name': port_name,
+                        'direction': direction,
+                        'net_bit': net_bit,
+                        'net_name': net_name
+                    })
+        
+        # Create DataFrame from records
+        self.ports_df = pd.DataFrame(port_records)
+    
+    def _build_netlist_graph_db(self, module_data: Dict):
+        """
+        Build netlist_graph_db DataFrame with netnames for all cell-port-net connections.
         
         Args:
             module_data: The data dictionary for the top module
         """
         cells = module_data.get('cells', {})
-        
-        # Build records for cell_connections_df
-        cell_connections_records = []
-        net_to_cells_records = []
+        cell_records = []
         
         for cell_name, cell_data in cells.items():
             cell_type = cell_data.get('type', 'UNKNOWN')
@@ -137,113 +191,22 @@ class NetlistParser:
                 # For each net bit connected to this port
                 for net_bit in net_bits:
                     if net_bit is not None:  # Skip None/null connections
-                        # Add to cell_connections DataFrame
-                        cell_connections_records.append({
+                        # Get net name from mapping, or use None if not found
+                        net_name = self.net_bit_to_name.get(net_bit, None)
+                        
+                        cell_records.append({
                             'cell_name': cell_name,
                             'cell_type': cell_type,
                             'port': port_name,
                             'net_bit': net_bit,
+                            'net_name': net_name,
                             'direction': direction
                         })
-                        
-                        # Add to net_to_cells DataFrame
-                        net_to_cells_records.append({
-                            'net_bit': net_bit,
-                            'cell_name': cell_name
-                        })
         
-        # Create DataFrames
-        self.cell_connections_df = pd.DataFrame(cell_connections_records)
-        self.net_to_cells_df = pd.DataFrame(net_to_cells_records)
-        
-        # Remove duplicates from net_to_cells_df (same net can connect same cell multiple times via different ports)
-        self.net_to_cells_df = self.net_to_cells_df.drop_duplicates()
+        # Create DataFrame from records
+        self.netlist_graph_db = pd.DataFrame(cell_records)
     
-    def get_cells_by_type(self, cell_type: str) -> pd.DataFrame:
-        """
-        Get all cell instances of a specific type.
-        
-        Args:
-            cell_type: The cell type to query
-            
-        Returns:
-            DataFrame with cell instances of the specified type
-        """
-        if self.logical_db_df is None:
-            return pd.DataFrame(columns=['cell_type', 'cell_name'])
-        return self.logical_db_df[self.logical_db_df['cell_type'] == cell_type]
-    
-    def get_cell_connections(self, cell_name: str) -> pd.DataFrame:
-        """
-        Get connections for a specific cell.
-        
-        Args:
-            cell_name: Name of the cell instance
-            
-        Returns:
-            DataFrame with columns [cell_name, cell_type, port, net_bit, direction]
-        """
-        if self.cell_connections_df is None:
-            return pd.DataFrame(columns=['cell_name', 'cell_type', 'port', 'net_bit', 'direction'])
-        return self.cell_connections_df[self.cell_connections_df['cell_name'] == cell_name]
-    
-    def get_net_connections(self, net_bit: int) -> pd.DataFrame:
-        """
-        Get all cells connected to a specific net.
-        
-        Args:
-            net_bit: The net bit number
-            
-        Returns:
-            DataFrame with cell names connected to this net
-        """
-        if self.net_to_cells_df is None:
-            return pd.DataFrame(columns=['net_bit', 'cell_name'])
-        return self.net_to_cells_df[self.net_to_cells_df['net_bit'] == net_bit]
-    
-    def get_all_cell_types(self) -> List[str]:
-        """Get a list of all cell types in the design."""
-        if self.logical_db_df is None:
-            return []
-        return self.logical_db_df['cell_type'].unique().tolist()
-    
-    def get_total_cell_count(self) -> int:
-        """Get the total number of cells in the design."""
-        if self.logical_db_df is None:
-            return 0
-        return len(self.logical_db_df)
-    
-    def get_cell_type_counts(self) -> pd.Series:
-        """
-        Get count of each cell type.
-        
-        Returns:
-            Series with cell_type as index and counts as values
-        """
-        if self.logical_db_df is None:
-            return pd.Series(dtype=int)
-        return self.logical_db_df['cell_type'].value_counts()
-    
-    def get_logical_db_dict(self) -> Dict[str, List[str]]:
-        """
-        Get logical_db as a dictionary for backward compatibility.
-        
-        Returns:
-            Dictionary mapping cell_type to list of cell_instance names
-        """
-        if self.logical_db_df is None:
-            return {}
-        
-        result = {}
-        for cell_type in self.logical_db_df['cell_type'].unique():
-            result[cell_type] = self.logical_db_df[
-                self.logical_db_df['cell_type'] == cell_type
-            ]['cell_name'].tolist()
-        
-        return result
-
-
-def parse_netlist(json_file_path: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def parse_netlist(json_file_path: str) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Convenience function to parse a netlist JSON file.
     
@@ -251,12 +214,45 @@ def parse_netlist(json_file_path: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
         json_file_path: Path to the [design_name]_mapped.json file
         
     Returns:
-        Tuple of (logical_db, netlist_graph) where:
-        - logical_db: DataFrame with columns [cell_type, cell_instance]
-        - netlist_graph: DataFrame with columns [cell_name, cell_type, port, net_bit, direction]
+        Tuple of (logical_db, ports_df, netlist_graph_db) where:
+        - logical_db: DataFrame with columns [cell_type, cell_name]
+        - ports_df: DataFrame with columns [port_name, direction, net_bit, net_name]
+        - netlist_graph_db: DataFrame with columns [cell_name, cell_type, port, net_bit, net_name, direction]
     """
     parser = NetlistParser(json_file_path)
     return parser.parse()
+
+
+def get_logical_db(json_file_path: str) -> pd.DataFrame:
+    """
+    Convenience function to get only the logical_db DataFrame.
+    
+    Args:
+        json_file_path: Path to the [design_name]_mapped.json file
+        
+    Returns:
+        logical_db: DataFrame with columns [cell_type, cell_name]
+    """
+    parser = NetlistParser(json_file_path)
+    logical_db, _, _ = parser.parse()
+    return logical_db
+
+
+def get_netlist_graph(json_file_path: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Convenience function to get only the ports_df and netlist_graph_db DataFrames.
+    
+    Args:
+        json_file_path: Path to the [design_name]_mapped.json file
+        
+    Returns:
+        Tuple of (ports_df, netlist_graph_db) where:
+        - ports_df: DataFrame with columns [port_name, direction, net_bit, net_name]
+        - netlist_graph_db: DataFrame with columns [cell_name, cell_type, port, net_bit, net_name, direction]
+    """
+    parser = NetlistParser(json_file_path)
+    _, ports_df, netlist_graph_db = parser.parse()
+    return ports_df, netlist_graph_db
 
 
 if __name__ == "__main__":
@@ -269,7 +265,7 @@ if __name__ == "__main__":
         sys.exit(1)
     
     json_path = sys.argv[1]
-    logical_db, netlist_graph = parse_netlist(json_path)
+    logical_db, ports_df, netlist_graph_db = parse_netlist(json_path)
     
     print("Logical Database (cells grouped by type):")
     print("=" * 60)
@@ -278,24 +274,26 @@ if __name__ == "__main__":
         print(f"{cell_type}: {count} instances")
     
     print(f"\nTotal cells: {len(logical_db)}")
-    print(f"\nNetlist Graph (connectivity):")
-    print(f"Total connections: {len(netlist_graph)}")
-    print(f"Unique nets: {netlist_graph['net_bit'].nunique()}")
-    print(f"Unique cells: {netlist_graph['cell_name'].nunique()}")
+    print(f"\nPorts DataFrame:")
+    print(f"Total ports: {len(ports_df)}")
+    print(f"Unique port names: {ports_df['port_name'].nunique()}")
+    print(f"Unique nets: {ports_df['net_bit'].nunique()}")
+    
+    print(f"\nNetlist Graph Database (connectivity):")
+    print(f"Total connections: {len(netlist_graph_db)}")
+    print(f"Unique nets: {netlist_graph_db['net_bit'].nunique()}")
+    print(f"Unique cells: {netlist_graph_db['cell_name'].nunique()}")
     
     # Show sample of DataFrames
     print("\n" + "=" * 60)
     print("Sample logical_db:")
-    print(logical_db)
+    print(logical_db.head())
     
     print("\n" + "=" * 60)
-    print("Sample netlist_graph:")
-    print(netlist_graph)
+    print("Sample ports_df:")
+    print(ports_df.head())
     
-    # # Save netlist_graph to CSV in the parser folder
-    # parser_dir = Path(__file__).parent
-    # json_file = Path(json_path)
-    # csv_filename = parser_dir / f"{json_file.stem}_netlist_graph.csv"
-    # netlist_graph.to_csv(csv_filename, index=False)
-    # print(f"\n✓ Netlist graph saved to: {csv_filename}")
+    print("\n" + "=" * 60)
+    print("Sample netlist_graph_db:")
+    print(netlist_graph_db.head())
 
