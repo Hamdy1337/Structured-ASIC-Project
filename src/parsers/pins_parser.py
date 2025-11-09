@@ -1,14 +1,17 @@
-from typing import Dict, Any, List
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Dict, Any, List, Tuple, cast
 
 import yaml
 import numpy as np
 import pandas as pd
 
-TOL = 1e-4  # micron tolerance for edge/track checks
+TOL: float = 1e-4  # micron tolerance for edge/track checks
 SIDES = ("south", "north", "west", "east")
 
 
-def _require(d: Dict[str, Any], key: str, ctx: str = ""):
+def _require(d: Dict[str, Any], key: str, ctx: str = "") -> Any:
     if key not in d:
         raise ValueError(f"Missing key '{key}' {('in ' + ctx) if ctx else ''}")
     return d[key]
@@ -28,66 +31,114 @@ def _track_index(start_um: float, step_um: float, coord_um: float) -> int:
     )
 
 
-def load_and_validate(path: str) -> Dict[str, Any]:
+@dataclass(frozen=True)
+class Units:
+    coords: str
+    dbu_per_micron: int
+
+
+@dataclass(frozen=True)
+class Track:
+    start_um: float
+    step_um: float
+
+
+@dataclass(frozen=True)
+class Die:
+    width_um: float
+    height_um: float
+    core_margin_um: float
+    corner_keepout_um: float
+
+
+@dataclass(frozen=True)
+class Core:
+    width_um: float
+    height_um: float
+
+
+@dataclass(frozen=True)
+class PinsMeta:
+    version: str
+    units: Units
+    layers: Dict[str, str]
+    tracks: Dict[str, Track]
+    die: Die
+    core: Core
+    groups_per_side: int
+    pin_spacing_tracks: int
+    pin_spacing_um: Dict[str, float]
+
+
+def load_and_validate(path: str) -> Tuple[pd.DataFrame, PinsMeta]:
     with open(path, "r") as f:
         root = yaml.safe_load(f)
 
     if not isinstance(root, dict) or "pin_placement" not in root:
         raise ValueError("Top-level key 'pin_placement' not found")
-
-    pp = root["pin_placement"]
+    if not isinstance(root["pin_placement"], dict):
+        raise ValueError("'pin_placement' must be a mapping")
+    pp: Dict[str, Any] = cast(Dict[str, Any], root["pin_placement"])
 
     # Units
-    units = _require(pp, "units", "pin_placement")
+    units = cast(Dict[str, Any], _require(pp, "units", "pin_placement"))
     coords = _require(units, "coords", "units")
     if coords != "microns":
         raise ValueError("units.coords must be 'microns'")
     dbu_per_micron = _require(units, "dbu_per_micron", "units")
     if not isinstance(dbu_per_micron, int) or dbu_per_micron <= 0:
         raise ValueError("units.dbu_per_micron must be positive integer")
+    units_meta = Units(coords=str(coords), dbu_per_micron=int(dbu_per_micron))
 
     # Layers by side
-    layers = _require(pp, "layers", "pin_placement")
+    layers = cast(Dict[str, Any], _require(pp, "layers", "pin_placement"))
     for s in SIDES:
         if s not in layers:
             raise ValueError(f"layers.{s} missing")
-    layers_by_side = {s: str(layers[s]) for s in SIDES}
+    layers_by_side: Dict[str, str] = {s: str(layers[s]) for s in SIDES}
 
     # Tracks per metal
-    tracks_raw = _require(pp, "tracks", "pin_placement")
-    if not isinstance(tracks_raw, dict) or not tracks_raw:
+    tracks_raw = cast(Dict[str, Any], _require(pp, "tracks", "pin_placement"))
+    if not tracks_raw:
         raise ValueError("tracks must be a non-empty mapping")
-    tracks = {}
+    tracks: Dict[str, Track] = {}
     for metal, tinfo in tracks_raw.items():
-        tracks[metal] = {
-            "start_um": float(_require(tinfo, "start_um", f"tracks.{metal}")),
-            "step_um": float(_require(tinfo, "step_um", f"tracks.{metal}")),
-        }
+        if not isinstance(tinfo, dict):
+            raise ValueError(f"tracks.{metal} must be a mapping")
+        tracks[str(metal)] = Track(
+            start_um=float(_require(tinfo, "start_um", f"tracks.{metal}")),
+            step_um=float(_require(tinfo, "step_um", f"tracks.{metal}")),
+        )
 
     # Die & core
-    die = _require(pp, "die", "pin_placement")
-    die_w = float(_require(die, "width_um", "die"))
-    die_h = float(_require(die, "height_um", "die"))
-    core = _require(pp, "core", "pin_placement")
-    core_w = float(_require(core, "width_um", "core"))
-    core_h = float(_require(core, "height_um", "core"))
+    die = cast(Dict[str, Any], _require(pp, "die", "pin_placement"))
+    die_w: float = float(_require(die, "width_um", "die"))
+    die_h: float = float(_require(die, "height_um", "die"))
+    core_margin_um: float = float(die.get("core_margin_um", 0.0))
+    corner_keepout_um: float = float(die.get("corner_keepout_um", 0.0))
+    die_meta = Die(die_w, die_h, core_margin_um, corner_keepout_um)
+    core = cast(Dict[str, Any], _require(pp, "core", "pin_placement"))
+    core_w: float = float(_require(core, "width_um", "core"))
+    core_h: float = float(_require(core, "height_um", "core"))
+    core_meta = Core(core_w, core_h)
     if any(v <= 0 for v in (die_w, die_h, core_w, core_h)):
         raise ValueError("die/core width/height must be positive")
 
     # Spacing map exists for the metals used
-    pin_spacing_um = _require(pp, "pin_spacing_um", "pin_placement")
+    pin_spacing_um = cast(Dict[str, Any], _require(pp, "pin_spacing_um", "pin_placement"))
     for m in set(layers_by_side.values()):
         if m not in pin_spacing_um:
             raise ValueError(f"pin_spacing_um missing entry for metal '{m}'")
+    pin_spacing_um_typed: Dict[str, float] = {str(k): float(v) for k, v in pin_spacing_um.items()}
 
     # Pins
-    pins = _require(pp, "pins", "pin_placement")
-    if not isinstance(pins, list):
-        raise ValueError("pins must be a list")
+    pins = cast(List[Any], _require(pp, "pins", "pin_placement"))
 
     # Validate pins & compute derived data
     out_rows: List[Dict[str, Any]] = []
     for i, p in enumerate(pins):
+        if not isinstance(p, dict):
+            raise ValueError(f"pin[{i}] must be a mapping")
         for req in ("name", "side", "layer", "x_um", "y_um", "direction", "status"):
             if req not in p:
                 raise ValueError(f"pin[{i}] missing '{req}'")
@@ -129,7 +180,7 @@ def load_and_validate(path: str) -> Dict[str, Any]:
 
         # Track alignment along running axis (layer’s grid)
         grid = tracks[layer]
-        track_idx = _track_index(grid["start_um"], grid["step_um"], run_coord)
+        track_idx = _track_index(grid.start_um, grid.step_um, run_coord)
 
         # DBU
         x_dbu = int(np.rint(x_um * dbu_per_micron))
@@ -150,8 +201,31 @@ def load_and_validate(path: str) -> Dict[str, Any]:
             )
         )
 
-    return pd.DataFrame(out_rows, columns=[
-    "name", "side", "layer",
-    "x_um", "y_um", "x_dbu", "y_dbu",
-    "track_idx", "direction", "status",
-])
+    df = pd.DataFrame(out_rows, columns=[
+        "name", "side", "layer",
+        "x_um", "y_um", "x_dbu", "y_dbu",
+        "track_idx", "direction", "status",
+    ])
+
+    version = str(_require(pp, "version", "pin_placement")) if "version" in pp else ""
+    groups_per_side = int(_require(pp, "groups_per_side", "pin_placement")) if "groups_per_side" in pp else 0
+    pin_spacing_tracks = int(_require(pp, "pin_spacing_tracks", "pin_placement")) if "pin_spacing_tracks" in pp else 0
+
+    meta = PinsMeta(
+        version=version,
+        units=units_meta,
+        layers=layers_by_side,
+        tracks=tracks,
+        die=die_meta,
+        core=core_meta,
+        groups_per_side=groups_per_side,
+        pin_spacing_tracks=pin_spacing_tracks,
+        pin_spacing_um=pin_spacing_um_typed,
+    )
+
+    return df, meta
+
+if __name__ == "__main__":
+    pins_file_path = "inputs/Platform/pins.yaml"
+    pins_df, pins_meta = load_and_validate(pins_file_path)
+    print(pins_df.head())
