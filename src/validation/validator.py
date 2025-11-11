@@ -140,7 +140,7 @@ def print_validation_report(result: ValidationResult):
 
 if __name__ == "__main__":
     # Load fabric database (available slots)
-    fabric_db = get_fabric_db(
+    _, fabric_db = get_fabric_db(
         str(project_root / "inputs" / "Platform" / "fabric.yaml"),
         str(project_root / "inputs" / "Platform" / "fabric_cells.yaml")
     )
