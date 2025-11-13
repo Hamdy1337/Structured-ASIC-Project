@@ -1,2 +1,4 @@
-# Python dependencies
-
+plotly
+pandas
+numpy
+pyyaml
