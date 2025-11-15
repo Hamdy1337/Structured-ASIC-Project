@@ -36,6 +36,9 @@ def place_cells_greedy_sim_anneal(
     sa_moves_per_temp: int = 200,
     sa_cooling_rate: float = 0.90,
     sa_T_initial: Optional[float] = None,
+    sa_p_refine: float = 0.7,
+    sa_p_explore: float = 0.3,
+    sa_refine_max_distance: float = 100.0,
     sa_seed: int = 42,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Place cells on the fabric using a greedy simulated annealing algorithm.
@@ -56,6 +59,9 @@ def place_cells_greedy_sim_anneal(
         sa_moves_per_temp: Number of moves attempted at each temperature step (default: 200)
         sa_cooling_rate: Cooling rate alpha (default: 0.90). Higher = slower cooling
         sa_T_initial: Initial temperature. If None, auto-calculates from initial HPWL (default: None)
+        sa_p_refine: Probability of refine move (default: 0.7). Should sum with sa_p_explore to 1.0
+        sa_p_explore: Probability of explore move (default: 0.3). Should sum with sa_p_refine to 1.0
+        sa_refine_max_distance: Maximum Manhattan distance for refine moves in microns (default: 100.0)
         sa_seed: Random seed for reproducibility (default: 42)
 
     Returns:
@@ -115,6 +121,9 @@ def place_cells_greedy_sim_anneal(
                 iters=sa_moves_per_temp,
                 alpha=sa_cooling_rate,
                 T_initial=sa_T_initial,
+                p_refine=sa_p_refine,
+                p_explore=sa_p_explore,
+                refine_max_distance=sa_refine_max_distance,
                 seed=sa_seed
             )
 
