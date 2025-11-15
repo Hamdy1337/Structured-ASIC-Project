@@ -4,6 +4,7 @@
     python -m src.parsers.fabric_db
 """
 import pandas as pd
+from typing import Tuple
 from src.parsers.fabric_parser import parse_fabric_file, Fabric
 from src.parsers.fabric_cells_parser import parse_fabric_cells_file
 from typing import Tuple
