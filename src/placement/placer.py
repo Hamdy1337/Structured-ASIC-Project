@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Tuple, Any, Optional
 from pathlib import Path
+import time
 import pandas as pd
 
 from src.parsers.fabric_db import get_fabric_db, Fabric
@@ -39,6 +40,7 @@ def place_cells_greedy_sim_anneal(
     sa_p_refine: float = 0.7,
     sa_p_explore: float = 0.3,
     sa_refine_max_distance: float = 100.0,
+    sa_W_initial: float = 0.5,
     sa_seed: int = 42,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Place cells on the fabric using a greedy simulated annealing algorithm.
@@ -62,6 +64,7 @@ def place_cells_greedy_sim_anneal(
         sa_p_refine: Probability of refine move (default: 0.7). Should sum with sa_p_explore to 1.0
         sa_p_explore: Probability of explore move (default: 0.3). Should sum with sa_p_refine to 1.0
         sa_refine_max_distance: Maximum Manhattan distance for refine moves in microns (default: 100.0)
+        sa_W_initial: Initial exploration window size as fraction of die size (default: 0.5 = 50%)
         sa_seed: Random seed for reproducibility (default: 42)
 
     Returns:
@@ -84,6 +87,10 @@ def place_cells_greedy_sim_anneal(
     # Placement state
     assignments: Dict[str, int] = {}  # cell_name -> site_id
     pos_cells: Dict[str, Tuple[float, float]] = {}
+
+    # Timing: Track annealing time
+    total_annealing_time = 0.0
+    greedy_start_time = time.time()
 
     # Level-by-level greedy + SA in small batches
     batch_size = 24
@@ -116,6 +123,11 @@ def place_cells_greedy_sim_anneal(
         # Small-batch SA within the level
         for i in range(0, len(level_cells), batch_size):
             batch: List[str] = [c for c in level_cells[i:i + batch_size] if c in assignments]
+            if len(batch) < 2:
+                continue  # Skip batches with < 2 cells
+            
+            # Time this annealing batch
+            anneal_start = time.time()
             anneal_batch(
                 batch, pos_cells, assignments, sites_df, cell_to_nets, fixed_pts,
                 iters=sa_moves_per_temp,
@@ -124,8 +136,23 @@ def place_cells_greedy_sim_anneal(
                 p_refine=sa_p_refine,
                 p_explore=sa_p_explore,
                 refine_max_distance=sa_refine_max_distance,
+                W_initial=sa_W_initial,
                 seed=sa_seed
             )
+            anneal_end = time.time()
+            total_annealing_time += (anneal_end - anneal_start)
+    
+    greedy_end_time = time.time()
+    total_placement_time = greedy_end_time - greedy_start_time
+    greedy_time = total_placement_time - total_annealing_time
+    
+    # Debug: Print timing information
+    print(f"\n[DEBUG] Placement Timing:")
+    print(f"  Greedy placement time: {greedy_time:.3f} seconds")
+    print(f"  Total annealing time: {total_annealing_time:.3f} seconds")
+    print(f"  Total placement time: {total_placement_time:.3f} seconds")
+    if total_placement_time > 0:
+        print(f"  Annealing percentage: {(total_annealing_time / total_placement_time * 100):.1f}%")
 
     # Build placement DataFrame
     placement_rows: List[Dict[str, Any]] = []
@@ -158,6 +185,8 @@ if __name__ == "__main__":
     print(f"Running placement for design: {design_name}")
     print(f"Total cells to place: {len(netlist_graph['cell_name'].unique())}")
     
+    # Time overall placement
+    placement_start = time.time()
     assigned_pins, placement_df = place_cells_greedy_sim_anneal(
         fabric=fabric,
         fabric_df=fabric_df,
@@ -165,6 +194,12 @@ if __name__ == "__main__":
         ports_df=ports_df,
         netlist_graph=netlist_graph,
     )
+    placement_end = time.time()
+    total_time_with_overhead = placement_end - placement_start
+    
+    # Debug: Print overall timing (includes DataFrame building overhead)
+    print(f"\n[DEBUG] Overall Timing (including overhead):")
+    print(f"  Total time: {total_time_with_overhead:.3f} seconds")
 
     # Create build directory if it doesn't exist
     build_dir = Path("build") / design_name

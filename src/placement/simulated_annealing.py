@@ -51,19 +51,47 @@ def _pick_refine_move(
 
 def _pick_explore_move(
     batch_cells: List[str],
-    rng: random.Random
+    pos_cells: Dict[str, Tuple[float, float]],
+    window_size: float,
+    rng: random.Random,
+    max_attempts: int = 50
 ) -> Optional[Tuple[str, str]]:
-    """Pick two cells for an explore move (any two cells, typically far apart).
+    """Pick two cells for an explore move within the current window.
     
-    For now, this is just a random selection. Later, we'll add window constraints.
+    Returns two cells within window_size Manhattan distance of each other.
+    The window shrinks over time (tied to temperature cooling via alpha).
+    
+    Args:
+        batch_cells: List of cell names to choose from
+        pos_cells: Dict mapping cell_name -> (x, y) position
+        window_size: Current window size in microns (shrinks over time)
+        rng: Random number generator
+        max_attempts: Maximum attempts to find a valid pair
+    
+    Returns:
+        Tuple of (cell_a, cell_b) or None if not found
     """
     if len(batch_cells) < 2:
         return None
     
-    a, b = rng.sample(batch_cells, 2)
-    if a == b:
-        return None
-    return (a, b)
+    for _ in range(max_attempts):
+        a, b = rng.sample(batch_cells, 2)
+        if a == b:
+            continue
+        
+        pos_a = pos_cells.get(a)
+        pos_b = pos_cells.get(b)
+        if pos_a is None or pos_b is None:
+            continue
+        
+        dist = _manhattan_distance(pos_a, pos_b)
+        if dist <= window_size:
+            return (a, b)
+    
+    # Fallback: return any two cells if no pair found within window
+    if len(batch_cells) >= 2:
+        return tuple(rng.sample(batch_cells, 2))  # type: ignore
+    return None
 
 
 def anneal_batch(
@@ -79,6 +107,7 @@ def anneal_batch(
     p_refine: float = 0.7,
     p_explore: float = 0.3,
     refine_max_distance: float = 100.0,
+    W_initial: float = 0.5,
     seed: int = 42
 ) -> None:
     """Perform simulated annealing on a batch of cells with hybrid move set.
@@ -91,11 +120,12 @@ def anneal_batch(
         cell_nets: Dict mapping cell_name -> set of net_bits
         fixed_pts: Dict mapping net_bit -> list of (x, y) fixed pin positions
         iters: Number of SA iterations (moves per temperature step)
-        alpha: Cooling rate (temperature multiplier per cooling step)
+        alpha: Cooling rate (temperature multiplier per cooling step). Also used for window cooling.
         T_initial: Initial temperature. If None, auto-calculates from initial HPWL
         p_refine: Probability of choosing a refine move (default: 0.7)
         p_explore: Probability of choosing an explore move (default: 0.3)
         refine_max_distance: Maximum Manhattan distance for refine moves in microns (default: 100.0)
+        W_initial: Initial exploration window size as fraction of die size (default: 0.5 = 50%)
         seed: Random seed for reproducibility
     """
     if len(batch_cells) < 2:
@@ -118,15 +148,23 @@ def anneal_batch(
     temp = T0
     rng = random.Random(seed)
     
+    # Exploration window schedule (tied to alpha)
+    # Calculate die size from sites_df
+    die_width = float(sites_df["x_um"].max())
+    die_height = float(sites_df["y_um"].max())
+    die_size = max(die_width, die_height)  # Use larger dimension
+    
+    # Initial window size (as fraction of die size)
+    W0 = W_initial * die_size
+    window_size = W0
+    
     # Normalize probabilities
     total_prob = p_refine + p_explore
     if total_prob > 0:
         p_refine_norm = p_refine / total_prob
-        p_explore_norm = p_explore / total_prob
     else:
         # Default to refine if both are 0
         p_refine_norm = 1.0
-        p_explore_norm = 0.0
     
     for i in range(iters):
         # Choose move type based on probability
@@ -135,8 +173,8 @@ def anneal_batch(
             # Refine move: swap nearby cells
             move_result = _pick_refine_move(batch_cells, pos_cells, refine_max_distance, rng)
         else:
-            # Explore move: swap any cells (typically far apart)
-            move_result = _pick_explore_move(batch_cells, rng)
+            # Explore move: swap cells within current window (shrinks over time)
+            move_result = _pick_explore_move(batch_cells, pos_cells, window_size, rng)
         
         if move_result is None:
             continue
@@ -175,7 +213,8 @@ def anneal_batch(
             pos_cells[a] = (float(sites_df.at[sa, "x_um"]), float(sites_df.at[sa, "y_um"]))  # type: ignore[arg-type]
             pos_cells[b] = (float(sites_df.at[sb, "x_um"]), float(sites_df.at[sb, "y_um"]))  # type: ignore[arg-type]
         
-        # Cool down every 20 iterations
+        # Cool down every 20 iterations (temperature and window shrink together)
         if (i + 1) % 20 == 0:
             temp *= alpha
+            window_size *= alpha  # Window shrinks at same rate as temperature (beta = alpha)
 
