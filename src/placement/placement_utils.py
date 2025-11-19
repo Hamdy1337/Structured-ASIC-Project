@@ -4,7 +4,9 @@ placement_utils.py: Utility functions for cell placement.
 from __future__ import annotations
 
 from typing import Dict, List, Tuple, Set, Optional
+import math
 import pandas as pd
+from scipy.spatial import cKDTree
 
 
 def build_sites(df: pd.DataFrame) -> pd.DataFrame:
@@ -30,7 +32,11 @@ def fixed_points_from_pins(pins: pd.DataFrame) -> Dict[int, List[Tuple[float, fl
         return fp
     pins_valid = pins.dropna(subset=["net_bit", "x_um", "y_um"]).copy()  # type: ignore[call-arg]
     for row in pins_valid.itertuples(index=False):
-        nb = int(getattr(row, "net_bit"))
+        try:
+            nb = int(getattr(row, "net_bit"))
+        except (ValueError, TypeError):
+            # Skip non-integer values like 'x', 'z', etc.
+            continue
         x = float(getattr(row, "x_um"))
         y = float(getattr(row, "y_um"))
         fp.setdefault(nb, []).append((x, y))
@@ -41,7 +47,13 @@ def nets_by_cell(gdf: pd.DataFrame) -> Dict[str, Set[int]]:
     """Build mapping of cell_name -> set of all net_bits connected to that cell."""
     res: Dict[str, Set[int]] = {}
     for cell, grp in gdf.groupby("cell_name"):  # type: ignore[arg-type]
-        nets = set(grp["net_bit"].dropna().astype(int).tolist())
+        nets: Set[int] = set()
+        for nb in grp["net_bit"].dropna():
+            try:
+                nets.add(int(nb))
+            except (ValueError, TypeError):
+                # Skip non-integer values like 'x', 'z', etc.
+                continue
         res[str(cell)] = nets
     return res
 
@@ -56,8 +68,25 @@ def in_out_nets_by_cell(gdf: pd.DataFrame) -> Tuple[Dict[str, Set[int]], Dict[st
     outs: Dict[str, Set[int]] = {}
     dir_l = gdf["direction"].astype(str).str.lower()
     for cell, grp in gdf.groupby("cell_name"):  # type: ignore[arg-type]
-        in_n = set(grp.loc[dir_l.loc[grp.index] == "input", "net_bit"].dropna().astype(int).tolist())
-        out_n = set(grp.loc[dir_l.loc[grp.index] == "output", "net_bit"].dropna().astype(int).tolist())
+        # Filter out non-integer net_bit values (like 'x', 'z', etc.)
+        in_n: Set[int] = set()
+        in_nets = grp.loc[dir_l.loc[grp.index] == "input", "net_bit"].dropna()
+        for nb in in_nets:
+            try:
+                in_n.add(int(nb))
+            except (ValueError, TypeError):
+                # Skip non-integer values like 'x', 'z', etc.
+                continue
+        
+        out_n: Set[int] = set()
+        out_nets = grp.loc[dir_l.loc[grp.index] == "output", "net_bit"].dropna()
+        for nb in out_nets:
+            try:
+                out_n.add(int(nb))
+            except (ValueError, TypeError):
+                # Skip non-integer values like 'x', 'z', etc.
+                continue
+        
         ins[str(cell)] = in_n
         outs[str(cell)] = out_n
     return ins, outs
@@ -75,16 +104,65 @@ def median(vals: List[float]) -> float:
     return 0.5 * (s[mid - 1] + s[mid])
 
 
-def nearest_site(target: Tuple[float, float], free_site_ids: List[int], sites_df: pd.DataFrame) -> Optional[int]:
+def nearest_site(target: Tuple[float, float], free_site_ids: List[int], sites_df: pd.DataFrame, site_tree: Optional[cKDTree] = None, index_to_site_id: Optional[Dict[int, int]] = None) -> Optional[int]:
     """Find nearest free site to target position.
     
     Uses Manhattan distance (L1) as primary, Euclidean (L2) as tie-breaker.
-    Returns site_id or None if no free sites.
+    Optimized using KD-tree for fast spatial queries.
+    
+    Args:
+        target: (x, y) target position in microns
+        free_site_ids: List of available site IDs
+        sites_df: DataFrame with site information (columns: site_id, x_um, y_um)
+        site_tree: Pre-built KD-tree of all sites (optional, for performance)
+        index_to_site_id: Mapping from DataFrame index to site_id (optional, for performance)
+    
+    Returns:
+        site_id of nearest free site, or None if no free sites
     """
-    import math
     if not free_site_ids:
         return None
+    
     tx, ty = target
+    free_set = set(free_site_ids)
+    
+    # If we have a pre-built tree, use it for fast lookup
+    if site_tree is not None and index_to_site_id is not None:
+        # Query tree for nearest candidates (query more than we need to account for filtering)
+        k = min(len(free_site_ids), 100)  # Query up to 100 nearest sites
+        distances, indices = site_tree.query([tx, ty], k=k)
+        
+        # Handle single result (k=1 returns scalar, not array)
+        if k == 1:
+            distances = [distances]
+            indices = [indices]
+        
+        # Find first free site in results
+        best = None
+        best_key = (float("inf"), float("inf"))
+        for tree_idx in indices:
+            # Convert tree index (DataFrame index) to site_id
+            site_id = index_to_site_id.get(int(tree_idx))
+            if site_id is not None and site_id in free_set:
+                # Use DataFrame index (tree_idx) to access row, then get coordinates
+                row = sites_df.iloc[int(tree_idx)]
+                sx = float(row["x_um"])
+                sy = float(row["y_um"])
+                l1 = abs(tx - sx) + abs(ty - sy)
+                l2 = math.hypot(tx - sx, ty - sy)
+                key = (l1, l2)
+                if key < best_key:
+                    best_key = key
+                    best = site_id
+            if best is not None:
+                break
+        
+        # If we found a free site in the k nearest, return it
+        if best is not None:
+            return best
+    
+    # Fallback: linear search through free sites (slower but always works)
+    # This handles cases where tree isn't provided or k nearest don't include free sites
     best = None
     best_key = (float("inf"), float("inf"))
     for sid in free_site_ids:
@@ -97,6 +175,33 @@ def nearest_site(target: Tuple[float, float], free_site_ids: List[int], sites_df
             best_key = key
             best = sid
     return best
+
+
+def build_site_tree(sites_df: pd.DataFrame) -> Tuple[cKDTree, Dict[int, int]]:
+    """Build KD-tree and mapping for fast nearest site queries.
+    
+    Args:
+        sites_df: DataFrame with site information (columns: site_id, x_um, y_um)
+    
+    Returns:
+        (tree, index_to_site_id) where:
+        - tree: cKDTree built from site coordinates
+        - index_to_site_id: Dict mapping DataFrame index -> site_id
+    """
+    # Extract coordinates
+    coords = sites_df[["x_um", "y_um"]].values
+    
+    # Build KD-tree
+    tree = cKDTree(coords)
+    
+    # Build mapping from DataFrame index to site_id
+    # Tree indices correspond to DataFrame row indices
+    index_to_site_id = {}
+    for idx, row in sites_df.iterrows():
+        site_id = int(row["site_id"])
+        index_to_site_id[int(idx)] = site_id
+    
+    return tree, index_to_site_id
 
 
 def hpwl_for_nets(

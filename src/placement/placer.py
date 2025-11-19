@@ -79,6 +79,10 @@ def place_cells_greedy_sim_anneal(
     g_levels = build_dependency_levels(updated_pins, netlist_graph)
     ins_by_cell, outs_by_cell = in_out_nets_by_cell(g_levels)
     cell_to_nets = nets_by_cell(g_levels)
+    
+    # Build KD-tree for fast nearest site queries
+    from src.placement.placement_utils import build_site_tree
+    site_tree, index_to_site_id = build_site_tree(sites_df)
 
     # Order cells by level
     cell_levels = g_levels[["cell_name", "dependency_level"]].drop_duplicates()
@@ -111,7 +115,7 @@ def place_cells_greedy_sim_anneal(
                 tx = float(sites_df["x_um"].median())
                 ty = float(sites_df["y_um"].median())
             
-            sid = nearest_site((tx, ty), free_site_ids, sites_df)
+            sid = nearest_site((tx, ty), free_site_ids, sites_df, site_tree, index_to_site_id)
             if sid is None:
                 continue
             
@@ -172,7 +176,7 @@ if __name__ == "__main__":
     fabric_file_path = "inputs/Platform/fabric.yaml"
     fabric_cells_file_path = "inputs/Platform/fabric_cells.yaml"
     pins_file_path = "inputs/Platform/pins.yaml"
-    netlist_file_path = "inputs/designs/arith_mapped.json"
+    netlist_file_path = "inputs/designs/aes_128_mapped.json"
 
     # Extract design name from netlist file path
     # e.g., "inputs/designs/arith_mapped.json" -> "arith"
