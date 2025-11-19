@@ -560,7 +560,7 @@ if __name__ == "__main__":
     fabric_file_path = "inputs/Platform/fabric.yaml"
     fabric_cells_file_path = "inputs/Platform/fabric_cells.yaml"
     pins_file_path = "inputs/Platform/pins.yaml"
-    netlist_file_path = "inputs/designs/arith_mapped.json"
+    netlist_file_path = "inputs/designs/aes_128_mapped.json"
 
     fabric, fabric_df = get_fabric_db(fabric_file_path, fabric_cells_file_path)
     pins_df, pins_meta = load_pins_df(pins_file_path)

@@ -1,2 +1,6 @@
 # Python dependencies
+numpy
+pandas
+PyYAML
+torch
 
