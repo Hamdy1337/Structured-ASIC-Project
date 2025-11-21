@@ -8,6 +8,8 @@ from typing import Dict, List, Optional, Tuple, Any, Set
 import math
 import random
 import re
+import time
+import numpy as np
 
 import pandas as pd
 
@@ -290,6 +292,9 @@ def build_dependency_levels(
       assigning a topological level to each row based on its cell's level.
     """
     g = netlist_graph.copy()
+    # Coerce net_bit to numeric to handle constants like 'x' from Yosys JSON
+    if "net_bit" in g.columns:
+        g["net_bit"] = pd.to_numeric(g["net_bit"], errors="coerce")
     required = {"cell_name", "direction", "net_bit"}
     if not required.issubset(g.columns):
         g["dependency_level"] = 0
@@ -408,22 +413,10 @@ def place_cells_greedy_sim_anneal(
             return s[mid]
         return 0.5 * (s[mid - 1] + s[mid])
 
-    def _nearest_site(target: Tuple[float, float], free_site_ids: List[int], sites_df: pd.DataFrame) -> Optional[int]:
-        if not free_site_ids:
-            return None
-        tx, ty = target
-        best = None
-        best_key = (float("inf"), float("inf"))
-        for sid in free_site_ids:
-            sx = float(sites_df.at[sid, "x_um"])  # type: ignore[index, arg-type]
-            sy = float(sites_df.at[sid, "y_um"])  # type: ignore[index, arg-type]
-            l1 = abs(tx - sx) + abs(ty - sy)
-            l2 = math.hypot(tx - sx, ty - sy)
-            key = (l1, l2)
-            if key < best_key:
-                best_key = key
-                best = sid
-        return best
+    # Spatial acceleration structures will be built later (after sites_df is created)
+    def _nearest_site(target: Tuple[float, float], _unused: List[int], _sites_df_unused: pd.DataFrame, required_type: Optional[str] = None) -> Optional[int]:
+        # Placeholder; real implementation injected after sites_df build
+        raise RuntimeError("_nearest_site called before spatial index initialization")
 
     def _hpwl_for_nets(nets: Set[int], pos_cells: Dict[str, Tuple[float, float]],
                         cell_to_nets: Dict[str, Set[int]], fixed_pts: Dict[int, List[Tuple[float, float]]]) -> float:
@@ -445,9 +438,19 @@ def place_cells_greedy_sim_anneal(
     def _anneal_batch(batch_cells: List[str], pos_cells: Dict[str, Tuple[float, float]],
                       assignments: Dict[str, int], sites_df: pd.DataFrame,
                       cell_nets: Dict[str, Set[int]], fixed_pts: Dict[int, List[Tuple[float, float]]],
-                      iters: int = 200) -> None:
+                      cell_types: Dict[str, Optional[str]],
+                      iters: int = 200) -> Tuple[int,int]:
         if len(batch_cells) < 2:
-            return
+            return (0,0)
+        # Compatibility check helper (only enforced if sites_df has 'cell_type')
+        def _is_compatible(cell: str, site_id: int) -> bool:
+            if "cell_type" not in sites_df.columns:
+                return True
+            req = cell_types.get(cell)
+            st = sites_df.at[site_id, "cell_type"]  # type: ignore[index]
+            if req is None or pd.isna(st):
+                return True
+            return str(st) == str(req)
         # Precompute nets touched by the batch
         batch_nets: Set[int] = set()
         for c in batch_cells:
@@ -460,11 +463,16 @@ def place_cells_greedy_sim_anneal(
         alpha = 0.90
         rng = random.Random(42)
         choose = batch_cells
+        attempts = 0
+        accepted = 0
         for i in range(iters):
             a, b = rng.sample(choose, 2)
             if a == b:
                 continue
             sa = assignments[a]; sb = assignments[b]
+            # Enforce site-type compatibility on proposed swap
+            if not (_is_compatible(a, sb) and _is_compatible(b, sa)):
+                continue
             # nets affected
             nets_aff: Set[int] = set()
             nets_aff |= cell_nets.get(a, set())
@@ -479,8 +487,10 @@ def place_cells_greedy_sim_anneal(
             new = _hpwl_for_nets(nets_aff, pos_cells, cell_nets, fixed_pts)
             d = new - old
             accept = d <= 0 or rng.random() < math.exp(-d / max(temp, 1e-6))
+            attempts += 1
             if accept:
                 cur += d
+                accepted += 1
             else:
                 # revert
                 assignments[a], assignments[b] = sa, sb
@@ -488,14 +498,99 @@ def place_cells_greedy_sim_anneal(
                 pos_cells[b] = (float(sites_df.at[sb, "x_um"]), float(sites_df.at[sb, "y_um"]))  # type: ignore[arg-type]
             if (i + 1) % 20 == 0:
                 temp *= alpha
+        return (attempts, accepted)
 
     # ---- Build inputs for placement ----
+    t_total_start = time.perf_counter()
+    t_build_start = time.perf_counter()
     sites_df = _build_sites(fabric_df)
-    free_site_ids: List[int] = sites_df["site_id"].tolist()
+    # Build spatial index (grid + arrays)
+    site_x = sites_df["x_um"].to_numpy(dtype=float)
+    site_y = sites_df["y_um"].to_numpy(dtype=float)
+    n_sites = int(len(sites_df))
+    is_free = np.ones(n_sites, dtype=bool)
+    site_type_arr = sites_df["cell_type"].astype(str).to_numpy() if "cell_type" in sites_df.columns else None
+    if n_sites > 0:
+        minx = float(site_x.min()); maxx = float(site_x.max())
+        miny = float(site_y.min()); maxy = float(site_y.max())
+    else:
+        minx = maxx = miny = maxy = 0.0
+    spanx = max(maxx - minx, 1e-6); spany = max(maxy - miny, 1e-6)
+    target_bins_axis = max(16, min(128, int(math.sqrt(n_sites / 100.0)) if n_sites > 0 else 16))
+    gx = max(4, target_bins_axis); gy = max(4, target_bins_axis)
+    cell_w = spanx / gx; cell_h = spany / gy
+    if n_sites > 0:
+        bx = np.clip(((site_x - minx) / max(cell_w, 1e-9)).astype(int), 0, gx - 1)
+        by = np.clip(((site_y - miny) / max(cell_h, 1e-9)).astype(int), 0, gy - 1)
+    else:
+        bx = np.array([], dtype=int); by = np.array([], dtype=int)
+    bins: List[List[List[int]]] = [[[] for _ in range(gy)] for _ in range(gx)]
+    for idx in range(n_sites):
+        bins[int(bx[idx])][int(by[idx])].append(idx)
+    def _nearest_site(target: Tuple[float, float], _unused: List[int], _sites_df_unused: pd.DataFrame, required_type: Optional[str] = None) -> Optional[int]:
+        tx, ty = target
+        if n_sites == 0:
+            return None
+        bxi = int(np.clip(int((tx - minx) / max(cell_w, 1e-9)), 0, gx - 1))
+        byi = int(np.clip(int((ty - miny) / max(cell_h, 1e-9)), 0, gy - 1))
+        def _eval(cands: List[int]) -> Optional[int]:
+            if not cands:
+                return None
+            arr = np.array(cands, dtype=int)
+            mask = is_free[arr]
+            if not mask.any():
+                return None
+            arr = arr[mask]
+            if required_type is not None and site_type_arr is not None:
+                tmask = (site_type_arr[arr] == str(required_type))
+                if not tmask.any():
+                    return None
+                arr = arr[tmask]
+                if arr.size == 0:
+                    return None
+            dx = np.abs(site_x[arr] - tx); dy = np.abs(site_y[arr] - ty)
+            l1 = dx + dy; l2 = np.hypot(dx, dy)
+            order = np.lexsort((l2, l1))
+            return int(arr[order[0]])
+        max_r = max(gx, gy)
+        for r in range(max_r):
+            x0 = max(0, bxi - r); x1 = min(gx - 1, bxi + r)
+            y0 = max(0, byi - r); y1 = min(gy - 1, byi + r)
+            cands: List[int] = []
+            for xi in range(x0, x1 + 1):
+                for yi in range(y0, y1 + 1):
+                    cands.extend(bins[xi][yi])
+            sid = _eval(cands)
+            if sid is not None:
+                return sid
+        free_idxs = np.flatnonzero(is_free)
+        if free_idxs.size == 0:
+            return None
+        if required_type is not None and site_type_arr is not None:
+            tmask = (site_type_arr[free_idxs] == str(required_type))
+            free_idxs = free_idxs[tmask]
+        if free_idxs.size == 0:
+            return None
+        dx = np.abs(site_x[free_idxs] - tx); dy = np.abs(site_y[free_idxs] - ty)
+        l1 = dx + dy; l2 = np.hypot(dx, dy)
+        order = np.lexsort((l2, l1))
+        return int(free_idxs[order[0]])
+    t_build_end = time.perf_counter()
     fixed_pts = _fixed_points_from_pins(updated_pins)
+    t_level_start = time.perf_counter()
     g_levels = build_dependency_levels(updated_pins, netlist_graph)
+    t_level_end = time.perf_counter()
     ins_by_cell, outs_by_cell = _in_out_nets_by_cell(g_levels)
     nets_by_cell = _nets_by_cell(g_levels)
+    # Optional: cell type mapping per instance if provided by netlist
+    cell_type_by_cell: Dict[str, Optional[str]] = {}
+    if "cell_type" in g_levels.columns:
+        for cell, grp in g_levels.groupby("cell_name"):  # type: ignore[arg-type]
+            ctype_vals = grp["cell_type"].dropna().astype(str).unique().tolist()
+            cell_type_by_cell[str(cell)] = ctype_vals[0] if ctype_vals else None
+    else:
+        # default: unknown types
+        pass
 
     # Order cells by level
     cell_levels = g_levels[["cell_name", "dependency_level"]].drop_duplicates()
@@ -519,11 +614,17 @@ def place_cells_greedy_sim_anneal(
 
     # Level-by-level greedy + SA in small batches
     batch_size = 24
+    greedy_time_total = 0.0
+    sa_time_total = 0.0
+    sa_attempts_total = 0
+    sa_accepted_total = 0
+    per_level_times: List[Tuple[int,float,float]] = []
     for lvl in sorted(order["dependency_level"].unique()):
         # Build list of cell names (already strings or convertible)
         cells_series: pd.Series = order.loc[order["dependency_level"] == lvl, "cell_name"]  # type: ignore[assignment]
         level_cells = [str(x) for x in cells_series.tolist()]
         # Greedy initial placement for level
+        t_greedy_start = time.perf_counter()
         for c in level_cells:
             # Compute target (median of driver points)
             pts = _driver_points(c)
@@ -532,17 +633,28 @@ def place_cells_greedy_sim_anneal(
             else:
                 # fallback: center of available sites
                 tx = float(sites_df["x_um"].median()); ty = float(sites_df["y_um"].median())
-            sid = _nearest_site((tx, ty), free_site_ids, sites_df)
+            required_type = cell_type_by_cell.get(c)
+            sid = _nearest_site((tx, ty), [], sites_df, required_type=required_type)
             if sid is None:
                 continue
             assignments[c] = sid
             pos_cells[c] = (float(sites_df.at[sid, "x_um"]), float(sites_df.at[sid, "y_um"]))  # type: ignore[arg-type]
             # consume site
-            free_site_ids.remove(sid)
+            is_free[sid] = False
+        t_greedy_end = time.perf_counter()
+        greedy_time = t_greedy_end - t_greedy_start
+        greedy_time_total += greedy_time
         # Small-batch SA within the level
+        t_sa_start = time.perf_counter()
         for i in range(0, len(level_cells), batch_size):
             batch: List[str] = [c for c in level_cells[i:i + batch_size] if c in assignments]
-            _anneal_batch(batch, pos_cells, assignments, sites_df, nets_by_cell, fixed_pts, iters=200)
+            attempts, accepted = _anneal_batch(batch, pos_cells, assignments, sites_df, nets_by_cell, fixed_pts, cell_type_by_cell, iters=200)
+            sa_attempts_total += attempts
+            sa_accepted_total += accepted
+        t_sa_end = time.perf_counter()
+        sa_time = t_sa_end - t_sa_start
+        sa_time_total += sa_time
+        per_level_times.append((int(lvl), greedy_time, sa_time))
 
     # Save placement preview (optional): attach to fabric_df? We'll print in __main__
     placement_rows: List[Dict[str, Any]] = []
@@ -554,13 +666,26 @@ def place_cells_greedy_sim_anneal(
             "y_um": float(sites_df.at[sid, "y_um"]),  # type: ignore[arg-type]
         })
     placement_df = pd.DataFrame(placement_rows)
+
+    # Timing summary
+    t_total_end = time.perf_counter()
+    build_sites_dur = t_build_end - t_build_start
+    levelize_dur = t_level_end - t_level_start
+    total_dur = t_total_end - t_total_start
+    sa_accept_ratio = (sa_accepted_total / sa_attempts_total) if sa_attempts_total > 0 else 0.0
+    print(f"[PlacerTiming] total={total_dur:.3f}s build_sites={build_sites_dur:.3f}s levelize={levelize_dur:.3f}s greedy={greedy_time_total:.3f}s sa={sa_time_total:.3f}s sa_accept={sa_accept_ratio:.3f}")
+    print(f"PLACER_SUMMARY total={total_dur:.3f}s greedy={greedy_time_total:.3f}s sa={sa_time_total:.3f}s")
+    if per_level_times:
+        top_levels = sorted(per_level_times, key=lambda x: x[2], reverse=True)[:5]
+        for lvl_id, g_t, sa_t in top_levels:
+            print(f"[PlacerTiming] level={lvl_id} greedy={g_t:.3f}s sa={sa_t:.3f}s")
     return updated_pins, placement_df
 
 if __name__ == "__main__":
     fabric_file_path = "inputs/Platform/fabric.yaml"
     fabric_cells_file_path = "inputs/Platform/fabric_cells.yaml"
     pins_file_path = "inputs/Platform/pins.yaml"
-    netlist_file_path = "inputs/designs/aes_128_mapped.json"
+    netlist_file_path = "inputs/designs/arith_mapped.json"
 
     fabric, fabric_df = get_fabric_db(fabric_file_path, fabric_cells_file_path)
     pins_df, pins_meta = load_pins_df(pins_file_path)

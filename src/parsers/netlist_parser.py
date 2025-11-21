@@ -300,3 +300,7 @@ if __name__ == "__main__":
     print(netlist_graph_db.head())
     print(f"Shape: {netlist_graph_db.shape}")
 
+    #Write to CSV for inspection
+    logical_db.to_csv(f"{sys.argv[1]}_logical_db_output.csv", index=False)
+    ports_df.to_csv(f"{sys.argv[1]}_ports_output.csv", index=False)
+    netlist_graph_db.to_csv(f"{sys.argv[1]}_netlist_graph_output.csv", index=False)

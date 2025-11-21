@@ -11,6 +11,7 @@ import time
 from typing import List, Dict, Tuple, Set, Optional, Any, cast
 import numpy as np
 import pandas as pd
+import csv
 
 # Torch import
 try:
@@ -50,9 +51,12 @@ def hpwl_of_nets(nets: Dict[int, Set[str]],
     return total
 
 def build_sites_from_fabric_df(fabric_df: pd.DataFrame) -> pd.DataFrame:
-    cols = [c for c in ["cell_x", "cell_y", "tile_name"] if c in fabric_df.columns]
-    sites = fabric_df[cols].drop_duplicates().reset_index(drop=True).copy()
-    sites.rename(columns={"cell_x":"x_um","cell_y":"y_um"}, inplace=True)
+    """Build sites DataFrame, preserving cell_type if available.
+    Columns produced: site_id, x_um, y_um, tile_name (optional), cell_type (optional).
+    """
+    base_cols = [c for c in ["cell_x", "cell_y", "tile_name", "cell_type"] if c in fabric_df.columns]
+    sites = fabric_df[base_cols].drop_duplicates().reset_index(drop=True).copy()
+    sites.rename(columns={"cell_x": "x_um", "cell_y": "y_um"}, inplace=True)
     sites.insert(0, "site_id", range(len(sites)))
     return sites
 
@@ -99,12 +103,30 @@ class FullAssignEnv:
                  max_action: int = 32,
                  congestion_radius: float = 20.0,
                  global_reward_interval: int = 10,
-                 global_reward_weight: float = 0.02):
+                 global_reward_weight: float = 0.02,
+                 site_types: Optional[List[str]] = None,
+                 cell_types: Optional[Dict[str, str]] = None):
         self.cells = cells[:]  # assignment order
         self.sites_list = sites_list[:]  # index -> (site_id,x,y)
         self.site_index_by_id = {s[0]: idx for idx,s in enumerate(self.sites_list)}
         self.nets = nets_map
         self.fixed = fixed_pins
+        self.site_types = site_types[:] if site_types is not None else None  # index-aligned list of site type strings
+        if self.site_types is not None:
+            assert len(self.site_types) == len(self.sites_list), "site_types length must match sites_list length"
+        self.cell_types = dict(cell_types) if cell_types is not None else {}
+        # Precompute site coordinate arrays for vectorized candidate ranking
+        self.site_x = np.fromiter((s[1] for s in self.sites_list), dtype=float)
+        self.site_y = np.fromiter((s[2] for s in self.sites_list), dtype=float)
+        self.free_mask = np.ones(len(self.sites_list), dtype=bool)
+        # Map from type -> numpy array of site indices for fast filtering
+        self._indices_by_type: Dict[str, np.ndarray] = {}
+        if self.site_types is not None:
+            by_type: Dict[str, List[int]] = {}
+            for idx, t in enumerate(self.site_types):
+                by_type.setdefault(str(t), []).append(idx)
+            for t, lst in by_type.items():
+                self._indices_by_type[t] = np.asarray(lst, dtype=int)
 
         # limit action space to top-K candidates
         self.max_action = max_action
@@ -146,6 +168,7 @@ class FullAssignEnv:
         self.assignments = {}
         self.pos_cells = {}
         self.free_site_idx = [i for i in range(len(self.sites_list))]
+        self.free_mask[:] = True
         self.step_idx = 0
         obs = self._obs()
         self._obs_dim = obs.shape[0]
@@ -182,8 +205,25 @@ class FullAssignEnv:
                 bbox_vals.append((max(xs)-min(xs)) + (max(ys)-min(ys)))
         avg_bbox = float(np.mean(bbox_vals)) if bbox_vals else 0.0
 
-        # site candidates: choose top-K nearest to centroid of nets touching this cell
-        candidates_all = list(self.free_site_idx)
+        # site candidates: choose top-K nearest to centroid of nets touching this cell, filtered by cell_type if available
+        # Vectorized candidate derivation
+        if self.site_types is not None and self.cell_types:
+            ctype = self.cell_types.get(cur_cell)
+            if ctype is not None and ctype in self._indices_by_type:
+                cand_idx = self._indices_by_type[ctype]
+                cand_idx = cand_idx[self.free_mask[cand_idx]]
+            else:
+                cand_idx = np.flatnonzero(self.free_mask)
+        else:
+            cand_idx = np.flatnonzero(self.free_mask)
+        # Fallback if no free sites (should not happen mid-episode unless data issue)
+        if cand_idx.size == 0:
+            self._last_candidates = []
+            padded = np.full((self.max_action, 4), -10.0, dtype=np.float32)
+            cell_feat = np.array([deg, avg_bbox, 0.0, 0.0], dtype=np.float32)
+            obs = np.concatenate([cell_feat, padded.flatten()], axis=0)
+            self._last_obs = obs
+            return obs
         # compute centroid of currently connected points for cur_cell
         pts_all = []
         for nb in self.cell_to_nets.get(cur_cell, set()):
@@ -199,14 +239,26 @@ class FullAssignEnv:
             xs_all = [s[1] for s in self.sites_list]; ys_all = [s[2] for s in self.sites_list]
             cx = float(np.mean(xs_all)); cy = float(np.mean(ys_all))
         # rank free sites by distance to (cx,cy)
-        ranked = sorted(candidates_all, key=lambda idx: (self.sites_list[idx][1]-cx)**2 + (self.sites_list[idx][2]-cy)**2)
-        candidates = ranked[:self.max_action]
+        dx = self.site_x[cand_idx] - cx
+        dy = self.site_y[cand_idx] - cy
+        dist2 = dx*dx + dy*dy
+        if cand_idx.size > self.max_action:
+            # argpartition gives indices of k smallest without full sort
+            part = np.argpartition(dist2, self.max_action)[:self.max_action]
+            candidates = cand_idx[part]
+            # order them for determinism
+            order = np.argsort(dist2[part])
+            candidates = candidates[order]
+        else:
+            order = np.argsort(dist2)
+            candidates = cand_idx[order]
+        candidates = candidates.tolist()
         # remember candidate indices so action index maps correctly
         self._last_candidates = candidates[:self.max_action]
         # build features per candidate
         feats = []
         for idx in candidates:
-            _, sx, sy = self.sites_list[idx]
+            sx = float(self.site_x[idx]); sy = float(self.site_y[idx])
             # local density = count placed cells within radius
             cnt = 0
             for (px,py) in self.pos_cells.values():
@@ -292,7 +344,8 @@ class FullAssignEnv:
         if action >= len(self._last_candidates):
             return self._obs(), -1.0, False
         site_idx = self._last_candidates[action]
-        site_id, sx, sy = self.sites_list[site_idx]
+        site_id = self.sites_list[site_idx][0]
+        sx = float(self.site_x[site_idx]); sy = float(self.site_y[site_idx])
         cur_cell = self.cells[self.step_idx]
 
         # compute local nets touched and hpwl before
@@ -303,11 +356,10 @@ class FullAssignEnv:
         self.assignments[cur_cell] = site_id
         self.pos_cells[cur_cell] = (sx,sy)
         # remove chosen site index from free_site_idx
-        try:
+        # Mark site as used (free_mask) and lazily skip costly list removal if large
+        self.free_mask[site_idx] = False
+        if site_idx in self.free_site_idx:
             self.free_site_idx.remove(site_idx)
-        except ValueError:
-            # already removed; ignore
-            pass
 
         # delta hpwl for touched nets (local)
         total_after = hpwl_of_nets(self.nets, self.pos_cells, self.fixed, net_subset=nets_touch)
@@ -346,6 +398,7 @@ class SwapRefineEnv:
     """
     Swap-based entry: given a batch (fixed size), the agent picks a pair (i,j) to swap.
     Batch size defines action space size = B*(B-1)/2 + 1 (no-op).
+    Cell/site type awareness: a swap is only legal if each cell's type matches the destination site's type.
     """
 
     def __init__(self,
@@ -357,7 +410,9 @@ class SwapRefineEnv:
                  neighbor_radius: float = 20.0,
                  congestion_weight: float = 0.02,
                  net_weight_alpha: float = 0.1,
-                 target_B: Optional[int] = None):
+                 target_B: Optional[int] = None,
+                 site_types_map: Optional[Dict[int, str]] = None,
+                 cell_types_map: Optional[Dict[str, str]] = None):
         self.batch = batch_cells[:]
         self.placement = dict(placement_map)  # shallow copy
         self.sites_map = dict(sites_map)
@@ -374,6 +429,10 @@ class SwapRefineEnv:
                 if c in self.cell_to_nets:
                     self.cell_to_nets[c].add(nb)
 
+        # type maps
+        self.site_types_map = dict(site_types_map) if site_types_map is not None else {}
+        self.cell_types_map = dict(cell_types_map) if cell_types_map is not None else {}
+
         # net weights by pin count as a simple timing/congestion proxy
         self.net_weights: Dict[int, float] = {}
         for nb, cs in self.nets.items():
@@ -383,6 +442,34 @@ class SwapRefineEnv:
         # action list: pairs
         self.action_pairs = [(i,j) for i in range(self.B) for j in range(i+1, self.B)]
         self.action_pairs.append((-1,-1))  # no-op
+        # precompute legal mask
+        self._action_mask = self._compute_action_mask()
+
+    def _compute_action_mask(self) -> np.ndarray:
+        mask = np.zeros(len(self.action_pairs), dtype=np.float32)
+        for idx,(i,j) in enumerate(self.action_pairs):
+            if i == -1 and j == -1:
+                mask[idx] = 1.0
+                continue
+            ci = self.batch[i]; cj = self.batch[j]
+            xi, yi, sidi = self.placement[ci]
+            xj, yj, sidj = self.placement[cj]
+            # cell ci would move to sidj; cell cj to sidi
+            if self._is_type_compatible(ci, sidj) and self._is_type_compatible(cj, sidi):
+                mask[idx] = 1.0
+        return mask
+
+    def _is_type_compatible(self, cell: str, site_id: int) -> bool:
+        if not self.cell_types_map or not self.site_types_map:
+            return True
+        ctype = self.cell_types_map.get(cell)
+        stype = self.site_types_map.get(site_id)
+        if ctype is None or stype is None:
+            return True
+        return ctype == stype
+
+    def action_mask(self) -> np.ndarray:
+        return self._action_mask.copy()
 
     def reset(self):
         return self._obs()
@@ -415,8 +502,12 @@ class SwapRefineEnv:
     def step(self, action_idx: int) -> Tuple[np.ndarray, float, bool]:
         if action_idx < 0 or action_idx >= len(self.action_pairs):
             return self._obs(), -0.01, False
+        if self._action_mask[action_idx] < 0.5:
+            # illegal swap due to type mismatch
+            return self._obs(), -0.1, False
         i,j = self.action_pairs[action_idx]
         if i==-1 and j==-1:
+            self._action_mask = self._compute_action_mask()
             return self._obs(), 0.0, False
         ci = self.batch[i]; cj = self.batch[j]
         xi, yi, sidi = self.placement[ci]
@@ -435,6 +526,8 @@ class SwapRefineEnv:
         dens_after = _density_at(self.placement[ci][0], self.placement[ci][1]) + _density_at(self.placement[cj][0], self.placement[cj][1])
         d_dens = dens_after - dens_before
         reward = -d_hpwl - self.congestion_weight * float(d_dens)
+        # refresh mask after state change
+        self._action_mask = self._compute_action_mask()
         return self._obs(), float(reward), False
 
 # -------------------------
@@ -454,7 +547,8 @@ class MLPPolicy(nn.Module):
         return self.net(x)
 
 class PPOAgent:
-    def __init__(self, obs_dim: int, action_dim: int, hidden: int = 256, lr: float = 3e-4, device: str = "cpu"):
+    def __init__(self, obs_dim: int, action_dim: int, hidden: int = 256, lr: float = 3e-4, device: str = "cpu",
+                 clip_eps: float = 0.2, value_coef: float = 1.0, entropy_coef: float = 0.01, max_grad_norm: float = 0.5):
         self.device = torch.device(device)
         self.obs_dim = obs_dim
         self.policy_backbone = MLPPolicy(obs_dim, hidden).to(self.device)
@@ -463,10 +557,10 @@ class PPOAgent:
         self.critic = nn.Linear(hidden, 1).to(self.device)
         self.optimizer = optim.Adam(list(self.policy_backbone.parameters()) + list(self.actor.parameters()) + list(self.critic.parameters()), lr=lr)
 
-        self.clip_eps = 0.2
-        self.value_coef = 1.0
-        self.entropy_coef = 0.01
-        self.max_grad_norm = 0.5
+        self.clip_eps = float(clip_eps)
+        self.value_coef = float(value_coef)
+        self.entropy_coef = float(entropy_coef)
+        self.max_grad_norm = float(max_grad_norm)
         self.device = torch.device(device)
 
     def forward(self, obs: np.ndarray):
@@ -483,23 +577,17 @@ class PPOAgent:
         return logits, value
 
     def get_action_and_value(self, obs: np.ndarray, mask: Optional[np.ndarray]=None, eps: float = 0.0):
-        # ensure obs fixed dimension before forward
+        # Pure policy sampling; remove ε-greedy to keep PPO ratios unbiased
         logits, value = self.forward(obs)
         if mask is not None:
             mask_t = torch.tensor(mask, dtype=torch.bool, device=self.device)
-            # set logits for illegal to large negative
             logits = logits.masked_fill(~mask_t, float('-1e9'))
         probs = torch.softmax(logits, dim=0)
-        if random.random() < eps:
-            # sample from masked uniform
-            valid_indices = (mask>0.5).nonzero()[0] if mask is not None else np.arange(len(logits))
-            a = int(np.random.choice(valid_indices))
-            logp = torch.log(probs[a] + 1e-12)
-        else:
-            m = Categorical(probs)
-            a = int(m.sample().cpu().numpy().item())
-            logp = m.log_prob(torch.tensor(a, device=self.device))
-        return a, float(logp.cpu().item()), float(value.cpu().item())
+        dist = Categorical(probs)
+        act_t = dist.sample()
+        act = int(act_t.item())
+        logp = dist.log_prob(act_t)
+        return act, float(logp.item()), float(value.item())
 
     def compute_loss_and_update(self, batch_obs, batch_actions, batch_logps_old, batch_returns, batch_advantages, masks=None):
         fixed = []
@@ -519,6 +607,9 @@ class PPOAgent:
 
         h = self.policy_backbone(obs)
         logits = self.actor(h)
+        if masks is not None:
+            msk_t = torch.tensor(masks, dtype=torch.bool, device=self.device)
+            logits = logits.masked_fill(~msk_t, float('-1e9'))
         values = self.critic(h).squeeze(1)
 
         # compute log probs
@@ -569,13 +660,24 @@ def train_ppo_full_placer(env_builder_fn,   # function that returns a fresh Full
                           eps_end: float = 0.02,
                           device: str = "cpu",
                           ppo_epochs: int = 4,
-                          mini_batch_size: int = 128):
+                          mini_batch_size: int = 128,
+                          log_csv_path: Optional[str] = None):
     """
     env_builder_fn() -> FullAssignEnv. We'll run episodes, collect rollout, compute GAE, and update PPO.
     This is a simple on-policy training loop suited for experiments.
     """
     agent.device = torch.device(device)
+    # init CSV header if requested
+    if log_csv_path is not None:
+        try:
+            with open(log_csv_path, "a", newline="") as f:
+                if f.tell() == 0:
+                    w = csv.writer(f)
+                    w.writerow(["kind","episode","loss","policy_loss","value_loss","entropy","steps","eps","hpwl_end","time_sec"])
+        except Exception:
+            pass
     for ep in range(total_episodes):
+        t_ep_start = time.perf_counter()
         env = env_builder_fn()
         obs = env.reset()
         obs_list, act_list, logp_list, val_list, rew_list, done_list = [], [], [], [], [], []
@@ -625,26 +727,49 @@ def train_ppo_full_placer(env_builder_fn,   # function that returns a fresh Full
         ploss = float(np.mean(plosses)) if plosses else 0.0
         vloss = float(np.mean(vlosses)) if vlosses else 0.0
         ent = float(np.mean(ents)) if ents else 0.0
+        t_ep_end = time.perf_counter()
+        # episode HPWL (over currently placed cells only)
+        try:
+            hpwl_end = hpwl_of_nets(env.nets, env.pos_cells, env.fixed)
+        except Exception:
+            hpwl_end = float("nan")
+        if log_csv_path is not None:
+            try:
+                with open(log_csv_path, "a", newline="") as f:
+                    w = csv.writer(f)
+                    w.writerow(["full", ep+1, f"{loss:.6f}", f"{ploss:.6f}", f"{vloss:.6f}", f"{ent:.6f}", steps, f"{eps:.4f}", f"{hpwl_end:.6f}", f"{(t_ep_end - t_ep_start):.6f}"])
+            except Exception:
+                pass
         if (ep+1) % 10 == 0:
             print(f"[FullPPO] ep {ep+1}/{total_episodes} loss={loss:.4f} policy={ploss:.4f} value={vloss:.4f} ent={ent:.4f}")
 
 def train_ppo_swap_refiner(env_builder_fn, agent: PPOAgent,
                            episodes: int = 200, steps_per_episode: int = 100, device: str = "cpu",
-                           ppo_epochs: int = 4, mini_batch_size: int = 128):
+                           ppo_epochs: int = 4, mini_batch_size: int = 128,
+                           log_csv_path: Optional[str] = None):
     """
     Similar to train_ppo_full_placer but for SwapRefineEnv where action_dim is fixed by batch.
     env_builder_fn should return a fresh SwapRefineEnv.
     """
     agent.device = torch.device(device)
+    # init CSV header if requested
+    if log_csv_path is not None:
+        try:
+            with open(log_csv_path, "a", newline="") as f:
+                if f.tell() == 0:
+                    w = csv.writer(f)
+                    w.writerow(["kind","episode","loss","policy_loss","value_loss","entropy","steps","hpwl_local_end","time_sec"])
+        except Exception:
+            pass
     for ep in range(episodes):
+        t_ep_start = time.perf_counter()
         env = env_builder_fn()
         obs = env.reset()
         obs_list, act_list, logp_list, val_list, rew_list, done_list = [], [], [], [], [], []
         done = False
         steps = 0
         while not done and steps < steps_per_episode:
-            # action mask not needed (action_dim equals env action count)
-            mask = np.ones(len(env.action_pairs), dtype=np.float32)
+            mask = env.action_mask()
             a, logp, val = agent.get_action_and_value(obs, mask=mask, eps=0.1)
             obs2, r, _ = env.step(a)
             obs_list.append(obs); act_list.append(a); logp_list.append(logp); val_list.append(val)
@@ -672,6 +797,25 @@ def train_ppo_swap_refiner(env_builder_fn, agent: PPOAgent,
                 mb_adv = [advs[i] for i in mb]
                 loss, ploss, vloss, ent = agent.compute_loss_and_update(mb_obs, mb_act, mb_logp, mb_ret, mb_adv, None)
                 losses.append(loss)
+        t_ep_end = time.perf_counter()
+        # approximate batch-local HPWL at episode end
+        try:
+            # env.placement exists with (x,y,sid) for batch cells
+            pos_map = {c: (env.placement[c][0], env.placement[c][1]) for c in env.batch}
+            nets_touch: Set[int] = set()
+            for c in env.batch:
+                nets_touch |= env.cell_to_nets.get(c, set())
+            hpwl_local = hpwl_of_nets(env.nets, pos_map, env.fixed, net_subset=nets_touch)
+        except Exception:
+            hpwl_local = float("nan")
+        if log_csv_path is not None:
+            try:
+                with open(log_csv_path, "a", newline="") as f:
+                    w = csv.writer(f)
+                    mean_loss = float(np.mean(losses)) if losses else 0.0
+                    w.writerow(["swap", ep+1, f"{mean_loss:.6f}", "", "", "", steps_per_episode, f"{hpwl_local:.6f}", f"{(t_ep_end - t_ep_start):.6f}"])
+            except Exception:
+                pass
         if (ep+1) % 10 == 0:
             mean_loss = float(np.mean(losses)) if losses else 0.0
             print(f"[SwapPPO] ep {ep+1}/{episodes} loss={mean_loss:.4f}")
@@ -698,44 +842,38 @@ def pretrain_bc_swap_refiner(env_builder_fn,
         ys: List[int] = []
         steps = 0
         while steps < steps_per_episode:
-            # label via one-step lookahead across all actions
-            best_a = len(env.action_pairs) - 1  # default to no-op
+            # label via one-step lookahead across all legal actions (type-compatible)
+            mask = env.action_mask()
+            legal_indices = [aidx for aidx,mv in enumerate(mask) if mv > 0.5]
+            best_a = legal_indices[-1] if legal_indices else (len(env.action_pairs)-1)
             best_r = -1e9
-            # snapshot placements
             snap = {c: env.placement[c] for c in env.batch}
-            for aidx, (i,j) in enumerate(env.action_pairs):
+            for aidx in legal_indices:
+                i,j = env.action_pairs[aidx]
                 if i == -1 and j == -1:
-                    # evaluate noop quickly
                     _, r0, _ = env.step(aidx)
-                    # revert noop implicit: step made no changes; to be safe, restore snapshot
                     env.placement = {c: snap[c] for c in env.batch}
                     if r0 > best_r:
                         best_r = r0; best_a = aidx
                     continue
                 ci = env.batch[i]; cj = env.batch[j]
-                xi, yi, sidi = env.placement[ci]
-                xj, yj, sidj = env.placement[cj]
+                xi, yi, sidi = env.placement[ci]; xj, yj, sidj = env.placement[cj]
                 nets_aff = set(env.cell_to_nets.get(ci,set())) | set(env.cell_to_nets.get(cj,set()))
                 before = hpwl_of_nets(env.nets, {c:(env.placement[c][0], env.placement[c][1]) for c in env.batch}, env.fixed, net_subset=nets_aff, net_weights=getattr(env, 'net_weights', None))
-                # temp swap
                 env.placement[ci] = (xj, yj, sidj)
                 env.placement[cj] = (xi, yi, sidi)
                 after = hpwl_of_nets(env.nets, {c:(env.placement[c][0], env.placement[c][1]) for c in env.batch}, env.fixed, net_subset=nets_aff, net_weights=getattr(env, 'net_weights', None))
                 d_hpwl = after - before
-                # congestion delta
                 def _density_at(x: float, y: float) -> int:
                     return sum(1 for (xx,yy,_) in env.placement.values() if (xx-x)**2 + (yy-y)**2 <= (env.neighbor_radius**2)) - 1
                 dens_before = _density_at(xi, yi) + _density_at(xj, yj)
                 dens_after = _density_at(env.placement[ci][0], env.placement[ci][1]) + _density_at(env.placement[cj][0], env.placement[cj][1])
                 d_dens = dens_after - dens_before
                 r = -d_hpwl - env.congestion_weight * float(d_dens)
-                # revert
-                env.placement[ci] = (xi, yi, sidi)
-                env.placement[cj] = (xj, yj, sidj)
+                env.placement[ci] = (xi, yi, sidi); env.placement[cj] = (xj, yj, sidj)
                 if r > best_r:
                     best_r = r; best_a = aidx
-            xs.append(obs)
-            ys.append(int(best_a))
+            xs.append(obs); ys.append(int(best_a))
             # step env with best action to update state distribution
             obs, _, _ = env.step(best_a)
             steps += 1
@@ -780,9 +918,24 @@ def build_full_assign_env_from_data(cells_order: List[str],
     """
     # prepare structures
     sites_list = [(int(r.site_id), float(r.x_um), float(r.y_um)) for r in sites_df.itertuples(index=False)]
+    site_types: Optional[List[str]] = None
+    if 'cell_type' in sites_df.columns:
+        site_types = [str(ct) for ct in sites_df['cell_type'].astype(str).tolist()]
     nets_map = nets_map_from_graph_df(netlist_graph)
     fixed = fixed_points_from_pins(pins_df)
-    env = FullAssignEnv(cells=cells_order, sites_list=sites_list, nets_map=nets_map, fixed_pins=fixed, start_assignments=start_assignments, max_action=max_action)
+    # build cell_types mapping if available in netlist_graph
+    cell_types: Dict[str, str] = {}
+    if 'cell_type' in netlist_graph.columns:
+        for r in netlist_graph[['cell_name','cell_type']].dropna().itertuples(index=False):
+            cell_types[str(getattr(r,'cell_name'))] = str(getattr(r,'cell_type'))
+    env = FullAssignEnv(cells=cells_order,
+                        sites_list=sites_list,
+                        nets_map=nets_map,
+                        fixed_pins=fixed,
+                        start_assignments=start_assignments,
+                        max_action=max_action,
+                        site_types=site_types,
+                        cell_types=cell_types if cell_types else None)
     return env
 
 def apply_full_placer_agent(agent: PPOAgent, env: FullAssignEnv, eps: float = 0.0) -> Dict[str,int]:
@@ -798,14 +951,17 @@ def build_swap_refine_env_from_batch(batch_cells: List[str],
                                      placement_map: Dict[str, Tuple[float,float,int]],
                                      sites_map: Dict[int, Tuple[float,float]],
                                      netlist_graph: pd.DataFrame,
-                                     pins_df: pd.DataFrame) -> SwapRefineEnv:
+                                     pins_df: pd.DataFrame,
+                                     site_types_map: Optional[Dict[int,str]] = None,
+                                     cell_types_map: Optional[Dict[str,str]] = None) -> SwapRefineEnv:
     nets_map = nets_map_from_graph_df(netlist_graph)
     fixed = fixed_points_from_pins(pins_df)
-    env = SwapRefineEnv(batch_cells, placement_map, sites_map, nets_map, fixed)
+    env = SwapRefineEnv(batch_cells, placement_map, sites_map, nets_map, fixed,
+                        site_types_map=site_types_map, cell_types_map=cell_types_map)
     return env
 
-def apply_swap_refiner(agent: PPOAgent, batch_cells: List[str], placement_map: Dict[str, Tuple[float,float,int]], sites_map: Dict[int, Tuple[float,float]], netlist_graph: pd.DataFrame, pins_df: pd.DataFrame, steps: int = 100):
-    env = build_swap_refine_env_from_batch(batch_cells, placement_map, sites_map, netlist_graph, pins_df)
+def apply_swap_refiner(agent: PPOAgent, batch_cells: List[str], placement_map: Dict[str, Tuple[float,float,int]], sites_map: Dict[int, Tuple[float,float]], netlist_graph: pd.DataFrame, pins_df: pd.DataFrame, steps: int = 100, site_types_map: Optional[Dict[int,str]] = None, cell_types_map: Optional[Dict[str,str]] = None):
+    env = build_swap_refine_env_from_batch(batch_cells, placement_map, sites_map, netlist_graph, pins_df, site_types_map=site_types_map, cell_types_map=cell_types_map)
     obs = env.reset()
     # Precompute local nets touching this batch for logging
     nets_touch: Set[int] = set()
@@ -816,7 +972,7 @@ def apply_swap_refiner(agent: PPOAgent, batch_cells: List[str], placement_map: D
         return {c: (env.placement[c][0], env.placement[c][1]) for c in batch_cells}
     hpwl_before = hpwl_of_nets(env.nets, _pos_map(), env.fixed, net_subset=nets_touch)
     for _ in range(steps):
-        mask = np.ones(len(env.action_pairs), dtype=np.float32)
+        mask = env.action_mask()
         a, logp, v = agent.get_action_and_value(obs, mask=mask, eps=0.0)
         obs, r, _ = env.step(a)
     # greedy hill-climb: try a few best improving swaps
@@ -905,7 +1061,14 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
                                    max_apply_batches: int | None = None,
                                    full_steps_per_ep: int = 512,
                                    swap_steps_per_ep: int = 80,
-                                   swap_bc_pretrain_epochs: int = 0):
+                                   swap_bc_pretrain_epochs: int = 0,
+                                   enable_timing: bool = False,
+                                   full_log_csv: Optional[str] = None,
+                                   swap_log_csv: Optional[str] = None,
+                                   ppo_clip_eps: float = 0.2,
+                                   ppo_value_coef: float = 1.0,
+                                   ppo_entropy_coef: float = 0.01,
+                                   ppo_max_grad_norm: float = 0.5):
     """
     1) Run Greedy+SA to get initial placement (calls your place_cells_greedy_sim_anneal).
     2) Train a small full-placer PPO (optionally) or use greedy to produce assignment order.
@@ -923,12 +1086,17 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
         ng['cell_name'] = ng['cell_name'].astype(str)
         netlist_graph = ng
     # 1) Greedy+SA
+    t_total_start = time.perf_counter()
+    t_greedy_start = time.perf_counter()
     updated_pins, placement_df = place_cells_greedy_sim_anneal(fabric, fabric_df, pins_df, ports_df, netlist_graph)
+    t_greedy_end = time.perf_counter()
     # placement_df columns: cell_name, site_id, x_um, y_um
     sites_df = build_sites_from_fabric_df(fabric_df)
     sites_map = {int(r.site_id): (float(r.x_um), float(r.y_um)) for r in sites_df.itertuples(index=False)}
     fixed_pins = fixed_points_from_pins(updated_pins)
+    t_level_start = time.perf_counter()
     g_levels = build_dependency_levels(updated_pins, netlist_graph)
+    t_level_end = time.perf_counter()
     # build order by dependency level
     order = g_levels[["cell_name","dependency_level"]].drop_duplicates().sort_values(by=["dependency_level","cell_name"])
     cells_order = [str(x) for x in order["cell_name"].tolist()]
@@ -951,6 +1119,7 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
     netlist_graph = _validate_and_enhance_directions(netlist_graph)
 
     # 2) Full placer (optional): train/apply on curriculum windows preserving others via start_assignments
+    t_full_train_total = 0.0
     if full_placer_train_eps and full_placer_train_eps > 0:
         # Build current placement map
         placement_map = {r.cell_name: (float(r.x_um), float(r.y_um), int(r.site_id)) for r in placement_df.itertuples(index=False)}
@@ -959,6 +1128,7 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
         full_agent = None
         assign_map = None
         for w in window_sizes:
+            t_win_start = time.perf_counter()
             window_df = placement_df.sort_values(by=["x_um","y_um"]).head(w)
             window_cells = window_df["cell_name"].astype(str).tolist()
             start_assignments: Dict[str,int] = {c: int(placement_map[c][2]) for c in placement_map.keys() if c not in window_cells}
@@ -967,15 +1137,22 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
             obs0 = env0.reset(); obs_dim = obs0.shape[0]
             if full_agent is None:
                 # Size actor head to the env max_action (kept constant across windows)
-                full_agent = PPOAgent(obs_dim=obs_dim, action_dim=env0.max_action, device=device)
+                full_agent = PPOAgent(obs_dim=obs_dim, action_dim=env0.max_action, device=device,
+                                      clip_eps=ppo_clip_eps, value_coef=ppo_value_coef,
+                                      entropy_coef=ppo_entropy_coef, max_grad_norm=ppo_max_grad_norm)
             train_ppo_full_placer(
                 lambda: build_full_assign_env_from_data(window_order, sites_df, netlist_graph, updated_pins, start_assignments=start_assignments, max_action=min(max_action_full, 32)),
                 full_agent,
                 total_episodes=eps_per,
                 steps_per_episode=full_steps_per_ep,
-                device=device
+                device=device,
+                log_csv_path=full_log_csv
             )
             assign_map = apply_full_placer_agent(full_agent, env0, eps=0.0)
+            t_win_end = time.perf_counter()
+            t_full_train_total += (t_win_end - t_win_start)
+            if enable_timing:
+                print(f"[RLTiming] full_placer_window size={w} eps={eps_per} time={t_win_end - t_win_start:.3f}s")
         if assign_map:
             rows = []
             for r in placement_df.itertuples(index=False):
@@ -1073,11 +1250,23 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
         return placement_df
     first = train_batches[0]
     batch_cells, placement_subset, sites_local, nets_local, fixed_local = first
-    env0 = SwapRefineEnv(batch_cells, placement_subset, sites_local, nets_local, fixed_local)
+    # Build global type maps
+    site_types_map_full: Dict[int,str] = {}
+    if 'cell_type' in sites_df.columns:
+        site_types_map_full = {int(r.site_id): str(getattr(r,'cell_type')) for r in sites_df.itertuples(index=False) if hasattr(r,'cell_type')}
+    cell_types_map_full: Dict[str,str] = {}
+    if 'cell_type' in netlist_graph.columns:
+        cell_types_map_full = {str(r.cell_name): str(getattr(r,'cell_type')) for r in netlist_graph[['cell_name','cell_type']].dropna().itertuples(index=False)}
+    site_types_local = {sid: site_types_map_full.get(sid, '') for sid in sites_local.keys()}
+    cell_types_local = {c: cell_types_map_full.get(c, '') for c in batch_cells}
+    env0 = SwapRefineEnv(batch_cells, placement_subset, sites_local, nets_local, fixed_local,
+                         site_types_map=site_types_local, cell_types_map=cell_types_local)
     obs0 = env0.reset()
     obs_dim_swap = obs0.shape[0]
     action_dim_swap = len(env0.action_pairs)
-    swap_agent = PPOAgent(obs_dim=obs_dim_swap, action_dim=action_dim_swap, device=device)
+    swap_agent = PPOAgent(obs_dim=obs_dim_swap, action_dim=action_dim_swap, device=device,
+                          clip_eps=ppo_clip_eps, value_coef=ppo_value_coef,
+                          entropy_coef=ppo_entropy_coef, max_grad_norm=ppo_max_grad_norm)
 
     # Optional: BC pretrain for swap agent to warm start
     if swap_bc_pretrain_epochs and swap_bc_pretrain_epochs > 0:
@@ -1088,36 +1277,85 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
     # Train swap agent (PPO)
     def swap_env_builder_factory(batch_tuple):
         def _fn():
-            return SwapRefineEnv(batch_tuple[0], batch_tuple[1], batch_tuple[2], batch_tuple[3], batch_tuple[4])
+            cells_b, placement_subset_b, sites_local_b, nets_local_b, fixed_local_b = batch_tuple
+            site_types_local_b = {sid: site_types_map_full.get(sid, '') for sid in sites_local_b.keys()}
+            cell_types_local_b = {c: cell_types_map_full.get(c, '') for c in cells_b}
+            return SwapRefineEnv(cells_b, placement_subset_b, sites_local_b, nets_local_b, fixed_local_b,
+                                 site_types_map=site_types_local_b, cell_types_map=cell_types_local_b)
         return _fn
 
     # sample some batches for training
     limit_train = min(len(train_batches), max_train_batches if max_train_batches is not None else 50)
     sample_batches = train_batches[:limit_train]
     # train agent on each batch sequentially (quick prototype)
+    t_swap_train_total = 0.0
     for bidx, b in enumerate(sample_batches):
+        t_batch_start = time.perf_counter()
         env_builder = swap_env_builder_factory(b)
-        train_ppo_swap_refiner(env_builder, swap_agent, episodes=swap_refine_train_eps, steps_per_episode=swap_steps_per_ep, device=device)
+        train_ppo_swap_refiner(env_builder, swap_agent, episodes=swap_refine_train_eps, steps_per_episode=swap_steps_per_ep, device=device, log_csv_path=swap_log_csv)
+        t_batch_end = time.perf_counter()
+        t_swap_train_total += (t_batch_end - t_batch_start)
+        if enable_timing:
+            print(f"[RLTiming] swap_train_batch index={bidx} time={t_batch_end - t_batch_start:.3f}s")
 
     # 4) Apply swap refiner across all batches
     total_apply = len(placement_df)//batch_size
     if max_apply_batches is not None:
         total_apply = min(total_apply, max_apply_batches)
+    t_swap_apply_total = 0.0
     for bidx in range(0, total_apply):
+        t_apply_start = time.perf_counter()
         cells = selector(placement_df, bidx)
         if not cells or len(cells) != batch_size:
             continue
-        placement_map = apply_swap_refiner(swap_agent, cells, placement_map, sites_map, netlist_graph, updated_pins, steps=50)
+        placement_map = apply_swap_refiner(swap_agent, cells, placement_map, sites_map, netlist_graph, updated_pins, steps=50,
+                           site_types_map=site_types_map_full, cell_types_map=cell_types_map_full)
+        t_apply_end = time.perf_counter()
+        t_swap_apply_total += (t_apply_end - t_apply_start)
+        if enable_timing:
+            print(f"[RLTiming] swap_apply_batch index={bidx} time={t_apply_end - t_apply_start:.3f}s")
 
     # rebuild placement_df from placement_map
     rows = []
     for cell_name, (x,y,sid) in placement_map.items():
         rows.append({"cell_name": cell_name, "site_id": int(sid), "x_um": float(x), "y_um": float(y)})
     refined_df = pd.DataFrame(rows)
+    t_total_end = time.perf_counter()
+    if enable_timing:
+        print(f"[RLTiming] summary total={t_total_end - t_total_start:.3f}s greedy_sa={t_greedy_end - t_greedy_start:.3f}s levelize={t_level_end - t_level_start:.3f}s full_train={t_full_train_total:.3f}s swap_train={t_swap_train_total:.3f}s swap_apply={t_swap_apply_total:.3f}s")
     return refined_df
 
 # Simple note when executed directly
 if __name__ == "__main__":
-    print("This module provides PPO-based placer/refiner helpers. Import and call run_greedy_sa_then_rl_pipeline(...) from your driver script.")
+    import sys
+    if "--smoke-cell-type" in sys.argv:
+        # Simple smoke test for FullAssignEnv cell type filtering
+        # Create 6 sites: 3 of type A, 3 of type B
+        sites_df_test = pd.DataFrame({
+            "cell_x": [0,10,20, 0,10,20],
+            "cell_y": [0,0,0, 10,10,10],
+            "cell_type": ["A","A","A","B","B","B"],
+        })
+        sites_df_test = build_sites_from_fabric_df(sites_df_test)
+        # Define cells: 4 cells of type A, 2 of type B
+        cells_order = ["cA1","cA2","cA3","cA4","cB1","cB2"]
+        netlist_graph_test = pd.DataFrame({
+            "cell_name": cells_order,
+            "net_bit": [0,1,2,3,4,5],
+            "cell_type": ["A","A","A","A","B","B"],
+        })
+        pins_df_test = pd.DataFrame({"net_bit": [], "x_um": [], "y_um": []})
+        env = build_full_assign_env_from_data(cells_order, sites_df_test, netlist_graph_test, pins_df_test, max_action=10)
+        obs = env.reset()
+        # After reset, candidates for first cell (type A) should only include A sites
+        cand_ids = env._last_candidates
+        cand_site_types = [env.site_types[idx] if env.site_types else "?" for idx in cand_ids]
+        print("[SmokeTest] Candidate site types for first A cell:", cand_site_types)
+        if all(ct == "A" for ct in cand_site_types):
+            print("[SmokeTest] PASS: filtering restricts to matching site types.")
+        else:
+            print("[SmokeTest] FAIL: unexpected site type in candidates.")
+    else:
+        print("This module provides PPO-based placer/refiner helpers. Import and call run_greedy_sa_then_rl_pipeline(...) from your driver script.")
 
 # End of file

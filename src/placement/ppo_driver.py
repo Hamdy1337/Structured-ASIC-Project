@@ -1,5 +1,6 @@
 import argparse
 import os
+import time
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -36,6 +37,13 @@ def main():
     ap.add_argument("--max-apply-batches", type=int, default=None, help="Max batches to apply refinement; default all")
     ap.add_argument("--full-steps-per-ep", type=int, default=512, help="Steps per episode for full placer")
     ap.add_argument("--out-csv", default="build/ppo_refined_placement.csv")
+    ap.add_argument("--timing", action="store_true", help="Enable detailed RL timing logs")
+    ap.add_argument("--full-log-csv", default=None, help="Optional CSV path to log per-episode full placer PPO metrics")
+    ap.add_argument("--swap-log-csv", default=None, help="Optional CSV path to log per-episode swap refiner PPO metrics")
+    ap.add_argument("--ppo-clip", type=float, default=0.2, help="PPO clip epsilon")
+    ap.add_argument("--ppo-value-coef", type=float, default=1.0, help="Value loss coefficient")
+    ap.add_argument("--ppo-entropy-coef", type=float, default=0.01, help="Entropy bonus coefficient")
+    ap.add_argument("--ppo-max-grad-norm", type=float, default=0.5, help="Max gradient norm for clipping")
     args = ap.parse_args()
 
     # Load inputs (use merged fabric DB to ensure cell_x/cell_y columns exist)
@@ -44,6 +52,7 @@ def main():
     logical_db, ports_df, netlist_graph = parse_netlist(args.design_json)
 
     # Run pipeline
+    t_pipeline_start = time.perf_counter()
     refined_df = run_greedy_sa_then_rl_pipeline(
         fabric,
         fabric_df,
@@ -59,7 +68,15 @@ def main():
         max_apply_batches=args.max_apply_batches,
         full_steps_per_ep=args.full_steps_per_ep,
         swap_steps_per_ep=args.swap_steps_per_ep,
+        enable_timing=args.timing,
+        full_log_csv=args.full_log_csv,
+        swap_log_csv=args.swap_log_csv,
+        ppo_clip_eps=args.ppo_clip,
+        ppo_value_coef=args.ppo_value_coef,
+        ppo_entropy_coef=args.ppo_entropy_coef,
+        ppo_max_grad_norm=args.ppo_max_grad_norm,
     )
+    t_pipeline_end = time.perf_counter()
 
     # Compute HPWL before/after
     # Greedy+SA HPWL can be approximated by re-running Greedy+SA part inside pipeline,
@@ -71,24 +88,40 @@ def main():
     updated_pins, placement_df = place_cells_greedy_sim_anneal(
         fabric, fabric_df, pins_df, ports_df, netlist_graph
     )
+    # Write to a CSV for later inspection and visualization
+    placement_out_path = Path(args.out_csv).with_suffix(f'.{Path(args.design_json).stem}.greedy_sa_placement.csv')
+    placement_out_path.parent.mkdir(parents=True, exist_ok=True)
+    placement_df.to_csv(placement_out_path, index=False)
+    print(f"Saved Greedy+SA placement to: {placement_out_path}")
 
     nets = nets_map_from_graph_df(netlist_graph)
     fixed_pts = fixed_points_from_pins(updated_pins)
 
+    t_hpwl_start = time.perf_counter()
     hpwl_before = hpwl_of_nets(nets, _pos_map_from_df(placement_df), fixed_pts)
     hpwl_after = hpwl_of_nets(nets, _pos_map_from_df(refined_df), fixed_pts)
+    t_hpwl_end = time.perf_counter()
 
     delta = hpwl_after - hpwl_before
     pct = (delta / hpwl_before * 100.0) if hpwl_before > 0 else 0.0
 
-    print("HPWL Summary (all nets):")
-    print(f"  Before (Greedy+SA): {hpwl_before:.3f}")
-    print(f"  After  (PPO refine): {hpwl_after:.3f}")
-    print(f"  Delta: {delta:.3f}  ({pct:.2f}%)")
+    # Prepare refined placement output path before printing
+    out_path = Path(args.out_csv).with_suffix(f'.{Path(args.design_json).stem}.ppo_refined_placement.csv')
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    print("==== Greedy+SA Placement ====")
+    print(f"Greedy+SA HPWL (all nets): {hpwl_before:.3f}")
+    print(f"Placement CSV: {placement_out_path}")
+    print("==== PPO Refined Placement ====")
+    print(f"PPO Refined HPWL (all nets): {hpwl_after:.3f}")
+    print(f"Refined CSV: {out_path}")
+    print("==== Delta ====")
+    print(f"ΔHPWL: {delta:.3f} ({pct:.2f}%)")
+    print("==== Timing ====")
+    print(f"Pipeline total: {t_pipeline_end - t_pipeline_start:.3f}s")
+    print(f"HPWL compute: {t_hpwl_end - t_hpwl_start:.3f}s")
 
     # Save
-    out_path = Path(args.out_csv)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
     refined_df.to_csv(out_path, index=False)
     print(f"Saved refined placement to: {out_path}")
 
