@@ -27,6 +27,7 @@ from src.placement.placement_utils import (
     driver_points,
 )
 from src.placement.simulated_annealing import anneal_batch
+from src.validation.placement_validator import validate_placement, print_validation_report
 
 
 def place_cells_greedy_sim_anneal(
@@ -69,7 +70,8 @@ def place_cells_greedy_sim_anneal(
         sa_seed: Random seed for reproducibility (default: 42)
 
     Returns:
-        (updated_pins_df, placement_df)
+        (updated_pins_df, placement_df, validation_result)
+        where validation_result is a PlacementValidationResult object
     """
     t_total_start = time.perf_counter()
     
@@ -174,7 +176,7 @@ def place_cells_greedy_sim_anneal(
 
     # ---- Phase 8: Level-by-Level Placement (Growing) ----
     print("[DEBUG] === PHASE 8: LEVEL-BY-LEVEL PLACEMENT (GROWING) ===")
-    batch_size = 24
+    batch_size = 48
     greedy_time_total = 0.0
     sa_time_total = 0.0
     per_level_times: List[Tuple[int, float, float]] = []
@@ -235,24 +237,47 @@ def place_cells_greedy_sim_anneal(
         print(f"[DEBUG] Level {lvl}: Starting simulated annealing...")
         t_sa_start = time.perf_counter()
         num_batches = 0
-        total_batches = (len(level_cells) + batch_size - 1) // batch_size
-        for batch_idx, i in enumerate(range(0, len(level_cells), batch_size), 1):
-            batch: List[str] = [c for c in level_cells[i:i + batch_size] if c in assignments]
-            if len(batch) < 2:
-                continue  # Skip batches with < 2 cells
-            num_batches += 1
-            print(f"[PROGRESS] L{lvl}: SA batch {num_batches}/{total_batches} ({len(batch)} cells)", flush=True)
-            anneal_batch(
-                batch, pos_cells, assignments, sites_df, cell_to_nets, fixed_pts,
-                iters=sa_moves_per_temp,
-                alpha=sa_cooling_rate,
-                T_initial=sa_T_initial,
-                p_refine=sa_p_refine,
-                p_explore=sa_p_explore,
-                refine_max_distance=sa_refine_max_distance,
-                W_initial=sa_W_initial,
-                seed=sa_seed
-            )
+        
+        # Group cells by type for efficient batching (only swap cells of same type)
+        cells_by_type: Dict[Optional[str], List[str]] = {}
+        for c in level_cells:
+            if c not in assignments:
+                continue
+            cell_type = cell_type_by_cell.get(c)
+            cells_by_type.setdefault(cell_type, []).append(c)
+        
+        # Calculate total batches for progress reporting
+        total_batches = sum((len(type_cells) + batch_size - 1) // batch_size 
+                           for type_cells in cells_by_type.values() 
+                           if len(type_cells) >= 2)
+        
+        # Process each cell type separately
+        for cell_type, type_cells in cells_by_type.items():
+            if len(type_cells) < 2:
+                continue  # Skip types with < 2 cells (can't swap)
+            
+            type_name = str(cell_type) if cell_type is not None else "unknown"
+            print(f"[DEBUG] Level {lvl}: Processing {len(type_cells)} cells of type '{type_name}'")
+            
+            # Batch cells of this type
+            for i in range(0, len(type_cells), batch_size):
+                batch: List[str] = type_cells[i:i + batch_size]
+                if len(batch) < 2:
+                    continue  # Skip batches with < 2 cells
+                num_batches += 1
+                print(f"[PROGRESS] L{lvl}: SA batch {num_batches}/{total_batches} ({len(batch)} cells, type: {type_name[:20]})", flush=True)
+                anneal_batch(
+                    batch, pos_cells, assignments, sites_df, cell_to_nets, fixed_pts,
+                    iters=sa_moves_per_temp,
+                    alpha=sa_cooling_rate,
+                    T_initial=sa_T_initial,
+                    p_refine=sa_p_refine,
+                    p_explore=sa_p_explore,
+                    refine_max_distance=sa_refine_max_distance,
+                    W_initial=sa_W_initial,
+                    seed=sa_seed,
+                    cell_types=cell_type_by_cell
+                )
         t_sa_end = time.perf_counter()
         sa_time = t_sa_end - t_sa_start
         sa_time_total += sa_time
@@ -292,6 +317,25 @@ def place_cells_greedy_sim_anneal(
     print(f"[DEBUG] Built placement DataFrame with {len(placement_df)} cells")
     print(f"[DEBUG] Building placement DataFrame completed in {df_dur:.3f}s")
     print()
+    
+    # ---- Phase 10: Validate Placement ----
+    print("[DEBUG] === PHASE 10: VALIDATING PLACEMENT ===")
+    t_validate_start = time.perf_counter()
+    validation_result = validate_placement(
+        placement_df=placement_df,
+        netlist_graph=netlist_graph,
+        sites_df=sites_df,
+        assignments_df=_assign,
+        ports_df=ports_df,
+        pins_df=pins_df,
+        updated_pins=updated_pins,
+        fabric_df=fabric_df,
+    )
+    t_validate_end = time.perf_counter()
+    validate_dur = t_validate_end - t_validate_start
+    print(f"[DEBUG] Validation completed in {validate_dur:.3f}s")
+    print_validation_report(validation_result)
+    print()
 
     # ---- Final Timing Summary ----
     t_total_end = time.perf_counter()
@@ -310,6 +354,7 @@ def place_cells_greedy_sim_anneal(
     print(f"[DEBUG]   - Greedy Placement:                   {greedy_time_total:.3f}s ({greedy_time_total/total_dur*100:.1f}%)")
     print(f"[DEBUG]   - Simulated Annealing:                 {sa_time_total:.3f}s ({sa_time_total/total_dur*100:.1f}%)")
     print(f"[DEBUG] Phase 9 - Build Placement DataFrame:     {df_dur:.3f}s ({df_dur/total_dur*100:.1f}%)")
+    print(f"[DEBUG] Phase 10 - Validate Placement:           {validate_dur:.3f}s ({validate_dur/total_dur*100:.1f}%)")
     print(f"[DEBUG] TOTAL TIME:                              {total_dur:.3f}s")
     print("[DEBUG] ========================================")
     print()
@@ -322,14 +367,14 @@ def place_cells_greedy_sim_anneal(
         for lvl_id, g_t, sa_t in top_levels:
             print(f"[PlacerTiming] level={lvl_id} greedy={g_t:.3f}s sa={sa_t:.3f}s")
     
-    return updated_pins, placement_df
+    return updated_pins, placement_df, validation_result
 
 
 if __name__ == "__main__":
     fabric_file_path = "inputs/Platform/fabric.yaml"
     fabric_cells_file_path = "inputs/Platform/fabric_cells.yaml"
     pins_file_path = "inputs/Platform/pins.yaml"
-    netlist_file_path = "inputs/designs/aes_128_mapped.json"
+    netlist_file_path = "inputs/designs/6502_mapped.json"
 
     # Extract design name from netlist file path
     # e.g., "inputs/designs/arith_mapped.json" -> "arith"
@@ -344,7 +389,7 @@ if __name__ == "__main__":
     
     # Time overall placement
     placement_start = time.time()
-    assigned_pins, placement_df = place_cells_greedy_sim_anneal(
+    assigned_pins, placement_df, validation_result = place_cells_greedy_sim_anneal(
         fabric=fabric,
         fabric_df=fabric_df,
         pins_df=pins_df,
@@ -369,3 +414,12 @@ if __name__ == "__main__":
     print(f"\nPlacement complete!")
     print(f"Placed {len(placement_df)} cells")
     print(f"Output written to: {output_csv}")
+    
+    # Check validation result
+    if not validation_result.passed:
+        print("\n⚠️  WARNING: Placement validation found errors (see report above)")
+        # Uncomment below to exit on validation failure:
+        # import sys
+        # sys.exit(1)
+    else:
+        print("\n✅ Placement validation passed!")

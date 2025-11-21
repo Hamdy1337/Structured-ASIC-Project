@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Dict, List, Tuple, Set, Optional
 import math
 import random
+import pandas as pd
 
 from src.placement.placement_utils import hpwl_for_nets
 
@@ -108,7 +109,8 @@ def anneal_batch(
     p_explore: float = 0.3,
     refine_max_distance: float = 100.0,
     W_initial: float = 0.5,
-    seed: int = 42
+    seed: int = 42,
+    cell_types: Optional[Dict[str, Optional[str]]] = None
 ) -> None:
     """Perform simulated annealing on a batch of cells with hybrid move set.
     
@@ -116,7 +118,7 @@ def anneal_batch(
         batch_cells: List of cell names to optimize
         pos_cells: Dict mapping cell_name -> (x, y) position (modified in-place)
         assignments: Dict mapping cell_name -> site_id (modified in-place)
-        sites_df: DataFrame with site information (columns: site_id, x_um, y_um)
+        sites_df: DataFrame with site information (columns: site_id, x_um, y_um, cell_type)
         cell_nets: Dict mapping cell_name -> set of net_bits
         fixed_pts: Dict mapping net_bit -> list of (x, y) fixed pin positions
         iters: Number of SA iterations (moves per temperature step)
@@ -127,9 +129,25 @@ def anneal_batch(
         refine_max_distance: Maximum Manhattan distance for refine moves in microns (default: 100.0)
         W_initial: Initial exploration window size as fraction of die size (default: 0.5 = 50%)
         seed: Random seed for reproducibility
+        cell_types: Optional dict mapping cell_name -> cell_type for compatibility checking
     """
     if len(batch_cells) < 2:
         return
+    
+    # Compatibility check helper (only enforced if sites_df has 'cell_type' and cell_types is provided)
+    def _is_compatible(cell: str, site_id: int) -> bool:
+        if cell_types is None or "cell_type" not in sites_df.columns:
+            return True  # No type checking if types not provided
+        req = cell_types.get(cell)
+        if req is None:
+            return True  # Unknown cell type, allow placement
+        try:
+            st = sites_df.at[site_id, "cell_type"]  # type: ignore[index]
+            if pd.isna(st):
+                return True  # Unknown site type, allow placement
+            return str(st) == str(req)
+        except (KeyError, IndexError):
+            return True  # Site not found, skip check
     
     # Precompute nets touched by the batch
     batch_nets: Set[int] = set()
@@ -185,6 +203,10 @@ def anneal_batch(
         
         sa = assignments[a]
         sb = assignments[b]
+        
+        # Enforce site-type compatibility on proposed swap
+        if not (_is_compatible(a, sb) and _is_compatible(b, sa)):
+            continue  # Skip incompatible swaps
         
         # Nets affected by swap
         nets_aff: Set[int] = set()
