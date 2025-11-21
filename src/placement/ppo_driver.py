@@ -83,7 +83,7 @@ def main():
     # but we can reconstruct from refined_df vs initial Greedy+SA placement by running Greedy+SA once.
     # For simplicity, compute HPWL on refined_df and report it; if the placement_df from Greedy+SA is needed,
     # you can modify the pipeline to return both. Here, we recompute Greedy+SA quickly:
-    from src.placement.placer import place_cells_greedy_sim_anneal
+    from placement.placer2 import place_cells_greedy_sim_anneal
 
     updated_pins, placement_df = place_cells_greedy_sim_anneal(
         fabric, fabric_df, pins_df, ports_df, netlist_graph
