@@ -7,91 +7,128 @@ from typing import Dict, List, Tuple, Set, Optional
 import math
 import random
 import pandas as pd
+import numpy as np
 
 from src.placement.placement_utils import hpwl_for_nets
 
 
-def _manhattan_distance(pos1: Tuple[float, float], pos2: Tuple[float, float]) -> float:
-    """Calculate Manhattan distance between two positions."""
-    return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
-
-
-def _pick_refine_move(
-    batch_cells: List[str],
+def _hpwl_for_nets_optimized(
+    nets: Set[int],
     pos_cells: Dict[str, Tuple[float, float]],
+    net_to_cells: Dict[int, List[str]],  # Precomputed reverse mapping
+    fixed_pts: Dict[int, List[Tuple[float, float]]]
+) -> float:
+    """Optimized HPWL calculation using NumPy vectorization.
+    
+    Args:
+        nets: Set of net bits to calculate HPWL for
+        pos_cells: Dict mapping cell_name -> (x, y) position
+        net_to_cells: Precomputed dict mapping net_bit -> list of cell names on that net
+        fixed_pts: Dict mapping net_bit -> list of (x, y) fixed pin positions
+    """
+    total = 0.0
+    for nb in nets:
+        xs: List[float] = []
+        ys: List[float] = []
+        
+        # Get cells on this net (using precomputed mapping)
+        for cell in net_to_cells.get(nb, []):
+            pos = pos_cells.get(cell)
+            if pos is not None:
+                xs.append(pos[0])
+                ys.append(pos[1])
+        
+        # Fixed pins on this net
+        for (fx, fy) in fixed_pts.get(nb, []):
+            xs.append(fx)
+            ys.append(fy)
+        
+        if len(xs) >= 2:
+            # Use NumPy for faster min/max on larger lists
+            if len(xs) > 10:
+                xs_arr = np.array(xs, dtype=np.float64)
+                ys_arr = np.array(ys, dtype=np.float64)
+                total += float(np.max(xs_arr) - np.min(xs_arr) + np.max(ys_arr) - np.min(ys_arr))
+            else:
+                total += (max(xs) - min(xs)) + (max(ys) - min(ys))
+    
+    return total
+
+
+def _pick_refine_move_optimized(
+    batch_cells: List[str],
+    cell_pos_x: np.ndarray,
+    cell_pos_y: np.ndarray,
+    cell_to_idx: Dict[str, int],
     max_distance: float,
     rng: random.Random,
     max_attempts: int = 50
 ) -> Optional[Tuple[str, str]]:
-    """Pick two cells for a refine move (nearby cells).
-    
-    Returns two cells within max_distance of each other, or None if not found.
-    """
+    """Optimized refine move picking using NumPy vectorization."""
     if len(batch_cells) < 2:
         return None
     
+    batch_indices = np.array([cell_to_idx[c] for c in batch_cells], dtype=np.int32)
+    n_batch = len(batch_indices)
+    
     for _ in range(max_attempts):
-        a, b = rng.sample(batch_cells, 2)
-        if a == b:
+        # Random selection using indices
+        idx_a, idx_b = rng.sample(range(n_batch), 2)
+        if idx_a == idx_b:
             continue
         
-        pos_a = pos_cells.get(a)
-        pos_b = pos_cells.get(b)
-        if pos_a is None or pos_b is None:
-            continue
+        i_a = batch_indices[idx_a]
+        i_b = batch_indices[idx_b]
         
-        dist = _manhattan_distance(pos_a, pos_b)
+        # Vectorized Manhattan distance
+        dist = float(np.abs(cell_pos_x[i_a] - cell_pos_x[i_b]) + 
+                     np.abs(cell_pos_y[i_a] - cell_pos_y[i_b]))
+        
         if dist <= max_distance:
-            return (a, b)
+            return (batch_cells[idx_a], batch_cells[idx_b])
     
     # Fallback: return any two cells if no nearby pair found
     if len(batch_cells) >= 2:
-        return tuple(rng.sample(batch_cells, 2))  # type: ignore
+        idx_a, idx_b = rng.sample(range(n_batch), 2)
+        return (batch_cells[idx_a], batch_cells[idx_b])
     return None
 
 
-def _pick_explore_move(
+def _pick_explore_move_optimized(
     batch_cells: List[str],
-    pos_cells: Dict[str, Tuple[float, float]],
+    cell_pos_x: np.ndarray,
+    cell_pos_y: np.ndarray,
+    cell_to_idx: Dict[str, int],
     window_size: float,
     rng: random.Random,
     max_attempts: int = 50
 ) -> Optional[Tuple[str, str]]:
-    """Pick two cells for an explore move within the current window.
-    
-    Returns two cells within window_size Manhattan distance of each other.
-    The window shrinks over time (tied to temperature cooling via alpha).
-    
-    Args:
-        batch_cells: List of cell names to choose from
-        pos_cells: Dict mapping cell_name -> (x, y) position
-        window_size: Current window size in microns (shrinks over time)
-        rng: Random number generator
-        max_attempts: Maximum attempts to find a valid pair
-    
-    Returns:
-        Tuple of (cell_a, cell_b) or None if not found
-    """
+    """Optimized explore move picking using NumPy vectorization."""
     if len(batch_cells) < 2:
         return None
     
+    batch_indices = np.array([cell_to_idx[c] for c in batch_cells], dtype=np.int32)
+    n_batch = len(batch_indices)
+    
     for _ in range(max_attempts):
-        a, b = rng.sample(batch_cells, 2)
-        if a == b:
+        idx_a, idx_b = rng.sample(range(n_batch), 2)
+        if idx_a == idx_b:
             continue
         
-        pos_a = pos_cells.get(a)
-        pos_b = pos_cells.get(b)
-        if pos_a is None or pos_b is None:
-            continue
+        i_a = batch_indices[idx_a]
+        i_b = batch_indices[idx_b]
         
-        dist = _manhattan_distance(pos_a, pos_b)
+        # Vectorized Manhattan distance
+        dist = float(np.abs(cell_pos_x[i_a] - cell_pos_x[i_b]) + 
+                     np.abs(cell_pos_y[i_a] - cell_pos_y[i_b]))
+        
         if dist <= window_size:
-            return (a, b)
+            return (batch_cells[idx_a], batch_cells[idx_b])
     
     # Fallback: return any two cells if no pair found within window
     if len(batch_cells) >= 2:
-        return tuple(rng.sample(batch_cells, 2))  # type: ignore
+        idx_a, idx_b = rng.sample(range(n_batch), 2)
+        return (batch_cells[idx_a], batch_cells[idx_b])
     return None
 
 
@@ -114,6 +151,8 @@ def anneal_batch(
 ) -> None:
     """Perform simulated annealing on a batch of cells with hybrid move set.
     
+    OPTIMIZED VERSION: Uses NumPy arrays for fast lookups and vectorized operations.
+    
     Args:
         batch_cells: List of cell names to optimize
         pos_cells: Dict mapping cell_name -> (x, y) position (modified in-place)
@@ -134,45 +173,67 @@ def anneal_batch(
     if len(batch_cells) < 2:
         return
     
-    # Compatibility check helper (only enforced if sites_df has 'cell_type' and cell_types is provided)
+    # ===== OPTIMIZATION 1: Precompute NumPy arrays for site lookups =====
+    # Convert sites_df to NumPy arrays for O(1) access instead of O(log n) DataFrame.at[]
+    site_x_arr = sites_df["x_um"].to_numpy(dtype=np.float64)
+    site_y_arr = sites_df["y_um"].to_numpy(dtype=np.float64)
+    
+    # Precompute site type array if available
+    if "cell_type" in sites_df.columns and cell_types is not None:
+        site_type_arr = sites_df["cell_type"].astype(str).to_numpy()
+    else:
+        site_type_arr = None
+    
+    # ===== OPTIMIZATION 2: Precompute cell position arrays for move picking =====
+    # Build mapping from cell name to index in batch
+    cell_to_idx: Dict[str, int] = {cell: i for i, cell in enumerate(batch_cells)}
+    
+    # Precompute cell positions as NumPy arrays for vectorized distance calculations
+    cell_pos_x = np.array([pos_cells.get(c, (0.0, 0.0))[0] for c in batch_cells], dtype=np.float64)
+    cell_pos_y = np.array([pos_cells.get(c, (0.0, 0.0))[1] for c in batch_cells], dtype=np.float64)
+    
+    # Compatibility check helper (optimized to use NumPy array)
     def _is_compatible(cell: str, site_id: int) -> bool:
-        if cell_types is None or "cell_type" not in sites_df.columns:
-            return True  # No type checking if types not provided
+        if cell_types is None or site_type_arr is None:
+            return True
         req = cell_types.get(cell)
         if req is None:
-            return True  # Unknown cell type, allow placement
+            return True
         try:
-            st = sites_df.at[site_id, "cell_type"]  # type: ignore[index]
-            if pd.isna(st):
-                return True  # Unknown site type, allow placement
+            st = site_type_arr[site_id]
+            if pd.isna(st) or st == 'nan':
+                return True
             return str(st) == str(req)
-        except (KeyError, IndexError):
-            return True  # Site not found, skip check
+        except (IndexError, KeyError):
+            return True
     
     # Precompute nets touched by the batch
     batch_nets: Set[int] = set()
     for c in batch_cells:
         batch_nets |= cell_nets.get(c, set())
     
-    # Initial HPWL
-    cur = hpwl_for_nets(batch_nets, pos_cells, cell_nets, fixed_pts)
+    # Build net_to_cells mapping for ALL nets (needed for correct HPWL calculation)
+    # This includes all cells on each net, not just batch cells
+    net_to_cells: Dict[int, List[str]] = {}
+    for cell in pos_cells.keys():  # Iterate over ALL placed cells
+        for net in cell_nets.get(cell, set()):
+            net_to_cells.setdefault(net, []).append(cell)
+    
+    # Initial HPWL (using optimized version)
+    cur = _hpwl_for_nets_optimized(batch_nets, pos_cells, net_to_cells, fixed_pts)
     
     # Temperature schedule
     if T_initial is not None:
         T0 = T_initial
     else:
-        # Auto-calculate: use initial HPWL as basis
         T0 = max(1.0, cur / 50.0)
     temp = T0
     rng = random.Random(seed)
     
     # Exploration window schedule (tied to alpha)
-    # Calculate die size from sites_df
     die_width = float(sites_df["x_um"].max())
     die_height = float(sites_df["y_um"].max())
-    die_size = max(die_width, die_height)  # Use larger dimension
-    
-    # Initial window size (as fraction of die size)
+    die_size = max(die_width, die_height)
     W0 = W_initial * die_size
     window_size = W0
     
@@ -181,18 +242,23 @@ def anneal_batch(
     if total_prob > 0:
         p_refine_norm = p_refine / total_prob
     else:
-        # Default to refine if both are 0
         p_refine_norm = 1.0
     
     for i in range(iters):
         # Choose move type based on probability
         move_type_rand = rng.random()
         if move_type_rand < p_refine_norm:
-            # Refine move: swap nearby cells
-            move_result = _pick_refine_move(batch_cells, pos_cells, refine_max_distance, rng)
+            # Refine move: swap nearby cells (using optimized version)
+            move_result = _pick_refine_move_optimized(
+                batch_cells, cell_pos_x, cell_pos_y, cell_to_idx, 
+                refine_max_distance, rng
+            )
         else:
-            # Explore move: swap cells within current window (shrinks over time)
-            move_result = _pick_explore_move(batch_cells, pos_cells, window_size, rng)
+            # Explore move: swap cells within current window (using optimized version)
+            move_result = _pick_explore_move_optimized(
+                batch_cells, cell_pos_x, cell_pos_y, cell_to_idx, 
+                window_size, rng
+            )
         
         if move_result is None:
             continue
@@ -206,23 +272,38 @@ def anneal_batch(
         
         # Enforce site-type compatibility on proposed swap
         if not (_is_compatible(a, sb) and _is_compatible(b, sa)):
-            continue  # Skip incompatible swaps
+            continue
         
         # Nets affected by swap
         nets_aff: Set[int] = set()
         nets_aff |= cell_nets.get(a, set())
         nets_aff |= cell_nets.get(b, set())
         
-        # Calculate HPWL before swap
-        old = hpwl_for_nets(nets_aff, pos_cells, cell_nets, fixed_pts)
+        # Calculate HPWL before swap (using optimized version)
+        old = _hpwl_for_nets_optimized(nets_aff, pos_cells, net_to_cells, fixed_pts)
         
-        # Apply swap
+        # Apply swap (using NumPy array lookups - O(1) instead of O(log n))
         assignments[a], assignments[b] = sb, sa
-        pos_cells[a] = (float(sites_df.at[sb, "x_um"]), float(sites_df.at[sb, "y_um"]))  # type: ignore[arg-type]
-        pos_cells[b] = (float(sites_df.at[sa, "x_um"]), float(sites_df.at[sa, "y_um"]))  # type: ignore[arg-type]
+        new_x_a = float(site_x_arr[sb])
+        new_y_a = float(site_y_arr[sb])
+        new_x_b = float(site_x_arr[sa])
+        new_y_b = float(site_y_arr[sa])
         
-        # Calculate HPWL after swap
-        new = hpwl_for_nets(nets_aff, pos_cells, cell_nets, fixed_pts)
+        pos_cells[a] = (new_x_a, new_y_a)
+        pos_cells[b] = (new_x_b, new_y_b)
+        
+        # Update NumPy arrays for move picking (for next iteration)
+        idx_a = cell_to_idx.get(a)
+        idx_b = cell_to_idx.get(b)
+        if idx_a is not None:
+            cell_pos_x[idx_a] = new_x_a
+            cell_pos_y[idx_a] = new_y_a
+        if idx_b is not None:
+            cell_pos_x[idx_b] = new_x_b
+            cell_pos_y[idx_b] = new_y_b
+        
+        # Calculate HPWL after swap (using optimized version)
+        new = _hpwl_for_nets_optimized(nets_aff, pos_cells, net_to_cells, fixed_pts)
         d = new - old
         
         # Accept or reject
@@ -230,13 +311,26 @@ def anneal_batch(
         if accept:
             cur += d
         else:
-            # Revert swap
+            # Revert swap (using NumPy array lookups)
             assignments[a], assignments[b] = sa, sb
-            pos_cells[a] = (float(sites_df.at[sa, "x_um"]), float(sites_df.at[sa, "y_um"]))  # type: ignore[arg-type]
-            pos_cells[b] = (float(sites_df.at[sb, "x_um"]), float(sites_df.at[sb, "y_um"]))  # type: ignore[arg-type]
+            old_x_a = float(site_x_arr[sa])
+            old_y_a = float(site_y_arr[sa])
+            old_x_b = float(site_x_arr[sb])
+            old_y_b = float(site_y_arr[sb])
+            
+            pos_cells[a] = (old_x_a, old_y_a)
+            pos_cells[b] = (old_x_b, old_y_b)
+            
+            # Update NumPy arrays
+            if idx_a is not None:
+                cell_pos_x[idx_a] = old_x_a
+                cell_pos_y[idx_a] = old_y_a
+            if idx_b is not None:
+                cell_pos_x[idx_b] = old_x_b
+                cell_pos_y[idx_b] = old_y_b
         
         # Cool down every 20 iterations (temperature and window shrink together)
         if (i + 1) % 20 == 0:
             temp *= alpha
-            window_size *= alpha  # Window shrinks at same rate as temperature (beta = alpha)
+            window_size *= alpha
 
