@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Tuple, Any
 import re
+import time
 
 import pandas as pd
 
@@ -43,14 +44,12 @@ def _normalize_side(side: Optional[str]) -> Optional[str]:
 
 
 def _side_rank(side: Optional[str]) -> int:
-    """Return numeric rank for side ordering: W=0, S=1, E=2, N=3, unknown=4."""
     order = {"W": 0, "S": 1, "E": 2, "N": 3}
     card = _normalize_side(side)
     return order[card] if card in order else 4
 
 
 def _sort_key_for_pin(row: pd.Series) -> Tuple[int, float, float, int]:
-    """Generate sort key for physical pin ordering."""
     side = row.get("side")
     x = float(row.get("x_um", 0.0))
     y = float(row.get("y_um", 0.0))
@@ -82,6 +81,8 @@ def assign_ports_to_pins(pins_df: pd.DataFrame, ports_df: pd.DataFrame) -> Tuple
             "pin_index", "pin_name", "port_name", "direction", "net_base", "net_bit"
         ])
 
+    print("[DEBUG] [Seeding] Initializing pin assignment...")
+    t_init_start = time.perf_counter()
     pins = pins_df.copy()
     pins["assigned"] = False
     pins["assigned_port"] = None
@@ -93,8 +94,13 @@ def assign_ports_to_pins(pins_df: pd.DataFrame, ports_df: pd.DataFrame) -> Tuple
     ports = ports_df.copy()
     ports_dir = ports["direction"].astype(str).str.lower()
     ports["_direction_l"] = ports_dir
+    t_init_end = time.perf_counter()
+    print(f"[DEBUG] [Seeding] Initialization completed in {t_init_end - t_init_start:.3f}s")
+    print(f"[DEBUG] [Seeding] Processing {len(pins)} pins and {len(ports)} ports")
 
     # Build candidate indices per direction and per (direction, base) from pin names
+    print("[DEBUG] [Seeding] Building candidate pin pools...")
+    t_pools_start = time.perf_counter()
     candidates_by_dir: Dict[str, List[int]] = {}
     candidates_by_dir_base: Dict[str, Dict[str, List[int]]] = {}
     for dir_l, group in pins.groupby(pins_dir):  # type: ignore
@@ -111,6 +117,8 @@ def assign_ports_to_pins(pins_df: pd.DataFrame, ports_df: pd.DataFrame) -> Tuple
                 pin_base, _ = _parse_bus(pin_name)
                 base_bins.setdefault(pin_base, []).append(pin_idx)
         candidates_by_dir_base[dir_key_local] = base_bins
+    t_pools_end = time.perf_counter()
+    print(f"[DEBUG] [Seeding] Built candidate pools for {len(candidates_by_dir)} directions in {t_pools_end - t_pools_start:.3f}s")
 
     # Use ports['net_name'] as the grouping base exactly (per-signal matching),
     # and ports['net_bit'] for ordering; fallback to port_name only if net_name missing.
@@ -168,12 +176,15 @@ def assign_ports_to_pins(pins_df: pd.DataFrame, ports_df: pd.DataFrame) -> Tuple
     # and map them to pins with identical names first (case-insensitive).
     # This ensures stable, intention-aligned placement for global nets.
     # ------------------------------------------------------------------
+    print("[DEBUG] [Seeding] Processing special ports (clock/reset)...")
+    t_special_start = time.perf_counter()
     special_port_patterns = {
         "clock": re.compile(r"^(clk|clock)$", re.IGNORECASE),
         "reset": re.compile(r"^(rst|rst_n|reset|reset_n)$", re.IGNORECASE),
     }
     port_name_col = "port_name" if "port_name" in ports.columns else ("name" if "name" in ports.columns else None)
     used_port_indices: List[Any] = []
+    special_count = 0
     if port_name_col:
         pin_name_col = "name" if "name" in pins.columns else None
         for pattern in special_port_patterns.values():
@@ -206,10 +217,14 @@ def assign_ports_to_pins(pins_df: pd.DataFrame, ports_df: pd.DataFrame) -> Tuple
                     remove_all_bins=True,
                 )
                 used_port_indices.append(getattr(row, "Index"))
+                special_count += 1
             # pools already updated per assignment via _commit_assignment
+    t_special_end = time.perf_counter()
+    print(f"[DEBUG] [Seeding] Assigned {special_count} special ports in {t_special_end - t_special_start:.3f}s")
 
     # Exclude already assigned special ports from further grouping
     residual_ports = ports[~ports.index.isin(used_port_indices)].copy()  # type: ignore[arg-type]
+    print(f"[DEBUG] [Seeding] Processing {len(residual_ports)} residual ports...")
 
     # Direction override for certain bases (e.g., oeb ports drive input pins)
     def _dir_for_port_base(dir_label: Any, base_label: Any) -> str:
@@ -219,7 +234,20 @@ def assign_ports_to_pins(pins_df: pd.DataFrame, ports_df: pd.DataFrame) -> Tuple
         return str(dir_label)
 
     # Group ports by (direction, base)
-    for (dir_l, base), g in residual_ports.groupby(["_direction_l", "_bus_base"], dropna=False):  # type: ignore
+    t_regular_start = time.perf_counter()
+    regular_count = 0
+    port_groups = list(residual_ports.groupby(["_direction_l", "_bus_base"], dropna=False))  # type: ignore
+    total_groups = len(port_groups)
+    print(f"[DEBUG] [Seeding] Processing {total_groups} port groups...")
+    progress_interval = max(1, total_groups // 10)  # Report every 10%
+    last_progress = 0
+    
+    for group_idx, ((dir_l, base), g) in enumerate(port_groups, 1):
+        # Progress reporting
+        if group_idx - last_progress >= progress_interval or group_idx == total_groups:
+            pct = (group_idx / total_groups) * 100
+            print(f"[PROGRESS] [Seeding] Groups: {group_idx}/{total_groups} ({pct:.1f}%) | Assigned: {regular_count}", flush=True)
+            last_progress = group_idx
         # Retrieve candidate pool for this direction
         dir_key: str = _dir_for_port_base(dir_l, base)  # type: ignore[arg-type]
         base_key: str = str(base)  # type: ignore[arg-type]
@@ -257,13 +285,21 @@ def assign_ports_to_pins(pins_df: pd.DataFrame, ports_df: pd.DataFrame) -> Tuple
                 bit_val=original_bit,
                 remove_all_bins=False,
             )
+            regular_count += 1
         # Refresh pools for next group
         pool_dir = candidates_by_dir.get(dir_key, [])
         pool_base = candidates_by_dir_base.get(dir_key, {}).get(base_key, [])
+    t_regular_end = time.perf_counter()
+    print(f"[DEBUG] [Seeding] Assigned {regular_count} regular ports in {t_regular_end - t_regular_start:.3f}s")
 
+    t_final_start = time.perf_counter()
     assignments_df = pd.DataFrame(
         assignments,
         columns=["pin_index", "pin_name", "port_name", "direction", "net_base", "net_bit"],
     )
+    t_final_end = time.perf_counter()
+    total_assignments = len(assignments)
+    print(f"[DEBUG] [Seeding] Built assignments DataFrame with {total_assignments} assignments in {t_final_end - t_final_start:.3f}s")
+    print(f"[DEBUG] [Seeding] Total assignments: {total_assignments} (special: {special_count}, regular: {regular_count})")
     return pins, assignments_df
 

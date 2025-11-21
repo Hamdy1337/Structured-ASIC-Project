@@ -8,6 +8,7 @@ from typing import Dict, List, Tuple, Any, Optional
 from pathlib import Path
 import time
 import pandas as pd
+import numpy as np
 
 from src.parsers.fabric_db import get_fabric_db, Fabric
 from src.parsers.pins_parser import load_and_validate as load_pins_df
@@ -22,7 +23,7 @@ from src.placement.placement_utils import (
     in_out_nets_by_cell,
     median,
     nearest_site,
-    hpwl_for_nets,
+    build_spatial_index,
     driver_points,
 )
 from src.placement.simulated_annealing import anneal_batch
@@ -70,43 +71,136 @@ def place_cells_greedy_sim_anneal(
     Returns:
         (updated_pins_df, placement_df)
     """
+    t_total_start = time.perf_counter()
+    
+    # ---- Phase 1: Port Assignment (Seeding) ----
+    print("[DEBUG] === PHASE 1: PORT ASSIGNMENT (SEEDING) ===")
+    t_seeding_start = time.perf_counter()
     updated_pins, _assign = assign_ports_to_pins(pins_df, ports_df)
+    t_seeding_end = time.perf_counter()
+    seeding_dur = t_seeding_end - t_seeding_start
+    print(f"[DEBUG] Port assignment (seeding) completed in {seeding_dur:.3f}s")
+    print(f"[DEBUG] Assigned {len(_assign)} port-to-pin mappings")
+    print()
 
-    # Build inputs for placement
+    # ---- Phase 2: Build Sites and Spatial Index ----
+    print("[DEBUG] === PHASE 2: BUILDING SITES AND SPATIAL INDEX ===")
+    t_build_start = time.perf_counter()
     sites_df = build_sites(fabric_df)
-    free_site_ids: List[int] = sites_df["site_id"].tolist()
+    print(f"[DEBUG] Built {len(sites_df)} sites from fabric")
+    # Build spatial index (grid + arrays)
+    site_x, site_y, is_free, site_type_arr, minx, miny, cell_w, cell_h, gx, gy, bins = build_spatial_index(sites_df)
+    t_build_end = time.perf_counter()
+    build_sites_dur = t_build_end - t_build_start
+    print(f"[DEBUG] Spatial index built: grid={gx}x{gy}, {len(sites_df)} sites")
+    print(f"[DEBUG] Building sites and spatial index completed in {build_sites_dur:.3f}s")
+    print()
+
+    # ---- Phase 3: Build Fixed Points ----
+    print("[DEBUG] === PHASE 3: BUILDING FIXED POINTS ===")
+    t_fixed_start = time.perf_counter()
     fixed_pts = fixed_points_from_pins(updated_pins)
+    t_fixed_end = time.perf_counter()
+    fixed_dur = t_fixed_end - t_fixed_start
+    print(f"[DEBUG] Built {len(fixed_pts)} fixed point nets")
+    print(f"[DEBUG] Building fixed points completed in {fixed_dur:.3f}s")
+    print()
+
+    # ---- Phase 4: Build Dependency Levels (Levelization) ----
+    print("[DEBUG] === PHASE 4: BUILDING DEPENDENCY LEVELS (LEVELIZATION) ===")
+    t_level_start = time.perf_counter()
     g_levels = build_dependency_levels(updated_pins, netlist_graph)
+    t_level_end = time.perf_counter()
+    levelize_dur = t_level_end - t_level_start
+    unique_levels = sorted(g_levels["dependency_level"].unique())
+    print(f"[DEBUG] Levelization completed: {len(unique_levels)} levels found")
+    print(f"[DEBUG] Building dependency levels completed in {levelize_dur:.3f}s")
+    print()
+
+    # ---- Phase 5: Build Cell Mappings ----
+    print("[DEBUG] === PHASE 5: BUILDING CELL MAPPINGS ===")
+    t_mapping_start = time.perf_counter()
     ins_by_cell, outs_by_cell = in_out_nets_by_cell(g_levels)
     cell_to_nets = nets_by_cell(g_levels)
+    t_mapping_end = time.perf_counter()
+    mapping_dur = t_mapping_end - t_mapping_start
+    print(f"[DEBUG] Built mappings for {len(ins_by_cell)} cells")
+    print(f"[DEBUG] Building cell mappings completed in {mapping_dur:.3f}s")
+    print()
     
-    # Build KD-tree for fast nearest site queries
-    from src.placement.placement_utils import build_site_tree
-    site_tree, index_to_site_id = build_site_tree(sites_df)
+    # ---- Phase 6: Build Cell Type Mapping ----
+    print("[DEBUG] === PHASE 6: BUILDING CELL TYPE MAPPING ===")
+    t_type_start = time.perf_counter()
+    cell_type_by_cell: Dict[str, Optional[str]] = {}
+    if "cell_type" in g_levels.columns:
+        for cell, grp in g_levels.groupby("cell_name"):  # type: ignore[arg-type]
+            ctype_vals = grp["cell_type"].dropna().astype(str).unique().tolist()
+            cell_type_by_cell[str(cell)] = ctype_vals[0] if ctype_vals else None
+        print(f"[DEBUG] Built cell type mapping for {len(cell_type_by_cell)} cells")
+    else:
+        print("[DEBUG] No cell_type column found, skipping cell type mapping")
+    t_type_end = time.perf_counter()
+    type_dur = t_type_end - t_type_start
+    print(f"[DEBUG] Building cell type mapping completed in {type_dur:.3f}s")
+    print()
 
-    # Order cells by level
+    # ---- Phase 7: Order Cells by Level ----
+    print("[DEBUG] === PHASE 7: ORDERING CELLS BY LEVEL ===")
+    t_order_start = time.perf_counter()
     cell_levels = g_levels[["cell_name", "dependency_level"]].drop_duplicates()
     order = cell_levels.sort_values(by=["dependency_level", "cell_name"]).reset_index(drop=True)
+    t_order_end = time.perf_counter()
+    order_dur = t_order_end - t_order_start
+    total_cells = len(order)
+    print(f"[DEBUG] Ordered {total_cells} cells across {len(unique_levels)} levels")
+    print(f"[DEBUG] Ordering cells completed in {order_dur:.3f}s")
+    print()
 
     # Placement state
     assignments: Dict[str, int] = {}  # cell_name -> site_id
     pos_cells: Dict[str, Tuple[float, float]] = {}
 
-    # Timing: Track annealing time
-    total_annealing_time = 0.0
-    greedy_start_time = time.time()
+    # Helper to get driver/source points for a cell
+    def _driver_points(cell: str) -> List[Tuple[float, float]]:
+        pts: List[Tuple[float, float]] = []
+        for nb in ins_by_cell.get(cell, set()):
+            # Placed driver cell on this net?
+            for other, pos in pos_cells.items():
+                if nb in outs_by_cell.get(other, set()):
+                    pts.append(pos)
+            # Top-level pins on this net
+            pts.extend(fixed_pts.get(nb, []))
+        return pts
 
-    # Level-by-level greedy + SA in small batches
+    # ---- Phase 8: Level-by-Level Placement (Growing) ----
+    print("[DEBUG] === PHASE 8: LEVEL-BY-LEVEL PLACEMENT (GROWING) ===")
     batch_size = 24
-    for lvl in sorted(order["dependency_level"].unique()):
+    greedy_time_total = 0.0
+    sa_time_total = 0.0
+    per_level_times: List[Tuple[int, float, float]] = []
+    total_levels = len(unique_levels)
+    
+    for level_idx, lvl in enumerate(sorted(unique_levels), 1):
+        print(f"[DEBUG] --- Processing Level {lvl} ({level_idx}/{total_levels}) ---")
+        t_level_processing_start = time.perf_counter()
+        
         # Build list of cell names (already strings or convertible)
         cells_series: pd.Series = order.loc[order["dependency_level"] == lvl, "cell_name"]  # type: ignore[assignment]
         level_cells = [str(x) for x in cells_series.tolist()]
+        print(f"[DEBUG] Level {lvl}: {len(level_cells)} cells to place")
         
-        # Greedy initial placement for level
-        for c in level_cells:
+        # ---- Greedy initial placement for level ----
+        print(f"[DEBUG] Level {lvl}: Starting greedy placement...")
+        t_greedy_start = time.perf_counter()
+        placed_count = 0
+        total_cells = len(level_cells)
+        # Progress reporting: every 10% or every 50 cells, whichever is smaller
+        progress_interval = max(1, min(50, total_cells // 10))
+        last_progress = 0
+        
+        for cell_idx, c in enumerate(level_cells, 1):
             # Compute target (median of driver points)
-            pts = driver_points(c, ins_by_cell, outs_by_cell, pos_cells, fixed_pts)
+            pts = _driver_points(c)
             if pts:
                 tx = median([p[0] for p in pts])
                 ty = median([p[1] for p in pts])
@@ -114,24 +208,40 @@ def place_cells_greedy_sim_anneal(
                 # fallback: center of available sites
                 tx = float(sites_df["x_um"].median())
                 ty = float(sites_df["y_um"].median())
-            
-            sid = nearest_site((tx, ty), free_site_ids, sites_df, site_tree, index_to_site_id)
+            required_type = cell_type_by_cell.get(c)
+            sid = nearest_site((tx, ty), is_free, sites_df, site_x, site_y, site_type_arr, minx, miny, cell_w, cell_h, gx, gy, bins, required_type=required_type)
             if sid is None:
                 continue
-            
             assignments[c] = sid
-            pos_cells[c] = (float(sites_df.at[sid, "x_um"]), float(sites_df.at[sid, "y_um"]))  # type: ignore[arg-type]
+            pos_x = float(sites_df.at[sid, "x_um"])  # type: ignore[arg-type]
+            pos_y = float(sites_df.at[sid, "y_um"])  # type: ignore[arg-type]
+            pos_cells[c] = (pos_x, pos_y)
             # consume site
-            free_site_ids.remove(sid)
+            is_free[sid] = False
+            placed_count += 1
+            
+            # Progress reporting
+            if cell_idx - last_progress >= progress_interval or cell_idx == total_cells:
+                pct = (cell_idx / total_cells) * 100
+                print(f"[PROGRESS] L{lvl}: {cell_idx}/{total_cells} ({pct:.1f}%) | Placed: {placed_count} | Latest: {c[:20]} @ ({pos_x:.1f}, {pos_y:.1f})", flush=True)
+                last_progress = cell_idx
         
-        # Small-batch SA within the level
-        for i in range(0, len(level_cells), batch_size):
+        t_greedy_end = time.perf_counter()
+        greedy_time = t_greedy_end - t_greedy_start
+        greedy_time_total += greedy_time
+        print(f"[DEBUG] Level {lvl}: Greedy placement completed - placed {placed_count}/{len(level_cells)} cells in {greedy_time:.3f}s")
+        
+        # ---- Small-batch SA within the level ----
+        print(f"[DEBUG] Level {lvl}: Starting simulated annealing...")
+        t_sa_start = time.perf_counter()
+        num_batches = 0
+        total_batches = (len(level_cells) + batch_size - 1) // batch_size
+        for batch_idx, i in enumerate(range(0, len(level_cells), batch_size), 1):
             batch: List[str] = [c for c in level_cells[i:i + batch_size] if c in assignments]
             if len(batch) < 2:
                 continue  # Skip batches with < 2 cells
-            
-            # Time this annealing batch
-            anneal_start = time.time()
+            num_batches += 1
+            print(f"[PROGRESS] L{lvl}: SA batch {num_batches}/{total_batches} ({len(batch)} cells)", flush=True)
             anneal_batch(
                 batch, pos_cells, assignments, sites_df, cell_to_nets, fixed_pts,
                 iters=sa_moves_per_temp,
@@ -143,31 +253,74 @@ def place_cells_greedy_sim_anneal(
                 W_initial=sa_W_initial,
                 seed=sa_seed
             )
-            anneal_end = time.time()
-            total_annealing_time += (anneal_end - anneal_start)
-    
-    greedy_end_time = time.time()
-    total_placement_time = greedy_end_time - greedy_start_time
-    greedy_time = total_placement_time - total_annealing_time
-    
-    # Debug: Print timing information
-    print(f"\n[DEBUG] Placement Timing:")
-    print(f"  Greedy placement time: {greedy_time:.3f} seconds")
-    print(f"  Total annealing time: {total_annealing_time:.3f} seconds")
-    print(f"  Total placement time: {total_placement_time:.3f} seconds")
-    if total_placement_time > 0:
-        print(f"  Annealing percentage: {(total_annealing_time / total_placement_time * 100):.1f}%")
+        t_sa_end = time.perf_counter()
+        sa_time = t_sa_end - t_sa_start
+        sa_time_total += sa_time
+        per_level_times.append((int(lvl), greedy_time, sa_time))
+        t_level_processing_end = time.perf_counter()
+        level_total_time = t_level_processing_end - t_level_processing_start
+        print(f"[DEBUG] Level {lvl}: Simulated annealing completed - {num_batches} batches in {sa_time:.3f}s")
+        print(f"[DEBUG] Level {lvl}: Total level processing time: {level_total_time:.3f}s (greedy: {greedy_time:.3f}s, SA: {sa_time:.3f}s)")
+        print(f"[PROGRESS] L{lvl}: COMPLETE | Total placed so far: {len(assignments)} cells", flush=True)
+        print()
 
-    # Build placement DataFrame
+    # ---- Phase 9: Build Placement DataFrame ----
+    print("[DEBUG] === PHASE 9: BUILDING PLACEMENT DATAFRAME ===")
+    t_df_start = time.perf_counter()
     placement_rows: List[Dict[str, Any]] = []
-    for cell, sid in assignments.items():
+    total_assigned = len(assignments)
+    df_progress_interval = max(1, total_assigned // 10)  # Report every 10%
+    df_last_progress = 0
+    
+    for df_idx, (cell, sid) in enumerate(assignments.items(), 1):
         placement_rows.append({
             "cell_name": cell,
             "site_id": sid,
             "x_um": float(sites_df.at[sid, "x_um"]),  # type: ignore[arg-type]
             "y_um": float(sites_df.at[sid, "y_um"]),  # type: ignore[arg-type]
         })
+        
+        # Progress reporting
+        if df_idx - df_last_progress >= df_progress_interval or df_idx == total_assigned:
+            pct = (df_idx / total_assigned) * 100
+            print(f"[PROGRESS] Building DataFrame: {df_idx}/{total_assigned} ({pct:.1f}%)", flush=True)
+            df_last_progress = df_idx
+    
     placement_df = pd.DataFrame(placement_rows)
+    t_df_end = time.perf_counter()
+    df_dur = t_df_end - t_df_start
+    print(f"[DEBUG] Built placement DataFrame with {len(placement_df)} cells")
+    print(f"[DEBUG] Building placement DataFrame completed in {df_dur:.3f}s")
+    print()
+
+    # ---- Final Timing Summary ----
+    t_total_end = time.perf_counter()
+    total_dur = t_total_end - t_total_start
+    print("[DEBUG] ========================================")
+    print("[DEBUG] FINAL TIMING SUMMARY")
+    print("[DEBUG] ========================================")
+    print(f"[DEBUG] Phase 1 - Port Assignment (Seeding):     {seeding_dur:.3f}s ({seeding_dur/total_dur*100:.1f}%)")
+    print(f"[DEBUG] Phase 2 - Build Sites & Spatial Index:    {build_sites_dur:.3f}s ({build_sites_dur/total_dur*100:.1f}%)")
+    print(f"[DEBUG] Phase 3 - Build Fixed Points:             {fixed_dur:.3f}s ({fixed_dur/total_dur*100:.1f}%)")
+    print(f"[DEBUG] Phase 4 - Build Dependency Levels:      {levelize_dur:.3f}s ({levelize_dur/total_dur*100:.1f}%)")
+    print(f"[DEBUG] Phase 5 - Build Cell Mappings:           {mapping_dur:.3f}s ({mapping_dur/total_dur*100:.1f}%)")
+    print(f"[DEBUG] Phase 6 - Build Cell Type Mapping:       {type_dur:.3f}s ({type_dur/total_dur*100:.1f}%)")
+    print(f"[DEBUG] Phase 7 - Order Cells by Level:         {order_dur:.3f}s ({order_dur/total_dur*100:.1f}%)")
+    print(f"[DEBUG] Phase 8 - Level-by-Level Placement:      {greedy_time_total + sa_time_total:.3f}s ({(greedy_time_total + sa_time_total)/total_dur*100:.1f}%)")
+    print(f"[DEBUG]   - Greedy Placement:                   {greedy_time_total:.3f}s ({greedy_time_total/total_dur*100:.1f}%)")
+    print(f"[DEBUG]   - Simulated Annealing:                 {sa_time_total:.3f}s ({sa_time_total/total_dur*100:.1f}%)")
+    print(f"[DEBUG] Phase 9 - Build Placement DataFrame:     {df_dur:.3f}s ({df_dur/total_dur*100:.1f}%)")
+    print(f"[DEBUG] TOTAL TIME:                              {total_dur:.3f}s")
+    print("[DEBUG] ========================================")
+    print()
+    
+    # Legacy timing output (for compatibility)
+    print(f"[PlacerTiming] total={total_dur:.3f}s build_sites={build_sites_dur:.3f}s levelize={levelize_dur:.3f}s greedy={greedy_time_total:.3f}s sa={sa_time_total:.3f}s")
+    print(f"PLACER_SUMMARY total={total_dur:.3f}s greedy={greedy_time_total:.3f}s sa={sa_time_total:.3f}s")
+    if per_level_times:
+        top_levels = sorted(per_level_times, key=lambda x: x[2], reverse=True)[:5]
+        for lvl_id, g_t, sa_t in top_levels:
+            print(f"[PlacerTiming] level={lvl_id} greedy={g_t:.3f}s sa={sa_t:.3f}s")
     
     return updated_pins, placement_df
 

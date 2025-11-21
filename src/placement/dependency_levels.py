@@ -25,6 +25,9 @@ def build_dependency_levels(
       assigning a topological level to each row based on its cell's level.
     """
     g = netlist_graph.copy()
+    # Coerce net_bit to numeric to handle constants like 'x' from Yosys JSON
+    if "net_bit" in g.columns:
+        g["net_bit"] = pd.to_numeric(g["net_bit"], errors="coerce")
     required = {"cell_name", "direction", "net_bit"}
     if not required.issubset(g.columns):
         g["dependency_level"] = 0
@@ -34,15 +37,7 @@ def build_dependency_levels(
     pins = updated_pins.copy()
     if "assigned" in pins.columns and "direction" in pins.columns and "net_bit" in pins.columns:
         seed_mask = (pins["assigned"].astype(bool)) & (pins["direction"].astype(str).str.lower() == "input") & pins["net_bit"].notna()
-        # Filter out non-integer net_bit values (like 'x', 'z', etc.)
-        seed_nets = pins.loc[seed_mask, "net_bit"].dropna()
-        known_nets: Set[int] = set()
-        for nb in seed_nets:
-            try:
-                known_nets.add(int(nb))
-            except (ValueError, TypeError):
-                # Skip non-integer values like 'x', 'z', etc.
-                continue
+        known_nets: Set[int] = set(pins.loc[seed_mask, "net_bit"].dropna().astype(int).tolist())
     else:
         known_nets = set()
 
@@ -54,24 +49,8 @@ def build_dependency_levels(
     for cell, grp in g.groupby("cell_name"):  # type: ignore[arg-type]
         in_mask = dir_lower.loc[grp.index] == "input"
         out_mask = dir_lower.loc[grp.index] == "output"
-        
-        # Filter out non-integer net_bit values (like 'x', 'z', etc.)
-        in_nets: Set[int] = set()
-        for nb in grp.loc[in_mask, "net_bit"].dropna():
-            try:
-                in_nets.add(int(nb))
-            except (ValueError, TypeError):
-                # Skip non-integer values like 'x', 'z', etc.
-                continue
-        
-        out_nets: Set[int] = set()
-        for nb in grp.loc[out_mask, "net_bit"].dropna():
-            try:
-                out_nets.add(int(nb))
-            except (ValueError, TypeError):
-                # Skip non-integer values like 'x', 'z', etc.
-                continue
-        
+        in_nets: Set[int] = set(grp.loc[in_mask, "net_bit"].dropna().astype(int).tolist())
+        out_nets: Set[int] = set(grp.loc[out_mask, "net_bit"].dropna().astype(int).tolist())
         inputs_by_cell[cell] = in_nets
         outputs_by_cell[cell] = out_nets
 
