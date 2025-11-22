@@ -1,0 +1,29 @@
+name: CI – Makefile
+
+on:
+  push:
+    branches: [workflow-test ]   # or just [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # (Optional) set up languages / tools your Makefile needs
+      # - name: Set up Python
+      #   uses: actions/setup-python@v5
+      #   with:
+      #     python-version: "3.11"
+
+      - name: Build with make
+        run: make          # or: make <target>
+
+      # (Optional) run tests
+      # - name: Run tests
+      #   run: make test
+
