@@ -176,7 +176,7 @@ def place_cells_greedy_sim_anneal(
 
     # ---- Phase 8: Level-by-Level Placement (Growing) ----
     print("[DEBUG] === PHASE 8: LEVEL-BY-LEVEL PLACEMENT (GROWING) ===")
-    batch_size = 100
+    batch_size = 4
     greedy_time_total = 0.0
     sa_time_total = 0.0
     per_level_times: List[Tuple[int, float, float]] = []
@@ -374,7 +374,7 @@ if __name__ == "__main__":
     fabric_file_path = "inputs/Platform/fabric.yaml"
     fabric_cells_file_path = "inputs/Platform/fabric_cells.yaml"
     pins_file_path = "inputs/Platform/pins.yaml"
-    netlist_file_path = "inputs/designs/aes_128_mapped.json"
+    netlist_file_path = "inputs/designs/z80_mapped.json"
 
     # Extract design name from netlist file path
     # e.g., "inputs/designs/arith_mapped.json" -> "arith"
