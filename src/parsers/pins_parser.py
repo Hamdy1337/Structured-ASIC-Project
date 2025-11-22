@@ -228,4 +228,5 @@ def load_and_validate(path: str) -> Tuple[pd.DataFrame, PinsMeta]:
 if __name__ == "__main__":
     pins_file_path = "inputs/Platform/pins.yaml"
     pins_df, pins_meta = load_and_validate(pins_file_path)
-    print(pins_df.head())
+    #Write to CSV for inspection
+    pins_df.to_csv("pins_output.csv", index=False)

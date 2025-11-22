@@ -288,12 +288,19 @@ if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("Sample logical_db:")
     print(logical_db.head())
+    print(f"Shape: {logical_db.shape}")
     
     print("\n" + "=" * 60)
     print("Sample ports_df:")
     print(ports_df.head())
+    print(f"Shape: {ports_df.shape}")
     
     print("\n" + "=" * 60)
     print("Sample netlist_graph_db:")
     print(netlist_graph_db.head())
+    print(f"Shape: {netlist_graph_db.shape}")
 
+    #Write to CSV for inspection
+    logical_db.to_csv(f"{sys.argv[1]}_logical_db_output.csv", index=False)
+    ports_df.to_csv(f"{sys.argv[1]}_ports_output.csv", index=False)
+    netlist_graph_db.to_csv(f"{sys.argv[1]}_netlist_graph_output.csv", index=False)
