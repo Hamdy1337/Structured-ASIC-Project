@@ -9,6 +9,7 @@ from pathlib import Path
 import time
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
 from src.parsers.fabric_db import get_fabric_db, Fabric
 from src.parsers.pins_parser import load_and_validate as load_pins_df
@@ -27,6 +28,8 @@ from src.placement.placement_utils import (
     nearest_site,
     build_spatial_index,
     driver_points,
+    hpwl_for_nets,
+
 )
 from src.placement.simulated_annealing import anneal_batch
 from src.validation.placement_validator import validate_placement, print_validation_report
@@ -34,6 +37,105 @@ from src.Visualization.heatmap import plot_placement_heatmap
 from src.placement.placement_utils import hpwl_for_nets, nets_by_cell, fixed_points_from_pins
 
 
+
+def generate_net_hpwl_histogram(
+    placement_df: pd.DataFrame,
+    updated_pins: pd.DataFrame,
+    netlist_graph: pd.DataFrame,
+    design_name: str,
+    build_dir: Path,
+    bins: int = 50,
+) -> None:
+    """
+    Compute HPWL for every net in the design (using in-memory data) and
+    save a 1D histogram:
+
+        build/<design_name>/<design_name>_net_length.png
+    """
+
+    # 1) Rebuild levelized view so we can reuse nets_by_cell()
+    g_levels_hist = build_dependency_levels(updated_pins, netlist_graph)
+    cell_to_nets = nets_by_cell(g_levels_hist)
+
+    # 2) Fixed IO points per net (from pins)
+    fixed_pts = fixed_points_from_pins(updated_pins)
+
+    # 3) Cell positions: cell_name -> (x, y)
+    pos_cells: Dict[str, Tuple[float, float]] = {
+        str(row.cell_name): (float(row.x_um), float(row.y_um))
+        for row in placement_df.itertuples(index=False)
+    }
+
+    # 4) Collect all nets that appear either on cells or on fixed pins
+    all_nets: set[int] = set()
+    for nets in cell_to_nets.values():
+        all_nets.update(nets)
+    all_nets.update(fixed_pts.keys())
+
+    # 5) Compute HPWL per net (reuse hpwl_for_nets for each single-net set)
+    hpwl_values: List[float] = []
+    for nb in sorted(all_nets):
+        val = hpwl_for_nets({nb}, pos_cells, cell_to_nets, fixed_pts)
+        if val > 0.0:
+            hpwl_values.append(val)
+
+    if not hpwl_values:
+        print("[DEBUG] Net HPWL histogram: no nets to plot, skipping.")
+        return
+
+    hp = np.array(hpwl_values, dtype=float)
+
+    total_nets = hp.size
+    mean = float(hp.mean())
+    median = float(np.median(hp))
+    hp_min = float(hp.min())
+    hp_max = float(hp.max())
+    total_hpwl = float(hp.sum())
+
+    build_dir.mkdir(parents=True, exist_ok=True)
+    out_path = build_dir / f"{design_name}_net_length.png"
+
+    # 6) Plot histogram
+    fig, ax = plt.subplots(figsize=(10, 5))
+    counts, bin_edges, patches = ax.hist(hp, bins=bins)
+
+    # Color bars (viridis like your example)
+    cmap = plt.get_cmap("viridis")
+    n_patches = max(len(patches) - 1, 1)
+    for i, p in enumerate(patches):
+        p.set_facecolor(cmap(i / n_patches))
+
+    ax.set_xlabel("Net HPWL (um)")
+    ax.set_ylabel("Number of Nets")
+    ax.set_title(f"Net Length Distribution - {design_name}")
+
+    stats_text = (
+        f"Total nets: {total_nets:,}\n"
+        f"Mean HPWL: {mean:.2f} um\n"
+        f"Median HPWL: {median:.2f} um\n"
+        f"Min HPWL: {hp_min:.2f} um\n"
+        f"Max HPWL: {hp_max:.2f} um\n"
+        f"Total HPWL: {total_hpwl:,.2f} um"
+    )
+
+    ax.text(
+        0.98,
+        0.98,
+        stats_text,
+        transform=ax.transAxes,
+        va="top",
+        ha="right",
+        fontsize=9,
+        bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.8),
+    )
+
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=300)
+    plt.close(fig)
+
+    print(f"[DEBUG] Net length (HPWL) histogram written to: {out_path}")
+
+    
 def place_cells_greedy_sim_anneal(
     fabric: Fabric,
     fabric_df: pd.DataFrame,
@@ -437,6 +539,15 @@ if __name__ == "__main__":
     # Write placement DataFrame to CSV
     output_csv = build_dir / f"{design_name}_placement.csv"
     placement_df.to_csv(output_csv, index=False)
+
+    generate_net_hpwl_histogram(
+        placement_df=placement_df,
+        updated_pins=assigned_pins,
+        netlist_graph=netlist_graph,
+        design_name=design_name,
+        build_dir=build_dir,
+        bins=50,  # adjust if you want more/less bins
+    )
     
     print(f"\nPlacement complete!")
     print(f"Placed {len(placement_df)} cells")
