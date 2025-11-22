@@ -237,11 +237,6 @@ The main visualization is an interactive HTML file generated using Plotly:
 - `plotly` - Interactive visualizations
 - `pyyaml` - YAML file parsing
 
-### Optional Dependencies
-- **PyTorch** - Required only for PPO/RL placement refinement
-  ```bash
-  pip install torch  # Install separately if using PPO features
-  ```
 
 ### External Tools (Future Phases)
 - **OpenROAD** - For routing (Phase 4)
