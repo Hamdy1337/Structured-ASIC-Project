@@ -1,10 +1,12 @@
-name: CI – Makefile
+name: CI - Makefile
 
 on:
   push:
-    branches: [workflow-test ]   # or just [ main ]
+    branches:
+      - workflow-test        # change or add branches as you like
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   build:
@@ -14,16 +16,18 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      # (Optional) set up languages / tools your Makefile needs
-      # - name: Set up Python
-      #   uses: actions/setup-python@v5
-      #   with:
-      #     python-version: "3.11"
+      # Set up Python if your Makefile needs it
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Install dependencies if you have requirements.txt
+      - name: Install Python dependencies
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
 
       - name: Build with make
-        run: make          # or: make <target>
-
-      # (Optional) run tests
-      # - name: Run tests
-      #   run: make test
-
+        run: make validate      # or change to the target you really want
