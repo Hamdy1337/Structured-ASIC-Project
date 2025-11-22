@@ -13,6 +13,8 @@ import numpy as np
 from src.parsers.fabric_db import get_fabric_db, Fabric
 from src.parsers.pins_parser import load_and_validate as load_pins_df
 from src.parsers.netlist_parser import get_netlist_graph
+from src.parsers.fabric_cells_parser import parse_fabric_cells_file
+from src.placement.placement_mapper import map_placement_to_physical_cells, generate_map_file
 
 from src.placement.port_assigner import assign_ports_to_pins
 from src.placement.dependency_levels import build_dependency_levels
@@ -373,18 +375,32 @@ def place_cells_greedy_sim_anneal(
 
 
 if __name__ == "__main__":
-    fabric_file_path = "inputs/Platform/fabric.yaml"
-    fabric_cells_file_path = "inputs/Platform/fabric_cells.yaml"
-    pins_file_path = "inputs/Platform/pins.yaml"
-    netlist_file_path = "inputs/designs/6502_mapped.json"
-
-    # Extract design name from netlist file path
-    # e.g., "inputs/designs/arith_mapped.json" -> "arith"
-    design_name = Path(netlist_file_path).stem.replace("_mapped", "")
+    import sys
     
-    fabric, fabric_df = get_fabric_db(fabric_file_path, fabric_cells_file_path)
-    pins_df, pins_meta = load_pins_df(pins_file_path)
-    ports_df, netlist_graph = get_netlist_graph(netlist_file_path)
+    # Get design name from command line argument, default to 6502
+    if len(sys.argv) > 1:
+        design_name = sys.argv[1]
+    else:
+        design_name = "6502"  # Default design
+    
+    # Construct file paths
+    project_root = Path(__file__).parent.parent.parent
+    fabric_file_path = project_root / "inputs" / "Platform" / "fabric.yaml"
+    fabric_cells_file_path = project_root / "inputs" / "Platform" / "fabric_cells.yaml"
+    pins_file_path = project_root / "inputs" / "Platform" / "pins.yaml"
+    netlist_file_path = project_root / "inputs" / "designs" / f"{design_name}_mapped.json"
+    
+    # Validate that netlist file exists
+    if not netlist_file_path.exists():
+        print(f"Error: Design file not found: {netlist_file_path}")
+        print(f"Available designs: 6502, arith, aes_128, z80")
+        sys.exit(1)
+    
+    fabric, fabric_df = get_fabric_db(str(fabric_file_path), str(fabric_cells_file_path))
+    # Parse fabric_cells once to reuse for mapping (avoid re-parsing)
+    _, fabric_cells_df = parse_fabric_cells_file(str(fabric_cells_file_path))
+    pins_df, pins_meta = load_pins_df(str(pins_file_path))
+    ports_df, netlist_graph = get_netlist_graph(str(netlist_file_path))
     
     print(f"Running placement for design: {design_name}")
     print(f"Total cells to place: {len(netlist_graph['cell_name'].unique())}")
@@ -406,8 +422,17 @@ if __name__ == "__main__":
     print(f"  Total time: {total_time_with_overhead:.3f} seconds")
 
     # Create build directory if it doesn't exist
-    build_dir = Path("build") / design_name
+    build_dir = project_root / "build" / design_name
     build_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Map placement coordinates to physical cell names and add cell types
+    print(f"\n[DEBUG] Mapping placement to physical cell names...")
+    placement_df = map_placement_to_physical_cells(
+        placement_df=placement_df,
+        fabric_cells_df=fabric_cells_df,
+        fabric_df=fabric_df,
+        coord_tolerance=0.001
+    )
     
     # Write placement DataFrame to CSV
     output_csv = build_dir / f"{design_name}_placement.csv"
@@ -416,6 +441,14 @@ if __name__ == "__main__":
     print(f"\nPlacement complete!")
     print(f"Placed {len(placement_df)} cells")
     print(f"Output written to: {output_csv}")
+    
+    # Generate .map file (standard format for CTS: logical_name physical_name)
+    map_file_path = build_dir / f"{design_name}.map"
+    generate_map_file(
+        placement_df=placement_df,
+        map_file_path=map_file_path,
+        design_name=design_name
+    )
     
     # Generate placement heatmap
     print(f"\n[DEBUG] Generating placement heatmap...")
