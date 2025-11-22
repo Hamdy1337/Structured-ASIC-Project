@@ -13,12 +13,16 @@ help:
 	@echo "  make venv       - create local virtualenv (.venv)"
 	@echo "  make install    - install Python dependencies from requirements.txt"
 	@echo "  make parsers    - run all parsers in src/parsers/"
-	@echo "  make placer     - run src/placer.py"
+	@echo "  make placer     - run placement (use DESIGN=<name> to specify design, default: 6502)"
 	@echo "  make cts        - run src/cts.py"
 	@echo "  make eco        - run src/eco_generator.py"
-	@echo "  make validate   - run src/validation/validator.py"
-	@echo "  make visualize  - run src/Visualization/sasics_visualisation.py"
+	@echo "  make validate   - run validation (use DESIGN=<name> to specify design, default: aes_128)"
+	@echo "  make visualize  - run visualization (use DESIGN=<name> to specify design)"
 	@echo "  make clean      - remove __pycache__ and *.pyc files"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make placer DESIGN=6502    - Run placement for 6502 design"
+	@echo "  make validate DESIGN=arith - Validate arith design"
 
 # Create virtual environment
 venv:
@@ -38,7 +42,7 @@ parsers: install
 
 # Run placer
 placer: install
-	$(PY) -m src.placer
+	$(PY) -m src.placement.placer $(if $(DESIGN),$(DESIGN),6502)
 
 # Run clock tree synthesis
 cts: install
@@ -50,7 +54,7 @@ eco: install
 
 # Run design validator
 validate: install
-	$(PY) -m src.validation.validator
+	$(PY) -m src.validation.validator $(if $(DESIGN),$(DESIGN),aes_128)
 
 # Run visualization (also sees DESIGN if set)
 visualize: install

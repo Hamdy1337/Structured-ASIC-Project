@@ -4,7 +4,7 @@ placer.py: Main module for assigning cells on the sASIC fabric.
 """
 from __future__ import annotations
 
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Dict, List, Tuple, Any, Optional, Set
 from pathlib import Path
 import time
 import pandas as pd
@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 from src.parsers.fabric_db import get_fabric_db, Fabric
 from src.parsers.pins_parser import load_and_validate as load_pins_df
 from src.parsers.netlist_parser import get_netlist_graph
+from src.parsers.fabric_cells_parser import parse_fabric_cells_file
+from src.placement.placement_mapper import map_placement_to_physical_cells, generate_map_file
 
 from src.placement.port_assigner import assign_ports_to_pins
 from src.placement.dependency_levels import build_dependency_levels
@@ -31,6 +33,8 @@ from src.placement.placement_utils import (
 )
 from src.placement.simulated_annealing import anneal_batch
 from src.validation.placement_validator import validate_placement, print_validation_report
+from src.Visualization.heatmap import plot_placement_heatmap
+from src.placement.placement_utils import hpwl_for_nets, nets_by_cell, fixed_points_from_pins
 
 
 
@@ -278,7 +282,7 @@ def place_cells_greedy_sim_anneal(
 
     # ---- Phase 8: Level-by-Level Placement (Growing) ----
     print("[DEBUG] === PHASE 8: LEVEL-BY-LEVEL PLACEMENT (GROWING) ===")
-    batch_size = 100
+    batch_size = 4
     greedy_time_total = 0.0
     sa_time_total = 0.0
     per_level_times: List[Tuple[int, float, float]] = []
@@ -473,18 +477,32 @@ def place_cells_greedy_sim_anneal(
 
 
 if __name__ == "__main__":
-    fabric_file_path = "inputs/Platform/fabric.yaml"
-    fabric_cells_file_path = "inputs/Platform/fabric_cells.yaml"
-    pins_file_path = "inputs/Platform/pins.yaml"
-    netlist_file_path = "inputs/designs/arith_mapped.json"
-
-    # Extract design name from netlist file path
-    # e.g., "inputs/designs/arith_mapped.json" -> "arith"
-    design_name = Path(netlist_file_path).stem.replace("_mapped", "")
+    import sys
     
-    fabric, fabric_df = get_fabric_db(fabric_file_path, fabric_cells_file_path)
-    pins_df, pins_meta = load_pins_df(pins_file_path)
-    ports_df, netlist_graph = get_netlist_graph(netlist_file_path)
+    # Get design name from command line argument, default to 6502
+    if len(sys.argv) > 1:
+        design_name = sys.argv[1]
+    else:
+        design_name = "6502"  # Default design
+    
+    # Construct file paths
+    project_root = Path(__file__).parent.parent.parent
+    fabric_file_path = project_root / "inputs" / "Platform" / "fabric.yaml"
+    fabric_cells_file_path = project_root / "inputs" / "Platform" / "fabric_cells.yaml"
+    pins_file_path = project_root / "inputs" / "Platform" / "pins.yaml"
+    netlist_file_path = project_root / "inputs" / "designs" / f"{design_name}_mapped.json"
+    
+    # Validate that netlist file exists
+    if not netlist_file_path.exists():
+        print(f"Error: Design file not found: {netlist_file_path}")
+        print(f"Available designs: 6502, arith, aes_128, z80")
+        sys.exit(1)
+    
+    fabric, fabric_df = get_fabric_db(str(fabric_file_path), str(fabric_cells_file_path))
+    # Parse fabric_cells once to reuse for mapping (avoid re-parsing)
+    _, fabric_cells_df = parse_fabric_cells_file(str(fabric_cells_file_path))
+    pins_df, pins_meta = load_pins_df(str(pins_file_path))
+    ports_df, netlist_graph = get_netlist_graph(str(netlist_file_path))
     
     print(f"Running placement for design: {design_name}")
     print(f"Total cells to place: {len(netlist_graph['cell_name'].unique())}")
@@ -506,8 +524,17 @@ if __name__ == "__main__":
     print(f"  Total time: {total_time_with_overhead:.3f} seconds")
 
     # Create build directory if it doesn't exist
-    build_dir = Path("build") / design_name
+    build_dir = project_root / "build" / design_name
     build_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Map placement coordinates to physical cell names and add cell types
+    print(f"\n[DEBUG] Mapping placement to physical cell names...")
+    placement_df = map_placement_to_physical_cells(
+        placement_df=placement_df,
+        fabric_cells_df=fabric_cells_df,
+        fabric_df=fabric_df,
+        coord_tolerance=0.001
+    )
     
     # Write placement DataFrame to CSV
     output_csv = build_dir / f"{design_name}_placement.csv"
@@ -525,6 +552,159 @@ if __name__ == "__main__":
     print(f"\nPlacement complete!")
     print(f"Placed {len(placement_df)} cells")
     print(f"Output written to: {output_csv}")
+    
+    # Generate .map file (standard format for CTS: logical_name physical_name)
+    map_file_path = build_dir / f"{design_name}.map"
+    generate_map_file(
+        placement_df=placement_df,
+        map_file_path=map_file_path,
+        design_name=design_name
+    )
+    
+    # Generate placement heatmap
+    print(f"\n[DEBUG] Generating placement heatmap...")
+    heatmap_output = build_dir / f"{design_name}_placement_heatmap.png"
+    plot_placement_heatmap(
+        data=output_csv,  # Use the CSV file that was just written
+        bins=80,
+        cmap="viridis",
+        figsize=(12, 10),
+        output_path=heatmap_output,
+        title=f"Placement Density Heatmap - {design_name} ({len(placement_df)} cells)",
+    )
+    
+    # Calculate additional statistics for summary
+    total_cells_netlist = len(netlist_graph['cell_name'].unique())
+    placed_cells_count = len(placement_df)
+    placement_rate = (placed_cells_count / total_cells_netlist * 100) if total_cells_netlist > 0 else 0.0
+    
+    # Build data structures for HPWL calculation
+    pos_cells: Dict[str, Tuple[float, float]] = {}
+    for _, row in placement_df.iterrows():
+        pos_cells[row['cell_name']] = (row['x_um'], row['y_um'])
+    cell_to_nets = nets_by_cell(netlist_graph)
+    fixed_pts = fixed_points_from_pins(assigned_pins)
+    
+    # Get all nets
+    all_nets_set: Set[int] = set()
+    for nets in cell_to_nets.values():
+        all_nets_set |= nets
+    all_nets_set |= set(fixed_pts.keys())
+    num_nets = len(all_nets_set)
+    
+    # Get HPWL from validation result or calculate it
+    total_hpwl = validation_result.stats.get('total_hpwl', None)
+    if total_hpwl is None:
+        # Calculate HPWL if not in validation result
+        try:
+            total_hpwl = hpwl_for_nets(all_nets_set, pos_cells, cell_to_nets, fixed_pts)
+        except Exception as e:
+            total_hpwl = None
+    
+    # Calculate HPWL per net to find min/max
+    min_hpwl_per_net = None
+    max_hpwl_per_net = None
+    if total_hpwl is not None:
+        try:
+            # Calculate HPWL for each net individually
+            hpwl_per_net: List[float] = []
+            for nb in all_nets_set:
+                xs: List[float] = []
+                ys: List[float] = []
+                # Placed cells contributing to this net
+                for cell, pos in pos_cells.items():
+                    if nb in cell_to_nets.get(cell, set()):
+                        xs.append(pos[0])
+                        ys.append(pos[1])
+                # Fixed pins on this net
+                for (fx, fy) in fixed_pts.get(nb, []):
+                    xs.append(fx)
+                    ys.append(fy)
+                if len(xs) >= 2:
+                    net_hpwl = (max(xs) - min(xs)) + (max(ys) - min(ys))
+                    hpwl_per_net.append(net_hpwl)
+            
+            if hpwl_per_net:
+                min_hpwl_per_net = min(hpwl_per_net)
+                max_hpwl_per_net = max(hpwl_per_net)
+        except Exception:
+            # If calculation fails, leave as None
+            pass
+    
+    avg_hpwl_per_net = (total_hpwl / num_nets) if (total_hpwl is not None and num_nets > 0) else None
+    
+    # Rebuild sites_df for statistics (needed for site count and die dimensions)
+    sites_df_summary = build_sites(fabric_df)
+    total_sites = len(sites_df_summary)
+    site_utilization = validation_result.stats.get('site_utilization_percent', 
+                                                   (placed_cells_count / total_sites * 100) if total_sites > 0 else 0.0)
+    
+    # Get placement bounds
+    placement_bounds = validation_result.stats.get('placement_bounds', {})
+    x_span = validation_result.stats.get('x_span', None)
+    y_span = validation_result.stats.get('y_span', None)
+    
+    # Get die dimensions from fabric
+    die_width = float(sites_df_summary["x_um"].max()) if len(sites_df_summary) > 0 else 0.0
+    die_height = float(sites_df_summary["y_um"].max()) if len(sites_df_summary) > 0 else 0.0
+    
+    # Calculate cells per second
+    cells_per_sec = (placed_cells_count / total_time_with_overhead) if total_time_with_overhead > 0 else 0.0
+    
+    # Print comprehensive statistics summary
+    print("\n" + "="*80)
+    print(" " * 25 + "PLACEMENT SUMMARY")
+    print("="*80)
+    
+    # Design Information
+    print("\n📋 DESIGN INFORMATION")
+    print(f"  Design Name:              {design_name}")
+    print(f"  Total Cells (Netlist):    {total_cells_netlist:,}")
+    print(f"  Cells Successfully Placed: {placed_cells_count:,}")
+    print(f"  Placement Success Rate:   {placement_rate:.1f}%")
+    if validation_result.stats.get('missing_cells', 0) > 0:
+        print(f"  ⚠️  Missing Cells:         {validation_result.stats.get('missing_cells', 0):,}")
+    
+    # Placement Quality
+    print("\n📊 PLACEMENT QUALITY")
+    if total_hpwl is not None:
+        print(f"  Total HPWL:               {total_hpwl:,.2f} μm")
+        if avg_hpwl_per_net is not None:
+            print(f"  Average HPWL per Net:     {avg_hpwl_per_net:.2f} μm")
+        if min_hpwl_per_net is not None and max_hpwl_per_net is not None:
+            print(f"  Min HPWL per Net:         {min_hpwl_per_net:.2f} μm")
+            print(f"  Max HPWL per Net:         {max_hpwl_per_net:.2f} μm")
+    else:
+        print(f"  Total HPWL:               (calculation failed)")
+    print(f"  Number of Nets:           {num_nets:,}")
+    print(f"  Site Utilization:         {site_utilization:.1f}% ({placed_cells_count:,}/{total_sites:,} sites)")
+    
+    # Spatial Distribution
+    print("\n🗺️  SPATIAL DISTRIBUTION")
+    print(f"  Die Dimensions:           {die_width:.1f} × {die_height:.1f} μm")
+    if x_span is not None and y_span is not None:
+        print(f"  Placement Span:           {x_span:.1f} × {y_span:.1f} μm")
+        if placement_bounds:
+            print(f"  Placement Bounds:         X=[{placement_bounds.get('x_min', 0):.1f}, {placement_bounds.get('x_max', 0):.1f}] μm")
+            print(f"                            Y=[{placement_bounds.get('y_min', 0):.1f}, {placement_bounds.get('y_max', 0):.1f}] μm")
+    
+    # Performance Metrics
+    print("\n⚡ PERFORMANCE METRICS")
+    print(f"  Total Placement Time:     {total_time_with_overhead:.3f} seconds")
+    print(f"  Cells per Second:         {cells_per_sec:.1f} cells/sec")
+    
+    # Validation Status
+    print("\n✅ VALIDATION STATUS")
+    if validation_result.passed:
+        print(f"  Status:                   ✓ PASSED")
+    else:
+        print(f"  Status:                   ✗ FAILED")
+    if len(validation_result.errors) > 0:
+        print(f"  Errors:                   {len(validation_result.errors)}")
+    if len(validation_result.warnings) > 0:
+        print(f"  Warnings:                 {len(validation_result.warnings)}")
+    
+    print("\n" + "="*80)
     
     # Check validation result
     if not validation_result.passed:

@@ -1,188 +1,246 @@
 # Structured ASIC Physical Design Flow
 
-A complete automated physical design toolchain for Structured ASIC platforms, from netlist to timing signoff.
+A complete automated physical design toolchain for Structured ASIC platforms, from netlist to placement optimization.
 
 ## Overview
 
-This repository contains a full Place & Route (PnR) and Static Timing Analysis (STA) flow for Structured ASICs. Unlike traditional ASICs where cells can be placed anywhere, Structured ASICs use pre-fabricated wafers with fixed logic cell locations. Our flow solves the complex assignment problem of mapping logical gates to physical fabric slots, then routes and validates timing.
+This repository contains a full Place & Route (PnR) flow for Structured ASICs. Unlike traditional ASICs where cells can be placed anywhere, Structured ASICs use pre-fabricated wafers with fixed logic cell locations. Our flow solves the complex assignment problem of mapping logical gates to physical fabric slots, optimizing for minimal wirelength.
 
 **Key Features:**
-- Smart placement using Greedy + Simulated Annealing optimization
-- Automated clock tree synthesis (CTS)
-- Integration with OpenROAD for global/detailed routing
-- Complete timing signoff with STA
-- Rich visualizations at every stage
+- **Multi-Stage Placement**: Greedy initial placement + Simulated Annealing optimization
+- **Reinforcement Learning Enhancement**: Optional PPO-based placement refinement for further optimization
+- **Design Validation**: Automated validation to ensure designs fit on available fabric
+- **Rich Visualizations**: Interactive HTML layouts, placement heatmaps, and training plots
+- **Multiple Design Support**: Tested on 6502 CPU, arithmetic units, AES-128, and Z80 designs
 
 ## Quick Start
 
 ```bash
 # Clone the repository
 git clone <repo-url>
-cd structured-asic-flow
+cd Structred-ASIC-Project
 
-# Install dependencies
-pip install -r requirements.txt
+# Create virtual environment and install dependencies
+make venv
+make install
 
-# Run the complete flow for a design
-make all DESIGN=6502
+# Validate a design
+make validate
 
-# Results will be in build/6502/
+# Run placement for a design (defaults to 6502)
+make placer
+
+# Generate visualizations
+make visualize DESIGN=6502
+
+# Or run Phase 1 (validation + visualization)
+make phase1
 ```
 
 ## Architecture
 
-The flow consists of five major stages:
+The flow consists of several major stages, with Phase 1 and Phase 2 fully implemented:
 
-### 1. Database & Validation
-Parses platform files (fabric cells, pins, LEF, timing libraries) and design netlists. Validates that the design can fit on the available fabric by checking cell availability.
+### Phase 1: Database & Validation ✅
+Parses platform files (fabric cells, pins, YAML configurations) and design netlists. Validates that the design can fit on the available fabric by checking cell availability.
 
-**Outputs:**
-- Fabric utilization report
-- Ground-truth layout visualization
-
-### 2. Placement
-Maps logical cells to physical fabric slots to minimize wirelength (HPWL).
-
-**Algorithm:**
-- **Greedy Initial Placement**: I/O-driven seed & grow algorithm for high-quality starting point
-- **Simulated Annealing**: Refines placement using hybrid move set (local refinement + global exploration)
+**Implementation:**
+- `src/parsers/` - Complete parser suite for fabric, pins, and netlist files
+- `src/validation/validator.py` - Design validation with detailed utilization reports
 
 **Outputs:**
-- Cell-to-slot mapping (`.map` file)
-- Placement density heatmap
-- Net length distribution histogram
+- Fabric utilization report (console output)
+- Interactive HTML layout visualization (`build/structured_asic_layout.html`)
+- CSV files with parsed data
 
-### 3. Clock Tree Synthesis (CTS) & ECO
-Builds a balanced clock tree using available buffers in the fabric. Generates engineering change order (ECO) to tie-off unused cells.
+### Phase 2: Placement ✅
+Maps logical cells to physical fabric slots to minimize wirelength (HPWL - Half-Perimeter Wirelength).
 
-**Algorithm:**
-- H-Tree/X-Tree geometric partitioning
-- Recursive buffer insertion at geometric centers
-- Power optimization by tying unused logic low
+**Algorithms Implemented:**
 
-**Outputs:**
-- Modified Verilog netlist with clock tree
-- CTS tree visualization
+1. **Greedy Initial Placement** (`src/placement/placer.py`):
+   - I/O-driven seed & grow algorithm
+   - Port-to-pin assignment for fixed I/O cells
+   - Dependency-level-based placement ordering
+   - Median-of-drivers target location calculation
+   - Manhattan distance-based site selection
 
-### 4. Routing
-Integrates with OpenROAD for global and detailed routing.
-
-**Outputs:**
-- Routed DEF file
-- Parasitic extraction (SPEF)
-- Congestion analysis
-
-### 5. Static Timing Analysis
-Post-route timing validation and performance analysis.
+2. **Simulated Annealing Optimization** (`src/placement/simulated_annealing.py`):
+   - Hybrid move set: local refinement (70%) + global exploration (30%)
+   - Configurable annealing schedule (temperature, cooling rate)
+   - Level-by-level batch annealing for efficiency
+   - Tunable parameters for quality vs. runtime trade-offs
 
 **Outputs:**
-- Setup/hold timing reports
-- Clock skew analysis
-- Critical path visualization
-- Slack histograms
+- Placement CSV file (`build/<design>/<design>_placement.csv`)
+- Placement density heatmap (`build/<design>/<design>_placement_heatmap.png`)
+- HPWL metrics and validation reports
+
+### Phase 3: Clock Tree Synthesis (CTS) & ECO 🚧
+*In development* - Will build balanced clock trees using available buffers and generate ECO netlists.
+
+### Phase 4-5: Routing & STA 🚧
+*In development* - Will integrate with OpenROAD for routing and perform static timing analysis.
 
 ## Usage
 
-### Run Complete Flow
+### Available Makefile Targets
+
 ```bash
-make all DESIGN=<design_name>
+# Setup
+make venv          # Create Python virtual environment (.venv)
+make install       # Install dependencies from requirements.txt
+
+# Phase 1: Validation & Visualization
+make validate      # Validate design fits on fabric
+make visualize     # Generate interactive HTML layout (set DESIGN=name for specific design)
+make phase1        # Run both validate and visualize
+
+# Phase 2: Placement
+make placer        # Run Greedy + Simulated Annealing placement
+
+# Parsers (run individually if needed)
+make parsers       # Run all parser scripts
+
+# Cleanup
+make clean         # Remove __pycache__ and virtual environment
 ```
 
-### Run Individual Stages
+### Running Placement Directly
+
+You can also run the placement algorithm directly:
+
 ```bash
-make validate DESIGN=6502    # Check if design fits on fabric
-make place DESIGN=6502       # Run placement only
-make cts DESIGN=6502         # Run clock tree synthesis
-make route DESIGN=6502       # Run routing
-make sta DESIGN=6502         # Run timing analysis
+# Using Python module
+python -m src.placement.placer
+
+# Or modify the design in src/placement/placer.py (line 379)
+# Default design: 6502_mapped.json
 ```
 
-### Clean Build Files
-```bash
-make clean DESIGN=6502       # Clean specific design
-make clean                   # Clean all designs
-```
 
 ## Input Files
 
 ### Platform Files (Static)
-- `fabric_cells.yaml` - Complete fabric database with all cell slots
-- `pins.yaml` - I/O pin locations
-- `sky130_hd.lef` - Physical abstracts for all cells
-- `sky130_hd_timing.lib` - Timing models
+Located in `inputs/Platform/`:
+- `fabric.yaml` - Fabric configuration and dimensions
+- `fabric_cells.yaml` - Complete fabric database with all cell slots and types
+- `pins.yaml` - I/O pin locations and metal layer information
+- `fabric.lib` - Cell library definitions
+- `sky130_fd_sc_hd.lef` - Physical abstracts for all cells (LEF format)
+- `sky130_fd_sc_hd.tlef` - Technology LEF file
 
 ### Design Files (Per Design)
-- `<design>_mapped.json` - Logical netlist from Yosys
-- `<design>.sdc` - Timing constraints (clock period, I/O delays)
+Located in `inputs/designs/`:
+- `<design>_mapped.json` - Logical netlist from Yosys (JSON format)
+  - Available designs: `6502_mapped.json`, `arith_mapped.json`, `aes_128_mapped.json`, `z80_mapped.json`
 
 ## Output Files
 
-All generated files are organized in `build/<design_name>/`:
+All generated files are organized in `build/`:
+
+### Current Outputs (Phase 1 & 2)
 
 ```
-build/6502/
-├── 6502.map                    # Cell placement mapping
-├── 6502_final.v                # Modified netlist with CTS
-├── 6502_renamed.v              # Netlist with physical names
-├── 6502_fixed.def              # DEF with fixed placements
-├── 6502_routed.def             # Final routed design
-├── 6502.spef                   # Parasitic extraction
-├── 6502_setup.rpt              # Setup timing report
-├── 6502_hold.rpt               # Hold timing report
-├── visualizations/
-│   ├── fabric_layout.png       # Ground-truth fabric
-│   ├── placement_density.png   # Placement heatmap
-│   ├── net_length.png          # Net length histogram
-│   ├── cts_tree.png            # Clock tree visualization
-│   ├── congestion.png          # Routing congestion
-│   ├── critical_path.png       # Critical path overlay
-│   └── slack_histogram.png     # Slack distribution
+build/
+├── structured_asic_layout.html          # Interactive Plotly visualization of fabric
+├── pins_output.csv                      # Parsed pin information
+├── <design>/
+│   ├── <design>_placement.csv          # Final placement mapping (cell_name, x_um, y_um, site_id, etc.)
+│   └── <design>_placement_heatmap.png  # 2D density heatmap of placed cells
+│
 ```
 
-## Simulated Annealing Tuning
+### Placement CSV Format
 
-The placer uses Simulated Annealing with several tunable parameters:
+The placement CSV (`<design>_placement.csv`) contains:
+- `cell_name`: Logical cell name from netlist
+- `x_um`, `y_um`: Physical coordinates in micrometers
+- `site_id`: Assigned fabric site ID
+- `cell_type`: Type of cell (NAND2, OR2, DFF, etc.)
+- Additional metadata columns
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `T_initial` | Initial temperature | 1000 |
-| `alpha` | Cooling rate | 0.95 |
-| `moves_per_temp` | Moves per temperature | 100 |
-| `p_refine` | Probability of local refinement | 0.7 |
-| `p_explore` | Probability of global exploration | 0.3 |
-| `w_initial` | Initial exploration window size | 50% |
+## Placement Algorithm Configuration
 
-See `sa_knob_analysis.png` for experimental results showing the runtime vs. quality trade-off.
+### Simulated Annealing Parameters
 
-## Results
+The placer uses Simulated Annealing with several tunable parameters (configurable in `src/placement/placer.py`):
 
-Performance across test designs:
+| Parameter | Description | Default | Notes |
+|-----------|-------------|---------|-------|
+| `sa_moves_per_temp` | Moves attempted per temperature step | 200 | Higher = better quality, slower |
+| `sa_cooling_rate` | Cooling rate (alpha) | 0.90 | Higher = slower cooling, better quality |
+| `sa_T_initial` | Initial temperature | Auto-calculated | Based on initial HPWL if None |
+| `sa_p_refine` | Probability of local refinement move | 0.7 | Should sum to 1.0 with p_explore |
+| `sa_p_explore` | Probability of global exploration move | 0.3 | Should sum to 1.0 with p_refine |
+| `sa_refine_max_distance` | Max Manhattan distance for refine moves (μm) | 100.0 | Limits local search radius |
+| `sa_W_initial` | Initial exploration window (fraction of die) | 0.5 | 50% of die width/height |
+| `sa_seed` | Random seed for reproducibility | 42 | Set for deterministic results |
 
-| Design | Utilization | HPWL (μm) | WNS (ns) | TNS (ns) | Status |
-|--------|-------------|-----------|----------|----------|--------|
-| 6502   | 45%         | 2,450     | 1.2      | 0        | ✓ PASS |
-| UART   | 15%         | 850       | 5.8      | 0        | ✓ PASS |
-| FPU    | 80%         | 4,200     | -0.5     | -12.3    | ✗ FAIL |
 
-*WNS = Worst Negative Slack, TNS = Total Negative Slack*
+
+## Supported Designs
+
+The flow has been tested on the following designs:
+
+| Design | Description | Status |
+|--------|-------------|--------|
+| **6502** | 8-bit microprocessor | ✅ Tested |
+| **arith** | Arithmetic unit | ✅ Tested |
+| **aes_128** | AES-128 encryption core | ✅ Tested |
+| **z80** | Z80 microprocessor | ✅ Tested |
+
+### Example: 6502 Placement Results
+
+The 6502 design has been successfully placed with:
+- Placement heatmap visualization available at `build/6502/6502_placement_heatmap.png`
+- Placement CSV with all cell assignments at `build/6502/6502_placement.csv`
+- Interactive fabric layout at `build/structured_asic_layout.html`
+
+*Note: Timing analysis (WNS/TNS) will be available once Phase 4-5 (Routing & STA) are implemented.*
 
 ## Visualizations
 
-### Placement Density
-![Placement Density](build/6502/visualizations/placement_density.png)
+### Interactive Fabric Layout
+The main visualization is an interactive HTML file generated using Plotly:
+- **File**: `build/structured_asic_layout.html`
+- **Features**:
+  - Die and core outlines
+  - All fabric cells color-coded by type (NAND, OR, DFF, buffers, etc.)
+  - I/O pins with metal layer information
+  - Zoom, pan, and hover interactions
+  - Legend for cell type identification
 
-### Clock Tree
-![CTS Tree](build/6502/visualizations/cts_tree.png)
+**To view**: Open `build/structured_asic_layout.html` in a web browser for full interactivity.
 
-### Critical Path
-![Critical Path](build/6502/visualizations/critical_path.png)
+*Note: This is an interactive HTML file, not a static image. It provides zoom, pan, and hover capabilities to explore the fabric layout.*
+
+### Placement Density Heatmap
+2D histogram showing cell placement density across the chip:
+- **File**: `build/<design>/<design>_placement_heatmap.png`
+- Generated automatically after placement
+- Example: `build/6502/6502_placement_heatmap.png`
+
+![Placement Heatmap](build/6502/6502_placement_heatmap.png)
+
 
 ## Requirements
 
-- Python 3.8+
-- OpenROAD
-- Magic VLSI (optional, for layout viewing)
-- KLayout (optional, for layout viewing)
+### Core Dependencies
+- **Python 3.8+** (tested with Python 3.13)
+- **Virtual Environment**: The Makefile automatically creates and manages a `.venv`
+
+### Python Packages (see `requirements.txt`)
+- `pandas` - Data manipulation
+- `numpy` - Numerical computations
+- `matplotlib` - Plotting and heatmaps
+- `plotly` - Interactive visualizations
+- `pyyaml` - YAML file parsing
+
+
+### External Tools (Future Phases)
+- **OpenROAD** - For routing (Phase 4)
+- **Magic VLSI / KLayout** - For layout viewing (optional)
 
 
 ## Repository Structure
@@ -190,37 +248,87 @@ Performance across test designs:
 ```
 .
 ├── src/
-│   ├── parsers/           # Platform and netlist parsers
-│   ├── placer.py          # Placement algorithms
-│   ├── cts.py             # Clock tree synthesis
-│   ├── eco_generator.py   # ECO netlist generation
-│   ├── visualize.py       # All visualization utilities
-│   └── utils.py           # Helper functions
+│   ├── parsers/                    # Platform and netlist parsers
+│   │   ├── fabric_db.py           # Main fabric database loader
+│   │   ├── fabric_parser.py       # Fabric YAML parser
+│   │   ├── fabric_cells_parser.py # Fabric cells parser
+│   │   ├── pins_parser.py         # Pin locations parser
+│   │   └── netlist_parser.py      # Netlist JSON parser
+│   │
+│   ├── placement/                  # Placement algorithms
+│   │   ├── placer.py              # Main Greedy+SA placer
+│   │   ├── placer_rl.py           # PPO-based RL placement
+│   │   ├── ppo_driver.py          # PPO training and application driver
+│   │   ├── simulated_annealing.py # SA optimization engine
+│   │   ├── placement_utils.py     # HPWL, site building utilities
+│   │   ├── port_assigner.py       # I/O port-to-pin assignment
+│   │   └── dependency_levels.py   # Dependency levelization
+│   │
+│   ├── validation/                 # Design validation
+│   │   ├── validator.py           # Main design validator
+│   │   └── placement_validator.py # Placement validation
+│   │
+│   ├── Visualization/              # Visualization tools
+│   │   ├── sasics_visualisation.py # Interactive Plotly layout
+│   │   ├── heatmap.py             # Placement density heatmaps
+│   │   └── rl_training_plot.py    # PPO training curve plots
+│   │
+│   ├── cts.py                      # Clock tree synthesis (in development)
+│   ├── eco_generator.py            # ECO netlist generation (in development)
+│   └── utils.py                    # General utilities
+│
 ├── scripts/
-│   ├── route.tcl          # OpenROAD routing script
-│   ├── sta.tcl            # Timing analysis script
-│   └── make_def.py        # DEF file generator
+│   ├── route.tcl                   # OpenROAD routing script (future)
+│   ├── sta.tcl                     # Timing analysis script (future)
+│   └── make_def.py                 # DEF file generator (future)
+│
 ├── inputs/
-│   ├── platform/          # Platform files
-│   └── designs/           # Design files
-├── build/                 # Generated files (gitignored)
-├── Makefile              # Build automation
-├── requirements.txt
-└── README.md
+│   ├── Platform/                   # Platform files (static)
+│   │   ├── fabric.yaml
+│   │   ├── fabric_cells.yaml
+│   │   ├── pins.yaml
+│   │   └── sky130_fd_sc_hd.*       # LEF/TLEF files
+│   └── designs/                     # Design netlists
+│       ├── 6502_mapped.json
+│       ├── arith_mapped.json
+│       ├── aes_128_mapped.json
+│       └── z80_mapped.json
+│
+├── build/                           # Generated files (gitignored)
+│   ├── <design>/                    # Per-design outputs
+│   └── structured_asic_layout.html  # Interactive visualization
+│
+├── Makefile                         # Build automation
+├── requirements.txt                 # Python dependencies
+├── Project_Description.md           # Original project specification
+└── README.md                        # This file
 ```
 
-## Development
+## Development Workflow
 
-We use a standard GitHub workflow:
-- Issues for task tracking
-- Feature branches for development
-- Pull requests with code review
-- Protected `main` branch
+This project follows a professional GitHub-based workflow:
+- **Issues**: All tasks tracked via GitHub Issues
+- **Feature Branches**: Development on feature branches (e.g., `feature/cts-htree`)
+- **Pull Requests**: Code review required before merging
+- **Protected Branches**: `main` branch protected with PR requirements
 
-## License
+
+## Implementation Status
+
+| Phase | Component | Status | Notes |
+|-------|-----------|--------|-------|
+| **Phase 1** | Database & Validation | ✅ Complete | Full parser suite, validation, interactive visualization |
+| **Phase 2** | Placement (Greedy+SA) | ✅ Complete | Production-ready with tunable parameters |
+| **Phase 2** | Placement (PPO Refinement) | ✅ Complete | Optional RL-based improvement |
+| **Phase 3** | CTS & ECO | 🚧 In Development | Framework in place |
+| **Phase 4-5** | Routing & STA | 🚧 Planned | OpenROAD integration planned |
 
 ## Contributors
 
-- Ramy Shehata
-- Seif Elansary
-- Mohamed Mansour
+- **Ramy Shehata**
+- **Seif Elansary**
+- **Mohamed Mansour**
+
+## License
+
+See `LICENSE` file for details.
