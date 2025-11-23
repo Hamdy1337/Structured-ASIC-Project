@@ -3,6 +3,16 @@ import os
 import time
 from pathlib import Path
 from typing import Dict, Tuple
+"""Run Greedy+SA placement followed by PPO swap refiner and report HPWL delta.
+    Commands:
+        python -m src.placement.ppo_driver \
+            --design-json inputs/designs/6502_mapped.json \
+            --fabric-yaml inputs/Platform/fabric.yaml \
+            --pins-yaml inputs/Platform/pins.yaml \
+            --fabric-cells-yaml inputs/Platform/fabric_cells.yaml \
+            --out-csv build/6502.csv
+"""
+
 
 import pandas as pd
 
@@ -23,20 +33,20 @@ def _pos_map_from_df(df: pd.DataFrame) -> Dict[str, Tuple[float, float]]:
 
 def main():
     ap = argparse.ArgumentParser(description="Run Greedy+SA then PPO swap refiner and report ΔHPWL.")
-    ap.add_argument("--design-json", default="inputs/designs/arith_mapped.json", help="Path to [design]_mapped.json")
+    ap.add_argument("--design-json", default="inputs/designs/6502_mapped.json", help="Path to [design]_mapped.json")
     ap.add_argument("--fabric-yaml", default="inputs/Platform/fabric.yaml", help="Path to fabric.yaml")
     ap.add_argument("--pins-yaml", default="inputs/Platform/pins.yaml", help="Path to pins.yaml")
     ap.add_argument("--fabric-cells-yaml", default="inputs/Platform/fabric_cells.yaml", help="Path to fabric_cells.yaml")
     ap.add_argument("--max-action-full", type=int, default=1024)
-    ap.add_argument("--full-placer-eps", type=int, default=0, help="PPO episodes for full placer (0 = skip training)")
-    ap.add_argument("--swap-train-eps", type=int, default=100, help="PPO episodes for swap refiner per-batch")
+    ap.add_argument("--full-placer-eps", type=int, default=80, help="PPO episodes for full placer (0 = skip training)")
+    ap.add_argument("--swap-train-eps", type=int, default=60, help="PPO episodes for swap refiner per-batch")
     ap.add_argument("--swap-steps-per-ep", type=int, default=80, help="Environment steps per swap episode")
     ap.add_argument("--batch-size", type=int, default=64)
     ap.add_argument("--device", default="cpu", choices=["cpu", "cuda", "mps"])
     ap.add_argument("--max-train-batches", type=int, default=50, help="Max training batches for swap PPO")
     ap.add_argument("--max-apply-batches", type=int, default=None, help="Max batches to apply refinement; default all")
     ap.add_argument("--full-steps-per-ep", type=int, default=512, help="Steps per episode for full placer")
-    ap.add_argument("--out-csv", default="build/ppo_refined_placement.csv")
+    ap.add_argument("--out-csv", default="build/6502.csv")
     ap.add_argument("--timing", action="store_true", help="Enable detailed RL timing logs")
     ap.add_argument("--full-log-csv", default=None, help="Optional CSV path to log per-episode full placer PPO metrics")
     ap.add_argument("--swap-log-csv", default=None, help="Optional CSV path to log per-episode swap refiner PPO metrics")
@@ -53,7 +63,7 @@ def main():
 
     # Run pipeline
     t_pipeline_start = time.perf_counter()
-    refined_df = run_greedy_sa_then_rl_pipeline(
+    updated_pins, placement_df, refined_df = run_greedy_sa_then_rl_pipeline(
         fabric,
         fabric_df,
         pins_df,
@@ -78,17 +88,7 @@ def main():
     )
     t_pipeline_end = time.perf_counter()
 
-    # Compute HPWL before/after
-    # Greedy+SA HPWL can be approximated by re-running Greedy+SA part inside pipeline,
-    # but we can reconstruct from refined_df vs initial Greedy+SA placement by running Greedy+SA once.
-    # For simplicity, compute HPWL on refined_df and report it; if the placement_df from Greedy+SA is needed,
-    # you can modify the pipeline to return both. Here, we recompute Greedy+SA quickly:
-    from placement.placer2 import place_cells_greedy_sim_anneal
-
-    updated_pins, placement_df = place_cells_greedy_sim_anneal(
-        fabric, fabric_df, pins_df, ports_df, netlist_graph
-    )
-    # Write to a CSV for later inspection and visualization
+    # Write baseline placement to CSV for later inspection
     placement_out_path = Path(args.out_csv).with_suffix(f'.{Path(args.design_json).stem}.greedy_sa_placement.csv')
     placement_out_path.parent.mkdir(parents=True, exist_ok=True)
     placement_df.to_csv(placement_out_path, index=False)

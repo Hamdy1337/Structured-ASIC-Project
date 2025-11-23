@@ -152,12 +152,17 @@ class NetlistParser:
             
             # For each bit of the port
             for net_bit in bits:
-                if net_bit is not None:
-                    # Get net name from mapping, or use None if not found
-                    net_name = self.net_bit_to_name.get(net_bit, None)
-                    
-                    port_records.append({
-                        'port_name': port_name,
+                # Skip None/null connections or non-integer bits (like "x")
+                if net_bit is None:
+                    continue
+                if isinstance(net_bit, str) and not net_bit.isdigit():
+                    continue
+
+                # Get net name from mapping, or use None if not found
+                net_name = self.net_bit_to_name.get(net_bit, None)
+                
+                port_records.append({
+                    'port_name': port_name,
                         'direction': direction,
                         'net_bit': net_bit,
                         'net_name': net_name
@@ -190,18 +195,23 @@ class NetlistParser:
                 
                 # For each net bit connected to this port
                 for net_bit in net_bits:
-                    if net_bit is not None:  # Skip None/null connections
-                        # Get net name from mapping, or use None if not found
-                        net_name = self.net_bit_to_name.get(net_bit, None)
+                    # Skip None/null connections or non-integer bits (like "x")
+                    if net_bit is None:
+                        continue
+                    if isinstance(net_bit, str) and not net_bit.isdigit():
+                        continue
                         
-                        cell_records.append({
-                            'cell_name': cell_name,
-                            'cell_type': cell_type,
-                            'port': port_name,
-                            'net_bit': net_bit,
-                            'net_name': net_name,
-                            'direction': direction
-                        })
+                    # Get net name from mapping, or use None if not found
+                    net_name = self.net_bit_to_name.get(net_bit, None)
+                    
+                    cell_records.append({
+                        'cell_name': cell_name,
+                        'cell_type': cell_type,
+                        'port': port_name,
+                        'net_bit': net_bit,
+                        'net_name': net_name,
+                        'direction': direction
+                    })
         
         # Create DataFrame from records
         self.netlist_graph_db = pd.DataFrame(cell_records)
