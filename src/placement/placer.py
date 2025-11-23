@@ -28,6 +28,11 @@ from src.placement.placement_utils import (
     nearest_site,
     build_spatial_index,
     driver_points,
+)
+from src.placement.simulated_annealing import anneal_batch
+from src.validation.placement_validator import validate_placement, print_validation_report
+
+
     hpwl_for_nets,
 
 )

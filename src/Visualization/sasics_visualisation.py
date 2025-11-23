@@ -136,33 +136,6 @@ def draw_cells(
     ))
     print("Die and Core prepared.")
 
-    #Draw Pins (grouped by Layer + Direction for clean legends)
-    pins_df = pins_df.copy()
-    pins_df["_category"] = pins_df["layer"].astype(str) + " " + pins_df["direction"].astype(str)
-    # Prefer legend order based on PIN_LAYER_COLORS mapping keys if present
-    categories_in_data = list(dict.fromkeys(pins_df["_category"].tolist()))
-    ordered_categories = [c for c in PIN_LAYER_COLORS.keys() if c in categories_in_data]
-    ordered_categories += [c for c in categories_in_data if c not in ordered_categories]
-
-    for cat in ordered_categories:
-        grp = pins_df[pins_df["_category"] == cat]
-        fig.add_trace(  # type: ignore[reportUnknownMemberType]
-            go.Scatter(
-            x=grp["x_um"].tolist(),
-            y=grp["y_um"].tolist(),
-            mode="markers",
-            marker=dict(
-                size=10,
-                color=PIN_LAYER_COLORS.get(cat, "#000000"),
-                line=dict(width=2),
-            ),
-            name=cat,
-            hovertext=grp["name"].tolist(),
-            hovertemplate="Pin: %{hovertext}<br>Category: " + cat + "<br>(%{x:.2f}, %{y:.2f})<extra></extra>",
-            showlegend=True,
-        ))
-        print(f"Pins drawn for category: {cat}")
-    
     # Choose rendering path based on number of cells
     num_cells: int = int(fabric_df.shape[0])
     use_fast: bool = fast_mode if fast_mode is not None else (num_cells > fast_threshold)
@@ -261,6 +234,33 @@ def draw_cells(
                 showlegend=True,
             ))
 
+    #Draw Pins (grouped by Layer + Direction for clean legends)
+    pins_df = pins_df.copy()
+    pins_df["_category"] = pins_df["layer"].astype(str) + " " + pins_df["direction"].astype(str)
+    # Prefer legend order based on PIN_LAYER_COLORS mapping keys if present
+    categories_in_data = list(dict.fromkeys(pins_df["_category"].tolist()))
+    ordered_categories = [c for c in PIN_LAYER_COLORS.keys() if c in categories_in_data]
+    ordered_categories += [c for c in categories_in_data if c not in ordered_categories]
+
+    for cat in ordered_categories:
+        grp = pins_df[pins_df["_category"] == cat]
+        fig.add_trace(  # type: ignore[reportUnknownMemberType]
+            go.Scatter(
+            x=grp["x_um"].tolist(),
+            y=grp["y_um"].tolist(),
+            mode="markers",
+            marker=dict(
+                size=5,
+                color=PIN_LAYER_COLORS.get(cat, "#000000"),
+                line=dict(width=0),
+            ),
+            name=cat,
+            hovertext=grp["name"].tolist(),
+            hovertemplate="Pin: %{hovertext}<br>Category: " + cat + "<br>(%{x:.2f}, %{y:.2f})<extra></extra>",
+            showlegend=True,
+        ))
+        print(f"Pins drawn for category: {cat}")
+
 
 if __name__ == "__main__":
     fabric_file_path = "inputs/Platform/fabric.yaml"
@@ -279,7 +279,14 @@ if __name__ == "__main__":
         yaxis=dict(
             scaleanchor="x",
             scaleratio=1,
+            showgrid=False,
+            zeroline=False,
         ),
+        xaxis=dict(
+            showgrid=False,
+            zeroline=False,
+        ),
+        plot_bgcolor="white",
     )
 
     # Write to HTML and open in the default browser. Using CDN keeps the file lighter for large designs.
