@@ -1,0 +1,33 @@
+name: CI - Makefile
+
+on:
+  push:
+    branches:
+      - workflow-test        # change or add branches as you like
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Set up Python if your Makefile needs it
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Install dependencies if you have requirements.txt
+      - name: Install Python dependencies
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+      - name: Build with make
+        run: make validate      # or change to the target you really want
