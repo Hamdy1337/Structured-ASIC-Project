@@ -9,8 +9,6 @@ import random
 import pandas as pd
 import numpy as np
 
-from src.placement.placement_utils import hpwl_for_nets
-
 
 def _hpwl_for_nets_optimized(
     nets: Set[int],
@@ -184,7 +182,6 @@ def anneal_batch(
     else:
         site_type_arr = None
     
-    # ===== OPTIMIZATION 2: Precompute cell position arrays for move picking =====
     # Build mapping from cell name to index in batch
     cell_to_idx: Dict[str, int] = {cell: i for i, cell in enumerate(batch_cells)}
     
@@ -219,7 +216,7 @@ def anneal_batch(
         for net in cell_nets.get(cell, set()):
             net_to_cells.setdefault(net, []).append(cell)
     
-    # Initial HPWL (using optimized version)
+    # Initial HPWL 
     cur = _hpwl_for_nets_optimized(batch_nets, pos_cells, net_to_cells, fixed_pts)
     start_hpwl = cur
     
@@ -259,7 +256,7 @@ def anneal_batch(
         # Choose move type based on probability
         move_type_rand = rng.random()
         if move_type_rand < p_refine_norm:
-            # Refine move: swap nearby cells (using optimized version)
+            # Refine move: swap nearby cells
             move_result = _pick_refine_move_optimized(
                 batch_cells, cell_pos_x, cell_pos_y, cell_to_idx, 
                 refine_max_distance, rng
