@@ -8,7 +8,7 @@ Requires: torch, numpy, pandas
 import math
 import random
 import time
-from typing import List, Dict, Tuple, Set, Optional, Any, cast
+from typing import List, Dict, Tuple, Set, Optional, Any, cast, Union
 import numpy as np
 import pandas as pd
 import csv
@@ -157,7 +157,14 @@ class FullAssignEnv:
         # cache of last candidate site indices (into sites_list) used to build obs
         self._last_candidates: List[int] = []
         # last obs and fixed obs dimension (2 + max_action*4)
-        self._last_obs: np.ndarray = np.zeros(4 + max_action*4, dtype=np.float32)
+        # last obs and fixed obs dimension (2 + max_action*4)
+        # self._last_obs: np.ndarray = np.zeros(4 + max_action*4, dtype=np.float32)
+        # Initialize as dict to avoid type errors if accessed before reset (though reset should always be called)
+        self._last_obs = {
+            "cell": np.zeros(5, dtype=np.float32),
+            "sites": np.zeros((max_action, 4), dtype=np.float32),
+            "map": np.zeros((64, 64), dtype=np.float32)
+        }
         self._obs_dim: int = 4 + max_action*4
         # global reward bookkeeping
         self._global_reward_interval = max(1, int(global_reward_interval))
@@ -169,6 +176,29 @@ class FullAssignEnv:
         self.steps_with_candidates: int = 0
         self.type_filtered_ratio_accum: float = 0.0  # sum of (filtered_candidates / total_free_sites) when filtering applies
         self._total_free_sites_last: int = 0  # helper
+        
+        # Augmentation state
+        self.aug_mode = 0 # 0=Identity, 1-7=Rot/Flip
+
+    def _apply_aug(self, x: float, y: float) -> Tuple[float, float]:
+        # 8 symmetries of square
+        # 0: x, y
+        # 1: -x, y
+        # 2: x, -y
+        # 3: -x, -y
+        # 4: y, x
+        # 5: -y, x
+        # 6: y, -x
+        # 7: -y, -x
+        if self.aug_mode == 0: return x, y
+        if self.aug_mode == 1: return -x, y
+        if self.aug_mode == 2: return x, -y
+        if self.aug_mode == 3: return -x, -y
+        if self.aug_mode == 4: return y, x
+        if self.aug_mode == 5: return -y, x
+        if self.aug_mode == 6: return y, -x
+        if self.aug_mode == 7: return -y, -x
+        return x, y
 
     def reset(self):
         self.assignments = {}
@@ -180,8 +210,10 @@ class FullAssignEnv:
         self.candidate_count_accum = 0
         self.steps_with_candidates = 0
         self.type_filtered_ratio_accum = 0.0
+        # Randomize augmentation per episode
+        self.aug_mode = random.randint(0, 7)
         obs = self._obs()
-        self._obs_dim = obs.shape[0]
+        # self._obs_dim = obs.shape[0] # Deprecated for dict obs
         return obs
 
     def _obs(self) -> np.ndarray:
@@ -212,6 +244,8 @@ class FullAssignEnv:
                 pts.append((fx,fy))
             if pts:
                 xs = [p[0] for p in pts]; ys = [p[1] for p in pts]
+                # BBox size is invariant to isometry (rotation/flip)
+                # So we don't strictly need to transform points to compute bbox size
                 bbox_vals.append((max(xs)-min(xs)) + (max(ys)-min(ys)))
         avg_bbox = float(np.mean(bbox_vals)) if bbox_vals else 0.0
 
@@ -231,8 +265,9 @@ class FullAssignEnv:
         if cand_idx.size == 0:
             self._last_candidates = []
             padded = np.full((self.max_action, 4), -10.0, dtype=np.float32)
-            cell_feat = np.array([deg, avg_bbox, 0.0, 0.0], dtype=np.float32)
-            obs = np.concatenate([cell_feat, padded.flatten()], axis=0)
+            # cell_feat: [deg, avg_bbox, g_dens, hpwl_norm, max_fanout]
+            cell_feat = np.array([deg, avg_bbox, 0.0, 0.0, 0.0], dtype=np.float32)
+            obs = {"cell": cell_feat, "sites": padded, "map": np.zeros((64,64), dtype=np.float32)}
             self._last_obs = obs
             return obs
         # compute centroid of currently connected points for cur_cell
@@ -247,11 +282,28 @@ class FullAssignEnv:
             cx = float(np.mean([p[0] for p in pts_all])); cy = float(np.mean([p[1] for p in pts_all]))
         else:
             # fallback to center of all sites
-            xs_all = [s[1] for s in self.sites_list]; ys_all = [s[2] for s in self.sites_list]
-            cx = float(np.mean(xs_all)); cy = float(np.mean(ys_all))
+            cx = float(np.mean(self.site_x)); cy = float(np.mean(self.site_y))
+        
+        # Transform centroid for candidate ranking
+        cx_aug, cy_aug = self._apply_aug(cx, cy)
+        
         # rank free sites by distance to (cx,cy)
-        dx = self.site_x[cand_idx] - cx
-        dy = self.site_y[cand_idx] - cy
+        # We must transform site coordinates too
+        sx_aug = np.zeros_like(self.site_x)
+        sy_aug = np.zeros_like(self.site_y)
+        # Vectorized aug is hard with if/else, do simple loop or optimize later
+        # Optimization: apply aug to vectors
+        if self.aug_mode == 0: sx_aug, sy_aug = self.site_x, self.site_y
+        elif self.aug_mode == 1: sx_aug, sy_aug = -self.site_x, self.site_y
+        elif self.aug_mode == 2: sx_aug, sy_aug = self.site_x, -self.site_y
+        elif self.aug_mode == 3: sx_aug, sy_aug = -self.site_x, -self.site_y
+        elif self.aug_mode == 4: sx_aug, sy_aug = self.site_y, self.site_x
+        elif self.aug_mode == 5: sx_aug, sy_aug = -self.site_y, self.site_x
+        elif self.aug_mode == 6: sx_aug, sy_aug = self.site_y, -self.site_x
+        elif self.aug_mode == 7: sx_aug, sy_aug = -self.site_y, -self.site_x
+        
+        dx = sx_aug[cand_idx] - cx_aug
+        dy = sy_aug[cand_idx] - cy_aug
         dist2 = dx*dx + dy*dy
         if cand_idx.size > self.max_action:
             # argpartition gives indices of k smallest without full sort
@@ -276,7 +328,11 @@ class FullAssignEnv:
         # build features per candidate
         feats = []
         for idx in candidates:
-            sx = float(self.site_x[idx]); sy = float(self.site_y[idx])
+            # Original coords
+            sx_orig = float(self.site_x[idx]); sy_orig = float(self.site_y[idx])
+            # Augmented coords for feature
+            sx, sy = self._apply_aug(sx_orig, sy_orig)
+            
             # local density = count placed cells within radius
             cnt = 0
             for (px,py) in self.pos_cells.values():
@@ -333,11 +389,53 @@ class FullAssignEnv:
         # normalized HPWL over all placed cells and fixed pins
         hpwl_now = hpwl_of_nets(self.nets, self.pos_cells, self.fixed)
         hpwl_norm = float(hpwl_now / (len(self.nets) + 1e-6))
+        
+        # Net Embeddings for current cell
+        # Max fanout, is_clock (heuristic: name contains 'clk'), is_reset (heuristic: name contains 'rst')
+        max_fanout = 0.0
+        is_clock = 0.0
+        is_reset = 0.0
+        for nb in self.cell_to_nets.get(cur_cell, set()):
+            fanout = len(self.nets.get(nb, set()))
+            if fanout > max_fanout: max_fanout = float(fanout)
+            # We don't have net names here, only IDs. 
+            # Assuming we can't easily check names unless we map back.
+            # But we can check fanout.
+            # If we had net names we could do more.
+            # For now just fanout.
+        
+        # Global Congestion Map (64x64)
+        grid_size = 64
+        grid = np.zeros((grid_size, grid_size), dtype=np.float32)
+        if self.pos_cells:
+            # Simple point splatting
+            # Use augmented coordinates for the map
+            xs = []; ys = []
+            for (px, py) in self.pos_cells.values():
+                ax, ay = self._apply_aug(px, py)
+                xs.append(ax); ys.append(ay)
+            
+            if xs:
+                minx, maxx = min(xs), max(xs)
+                miny, maxy = min(ys), max(ys)
+                spanx = max(maxx - minx, 1.0)
+                spany = max(maxy - miny, 1.0)
+                
+                for i in range(len(xs)):
+                    gx = int((xs[i] - minx) / spanx * (grid_size - 1))
+                    gy = int((ys[i] - miny) / spany * (grid_size - 1))
+                    grid[gx, gy] += 1.0
+        
+        # Normalize grid
+        if grid.max() > 0:
+            grid /= grid.max()
+
         # final observation vector
-        cell_feat = np.array([deg, avg_bbox, g_dens, hpwl_norm], dtype=np.float32)
-        obs = np.concatenate([cell_feat, padded.flatten()], axis=0)
-        self._last_obs = obs
-        return obs
+        # Added max_fanout to cell features
+        cell_feat = np.array([deg, avg_bbox, g_dens, hpwl_norm, max_fanout], dtype=np.float32)
+        
+        # Return dict for Attention policy
+        return {"cell": cell_feat, "sites": padded, "map": grid}
 
     def action_mask(self) -> np.ndarray:
         # mask shape (max_action,), 1 = legal, 0 = illegal, aligned with last candidates
@@ -407,7 +505,12 @@ class FullAssignEnv:
             reward += - self._global_reward_weight * float(g_delta) * 0.01
             self._global_hpwl_prev = g_now
         if done:
-            term_obs = np.zeros(self._obs_dim, dtype=np.float32)
+            # Return zero-filled dict for terminal state
+            term_obs = {
+                "cell": np.zeros_like(self._last_obs["cell"]),
+                "sites": np.zeros_like(self._last_obs["sites"]),
+                "map": np.zeros_like(self._last_obs["map"]) if "map" in self._last_obs else np.zeros((64,64), dtype=np.float32)
+            }
             return term_obs, float(reward), True
         return self._obs(), float(reward), False
 
@@ -474,6 +577,20 @@ class SwapRefineEnv:
         self.action_pairs = [] 
         # metrics
         self.illegal_swap_count: int = 0
+        
+        # Augmentation
+        self.aug_mode = 0
+
+    def _apply_aug(self, x: float, y: float) -> Tuple[float, float]:
+        if self.aug_mode == 0: return x, y
+        if self.aug_mode == 1: return -x, y
+        if self.aug_mode == 2: return x, -y
+        if self.aug_mode == 3: return -x, -y
+        if self.aug_mode == 4: return y, x
+        if self.aug_mode == 5: return -y, x
+        if self.aug_mode == 6: return y, -x
+        if self.aug_mode == 7: return -y, -x
+        return x, y
 
     def _compute_action_mask(self) -> np.ndarray:
         # For factorized policy, we don't use a single mask vector for pairs.
@@ -495,12 +612,20 @@ class SwapRefineEnv:
         return np.ones(1, dtype=np.float32)
 
     def reset(self):
+        self.aug_mode = random.randint(0, 7)
         return self._obs()
 
     def _obs(self) -> np.ndarray:
         if self.B == 0:
             return np.zeros(self.target_B*6, dtype=np.float32)
-        coords = [ (self.placement[c][0], self.placement[c][1]) for c in self.batch ]
+        if self.B == 0:
+            return np.zeros(self.target_B*6, dtype=np.float32)
+        # Apply augmentation to coords
+        coords = []
+        for c in self.batch:
+            ox, oy, _ = self.placement[c]
+            coords.append(self._apply_aug(ox, oy))
+            
         xs = np.array([p[0] for p in coords], dtype=np.float32)
         ys = np.array([p[1] for p in coords], dtype=np.float32)
         cx, cy = xs.mean(), ys.mean()
@@ -510,6 +635,9 @@ class SwapRefineEnv:
         deg = np.array([len(self.cell_to_nets[c]) for c in self.batch], dtype=np.float32)
         # local density
         dens = np.zeros(self.B, dtype=np.float32)
+        # local density
+        dens = np.zeros(self.B, dtype=np.float32)
+        # Density is invariant to isometry, so we can use augmented coords
         for i,(x,y) in enumerate(coords):
             dens[i] = sum(1 for (x2,y2) in coords if (x-x2)**2 + (y-y2)**2 <= (self.neighbor_radius**2)) - 1
         deg_n = deg / (deg.max() if deg.max()>0 else 1.0)
@@ -530,27 +658,78 @@ class SwapRefineEnv:
                     connected_pts.append(fp)
             
             if connected_pts:
-                pts_arr = np.array(connected_pts)
+                # Augment connected points
+                aug_pts = [self._apply_aug(p[0], p[1]) for p in connected_pts]
+                pts_arr = np.array(aug_pts)
                 centroid_x = np.mean(pts_arr[:, 0])
                 centroid_y = np.mean(pts_arr[:, 1])
-                curr_x, curr_y = self.placement[c][:2]
+                curr_x, curr_y = coords[self.batch.index(c)] # Use augmented coord of c
                 fx = (centroid_x - curr_x) / span
                 fy = (centroid_y - curr_y) / span
                 force_feats.append([fx, fy])
             else:
                 force_feats.append([0.0, 0.0])
         
+        
         force_arr = np.array(force_feats, dtype=np.float32)
         
-        feat = np.stack([xs_n, ys_n, deg_n, dens_n], axis=1)  # shape Bx4
-        feat = np.concatenate([feat, force_arr], axis=1)      # shape Bx6
+        # Net Embeddings (Fanout)
+        net_feats = []
+        for c in self.batch:
+            max_fanout = 0.0
+            for nb in self.cell_to_nets.get(c, set()):
+                fanout = len(self.nets.get(nb, set()))
+                if fanout > max_fanout: max_fanout = float(fanout)
+            net_feats.append([max_fanout])
+        net_arr = np.array(net_feats, dtype=np.float32)
         
+        feat = np.stack([xs_n, ys_n, deg_n, dens_n], axis=1)  # shape Bx4
+        feat = np.concatenate([feat, force_arr, net_arr], axis=1)      # shape Bx7
+        
+        # Adjacency Matrix
+        # A_ij = 1 if cell i and cell j share a net
+        adj = np.eye(self.B, dtype=np.float32) # Self-loops
+        for i in range(self.B):
+            for j in range(i+1, self.B):
+                c1 = self.batch[i]
+                c2 = self.batch[j]
+                # Check intersection of nets
+                if not self.cell_to_nets[c1].isdisjoint(self.cell_to_nets[c2]):
+                    adj[i, j] = 1.0
+                    adj[j, i] = 1.0
+        
+        # Swap Mask
+        # M_ij = 1 if swap (i, j) is valid
+        swap_mask = np.zeros((self.target_B, self.target_B), dtype=np.float32)
+        for i in range(self.B):
+            has_valid = False
+            for j in range(self.B):
+                if i == j: continue
+                # Check type compatibility
+                # i -> site(j), j -> site(i)
+                if self._is_type_compatible(self.batch[i], self.placement[self.batch[j]][2]) and \
+                   self._is_type_compatible(self.batch[j], self.placement[self.batch[i]][2]):
+                    swap_mask[i, j] = 1.0
+                    has_valid = True
+            if not has_valid:
+                swap_mask[i, i] = 1.0 # Allow self-loop if no other choice
+        
+        # Pad adjacency if needed
         if self.B < self.target_B:
-            pad_rows = np.zeros((self.target_B - self.B, 6), dtype=np.float32)
+            pad_dim = self.target_B - self.B
+            # Pad feat
+            pad_rows = np.zeros((pad_dim, 7), dtype=np.float32)
             feat = np.concatenate([feat, pad_rows], axis=0)
+            # Pad adj
+            new_adj = np.eye(self.target_B, dtype=np.float32)
+            new_adj[:self.B, :self.B] = adj
+            adj = new_adj
         elif self.B > self.target_B:
             feat = feat[:self.target_B, :]
-        return feat.flatten()
+            adj = adj[:self.target_B, :self.target_B]
+            swap_mask = swap_mask[:self.target_B, :self.target_B]
+            
+        return {"x": feat, "adj": adj, "mask": swap_mask}
 
     def step(self, action: int | Tuple[int, int]) -> Tuple[np.ndarray, float, bool]:
         # Handle factorized action (i, j)
@@ -619,6 +798,110 @@ class SwapRefineEnv:
         return {"illegal_swaps": float(self.illegal_swap_count)}
 
 # -------------------------
+# GNN Components
+# -------------------------
+class GNNLayer(nn.Module):
+    """Simple Message Passing Layer: H_new = ReLU(Linear(Concatenate(H_self, Mean(H_neighbors))))"""
+    def __init__(self, in_dim, out_dim):
+        super().__init__()
+        self.linear = nn.Linear(in_dim * 2, out_dim)
+
+    def forward(self, node_feats, adj_matrix):
+        # node_feats: [Batch, Num_Nodes, Feat_Dim]
+        # adj_matrix: [Batch, Num_Nodes, Num_Nodes] (0 or 1)
+        
+        # 1. Aggregate neighbor messages (Mean aggregation)
+        # Add epsilon to avoid division by zero
+        degrees = adj_matrix.sum(dim=2, keepdim=True) + 1e-6
+        neighbor_sum = torch.bmm(adj_matrix, node_feats)
+        neighbor_mean = neighbor_sum / degrees
+        
+        # 2. Concatenate self + neighbors
+        combined = torch.cat([node_feats, neighbor_mean], dim=2)
+        
+        # 3. Update
+        return torch.relu(self.linear(combined))
+
+class GNNPolicy(nn.Module):
+    def __init__(self, node_feat_dim, hidden=128, depth=3):
+        super().__init__()
+        self.embedding = nn.Linear(node_feat_dim, hidden)
+        self.layers = nn.ModuleList([GNNLayer(hidden, hidden) for _ in range(depth)])
+        self.value_head = nn.Linear(hidden, 1)  # Value per graph (or mean of nodes)
+        
+        # Policy Head (Factorized): Produces scores for each node
+        self.actor_head = nn.Linear(hidden, hidden) 
+    
+    def forward(self, x, adj):
+        """
+        x: [Batch, N, F] (Node features)
+        adj: [Batch, N, N] (Adjacency)
+        """
+        h = torch.relu(self.embedding(x))
+        for layer in self.layers:
+            h = layer(h, adj)
+            
+        # Global pooling for Value function (mean over nodes)
+        graph_embedding = h.mean(dim=1)
+        value = self.value_head(graph_embedding)
+        
+        # Return node embeddings for the actor to select from
+        return h, value
+
+class AttentionPlacerPolicy(nn.Module):
+    def __init__(self, cell_dim, site_dim, hidden=128, cnn_feature_dim=0):
+        super().__init__()
+        # Encoders
+        self.cell_enc = nn.Linear(cell_dim + cnn_feature_dim, hidden)
+        self.site_enc = nn.Linear(site_dim, hidden)
+        
+        self.v_net = nn.Linear(hidden, 1)
+
+    def forward(self, cell_feat, candidate_feats, global_feat=None):
+        """
+        cell_feat: [Batch, Cell_Dim]
+        candidate_feats: [Batch, K_Candidates, Site_Dim]
+        global_feat: [Batch, CNN_Feat_Dim] (Optional)
+        """
+        # Concatenate global features to cell features (Query)
+        if global_feat is not None:
+            cell_feat = torch.cat([cell_feat, global_feat], dim=1)
+
+        # 1. Encode Query (Current Cell)
+        Q = torch.tanh(self.cell_enc(cell_feat)).unsqueeze(1) # [B, 1, H]
+        
+        # 2. Encode Keys (Candidates)
+        K = torch.tanh(self.site_enc(candidate_feats))        # [B, K, H]
+        
+        # 3. Attention Score (Dot Product)
+        # "How well does this site match this cell?"
+        logits = torch.bmm(Q, K.transpose(1, 2)).squeeze(1)   # [B, K]
+        
+        # Value Estimate
+        value = self.v_net(Q.squeeze(1))
+        
+        return logits, value
+
+class CongestionCNN(nn.Module):
+    def __init__(self, out_dim=32):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=3, stride=2, padding=1), # 64 -> 32
+            nn.ReLU(),
+            nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1), # 32 -> 16
+            nn.ReLU(),
+            nn.Conv2d(32, 32, kernel_size=3, stride=2, padding=1), # 16 -> 8
+            nn.ReLU(),
+            nn.Flatten(),
+            nn.Linear(32 * 8 * 8, out_dim),
+            nn.ReLU()
+        )
+    
+    def forward(self, x):
+        # x: [Batch, 1, 64, 64]
+        return self.net(x)
+
+# -------------------------
 # PPO Agent (shared actor-critic MLP)
 # -------------------------
 class MLPPolicy(nn.Module):
@@ -635,18 +918,43 @@ class MLPPolicy(nn.Module):
         return self.net(x)
 
 class PPOAgent:
-    def __init__(self, obs_dim: int, action_dim: int | Tuple[int, int], hidden: int = 256, lr: float = 3e-4, device: str = "cpu",
-                 clip_eps: float = 0.2, value_coef: float = 1.0, entropy_coef: float = 0.01, max_grad_norm: float = 0.5):
+    def __init__(self, obs_dim: int, action_dim: Union[int, Tuple[int, int]], hidden: int = 256, lr: float = 3e-4, device: str = "cpu",
+                 clip_eps: float = 0.2, value_coef: float = 1.0, entropy_coef: float = 0.01, max_grad_norm: float = 0.5,
+                 policy_type: str = "mlp"):
         self.device = torch.device(device)
         self.obs_dim = obs_dim
-        self.policy_backbone = MLPPolicy(obs_dim, hidden).to(self.device)
+        self.policy_type = policy_type.lower()
+        
+        if self.policy_type == "gnn":
+            # obs_dim is node feature dim
+            self.policy_backbone = GNNPolicy(obs_dim, hidden).to(self.device)
+        elif self.policy_type == "attention":
+            # obs_dim is tuple (cell_dim, site_dim)
+            if isinstance(obs_dim, (list, tuple)):
+                cell_dim, site_dim = obs_dim
+            else:
+                # Fallback or error
+                cell_dim, site_dim = 4, 4 # Default for FullAssignEnv
+            
+            self.cnn = CongestionCNN(out_dim=32).to(self.device)
+            self.policy_backbone = AttentionPlacerPolicy(cell_dim, site_dim, hidden, cnn_feature_dim=32).to(self.device)
+            # params not defined yet, wait until factorized block or init here
+        else:
+            self.policy_backbone = MLPPolicy(obs_dim, hidden).to(self.device)
         
         # Factorized action support
         self.is_factorized = isinstance(action_dim, (list, tuple))
         if self.is_factorized:
             self.n_a, self.n_b = action_dim
-            self.actor_a = nn.Linear(hidden, self.n_a).to(self.device)
-            self.actor_b = nn.Linear(hidden, self.n_b).to(self.device)
+            # For GNN, actor heads are usually projections from node embeddings
+            if self.policy_type == "gnn":
+                # ...
+                self.actor_a = nn.Linear(hidden, 1).to(self.device)
+                self.actor_b = nn.Linear(hidden, 1).to(self.device)
+            else:
+                self.actor_a = nn.Linear(hidden, self.n_a).to(self.device)
+                self.actor_b = nn.Linear(hidden, self.n_b).to(self.device)
+            
             self.actor = None
             params = list(self.policy_backbone.parameters()) + list(self.actor_a.parameters()) + list(self.actor_b.parameters())
         else:
@@ -655,8 +963,30 @@ class PPOAgent:
             self.actor_b = None
             params = list(self.policy_backbone.parameters()) + list(self.actor.parameters())
 
-        self.critic = nn.Linear(hidden, 1).to(self.device)
-        params += list(self.critic.parameters())
+        if self.policy_type == "attention":
+             params += list(self.cnn.parameters())
+
+        self.critic = nn.Linear(hidden, 1).to(self.device) # Used for MLP, GNN has its own value head usually but we can override or use it.
+        # User's GNNPolicy has value_head.
+        if self.policy_type == "gnn":
+             # Use the GNN's value head parameters
+             # But wait, we added self.critic above. Let's just use the GNN's value head if available.
+             # The optimizer needs all params.
+             # Let's adjust:
+             pass
+        else:
+             params += list(self.critic.parameters())
+             
+        # Re-collect params correctly
+        params = list(self.policy_backbone.parameters())
+        if self.is_factorized:
+            params += list(self.actor_a.parameters()) + list(self.actor_b.parameters())
+        elif self.actor is not None:
+            params += list(self.actor.parameters())
+        
+        if self.policy_type != "gnn" and self.policy_type != "attention":
+            params += list(self.critic.parameters())
+
         self.optimizer = optim.Adam(params, lr=lr)
 
         self.clip_eps = float(clip_eps)
@@ -665,87 +995,216 @@ class PPOAgent:
         self.max_grad_norm = float(max_grad_norm)
         self.device = torch.device(device)
 
-    def forward(self, obs: np.ndarray):
-        if obs.shape[0] != self.obs_dim:
-            if obs.shape[0] < self.obs_dim:
-                pad = np.zeros(self.obs_dim - obs.shape[0], dtype=np.float32)
-                obs = np.concatenate([obs, pad], axis=0)
+    def forward(self, obs: Any):
+        if self.policy_type == "gnn":
+            # obs is dict {"x": ..., "adj": ...} or list of dicts
+            # We need to batch them.
+            if isinstance(obs, dict):
+                x = torch.tensor(obs["x"], dtype=torch.float32, device=self.device).unsqueeze(0)
+                adj = torch.tensor(obs["adj"], dtype=torch.float32, device=self.device).unsqueeze(0)
+            elif isinstance(obs, list):
+                # Batch of dicts
+                xs = [torch.tensor(o["x"], dtype=torch.float32, device=self.device) for o in obs]
+                adjs = [torch.tensor(o["adj"], dtype=torch.float32, device=self.device) for o in obs]
+                x = torch.stack(xs)
+                adj = torch.stack(adjs)
             else:
-                obs = obs[:self.obs_dim]
-        t = torch.tensor(obs, dtype=torch.float32, device=self.device).unsqueeze(0)
-        h = self.policy_backbone(t)
-        value = self.critic(h).squeeze(0)
-        
-        if self.is_factorized:
-            logits_a = self.actor_a(h).squeeze(0)
-            logits_b = self.actor_b(h).squeeze(0)
-            return (logits_a, logits_b), value
-        else:
-            logits = self.actor(h).squeeze(0)
-            return logits, value
+                raise ValueError("GNN policy expects dict or list of dicts")
+            
+            h, value = self.policy_backbone(x, adj)
+            # h: [B, N, Hidden]
+            # value: [B, 1]
+            value = value.squeeze(1) # [B]
+            
+            if self.is_factorized:
+                # We need logits for selecting node A and node B.
+                # actor_a maps hidden -> 1
+                logits_a = self.actor_a(h).squeeze(2) # [B, N]
+                logits_b = self.actor_b(h).squeeze(2) # [B, N]
+                return (logits_a, logits_b), value
+            else:
+                # Not supported for GNN yet (single action index from graph?)
+                raise NotImplementedError("Single action GNN not implemented")
 
-    def get_action_and_value(self, obs: np.ndarray, mask: Optional[np.ndarray]=None, eps: float = 0.0):
+        elif self.policy_type == "attention":
+            # obs is dict {"cell": ..., "sites": ..., "map": ...}
+            if isinstance(obs, dict):
+                cell = torch.tensor(obs["cell"], dtype=torch.float32, device=self.device).unsqueeze(0)
+                sites = torch.tensor(obs["sites"], dtype=torch.float32, device=self.device).unsqueeze(0)
+                grid = torch.tensor(obs["map"], dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(1) # [1, 1, 64, 64]
+            elif isinstance(obs, list):
+                cells = [torch.tensor(o["cell"], dtype=torch.float32, device=self.device) for o in obs]
+                sites_list = [torch.tensor(o["sites"], dtype=torch.float32, device=self.device) for o in obs]
+                grids = [torch.tensor(o["map"], dtype=torch.float32, device=self.device) for o in obs]
+                cell = torch.stack(cells)
+                sites = torch.stack(sites_list)
+                grid = torch.stack(grids).unsqueeze(1) # [B, 1, 64, 64]
+            else:
+                raise ValueError("Attention policy expects dict or list of dicts")
+            
+            global_feat = self.cnn(grid)
+            logits, value = self.policy_backbone(cell, sites, global_feat)
+            return logits, value.squeeze(1)
+
+        else:
+            # MLP logic
+            if isinstance(obs, list):
+                obs = np.array(obs)
+            if isinstance(obs, np.ndarray):
+                if obs.ndim == 1:
+                    obs = obs[np.newaxis, :]
+            
+            t = torch.tensor(obs, dtype=torch.float32, device=self.device)
+            h = self.policy_backbone(t)
+            value = self.critic(h).squeeze(1) # [B]
+            
+            if self.is_factorized:
+                logits_a = self.actor_a(h)
+                logits_b = self.actor_b(h)
+                return (logits_a, logits_b), value
+            else:
+                logits = self.actor(h)
+                return logits, value
+
+    def get_action_and_value(self, obs: Any, mask: Optional[np.ndarray]=None, eps: float = 0.0,  deterministic: bool = False):
         # Pure policy sampling; remove ε-greedy to keep PPO ratios unbiased
         logits_out, value = self.forward(obs)
         
         if self.is_factorized:
             logits_a, logits_b = logits_out
-            # Masking for factorized not fully supported yet, assume None or handle separately
-            # If mask is provided, assume it's for both heads or ignore?
-            # For now, ignore mask for factorized or assume it's (mask_a, mask_b) if needed.
-            # But standard PPO loop passes single mask.
             
-            probs_a = torch.softmax(logits_a, dim=0)
-            dist_a = Categorical(probs_a)
-            act_a = dist_a.sample()
+            # Conditional masking
+            mask_matrix = None
+            if isinstance(obs, dict) and "mask" in obs:
+                mask_matrix = torch.tensor(obs["mask"], dtype=torch.bool, device=self.device)
+            elif isinstance(obs, list) and isinstance(obs[0], dict) and "mask" in obs[0]:
+                 # Should not happen in single-env step, but if vectorized envs used:
+                 # We assume single env for now or handle batch
+                 pass
+
+            # Mask A: valid if row has any valid targets
+            if mask_matrix is not None:
+                # mask_matrix is [N, N]
+                valid_a = mask_matrix.any(dim=1) # [N]
+                logits_a = logits_a.masked_fill(~valid_a, float('-1e9'))
+
+            if deterministic:
+                act_a = torch.argmax(logits_a)
+                dist_a = None
+            else:
+                probs_a = torch.softmax(logits_a, dim=0)
+                dist_a = Categorical(probs_a)
+                act_a = dist_a.sample()
             
-            probs_b = torch.softmax(logits_b, dim=0)
-            dist_b = Categorical(probs_b)
-            act_b = dist_b.sample()
-            
-            logp = dist_a.log_prob(act_a) + dist_b.log_prob(act_b)
+            # Mask B: based on act_a
+            if mask_matrix is not None:
+                row_mask = mask_matrix[act_a] # [N]
+                logits_b = logits_b.masked_fill(~row_mask, float('-1e9'))
+
+            if deterministic:
+                act_b = torch.argmax(logits_b)
+                logp = torch.tensor(0.0)  # Move this inside deterministic block
+            else:
+                probs_b = torch.softmax(logits_b, dim=0)
+                dist_b = Categorical(probs_b)
+                act_b = dist_b.sample()
+                logp = dist_a.log_prob(act_a) + dist_b.log_prob(act_b)  # Only compute when not deterministic
+
             return (int(act_a.item()), int(act_b.item())), float(logp.item()), float(value.item())
         else:
             if mask is not None:
                 mask_t = torch.tensor(mask, dtype=torch.bool, device=self.device)
                 logits_out = logits_out.masked_fill(~mask_t, float('-1e9'))
-            probs = torch.softmax(logits_out, dim=0)
-            dist = Categorical(probs)
-            act_t = dist.sample()
+            # probs = torch.softmax(logits_out, dim=0)
+            # dist = Categorical(probs)
+            # act_t = dist.sample()
+            # act = int(act_t.item())
+            # logp = dist.log_prob(act_t)
+            if deterministic:
+                act_t = torch.argmax(logits_out)
+                logp = torch.tensor(0.0)
+            else:
+                probs = torch.softmax(logits_out, dim=0)
+                dist = Categorical(probs)
+                act_t = dist.sample()
+                logp = dist.log_prob(act_t)
             act = int(act_t.item())
-            logp = dist.log_prob(act_t)
             return act, float(logp.item()), float(value.item())
 
     def compute_loss_and_update(self, batch_obs, batch_actions, batch_logps_old, batch_returns, batch_advantages, masks=None):
-        fixed = []
-        for o in batch_obs:
-            if o.shape[0] != self.obs_dim:
-                if o.shape[0] < self.obs_dim:
-                    pad = np.zeros(self.obs_dim - o.shape[0], dtype=np.float32)
-                    o = np.concatenate([o, pad], axis=0)
-                else:
-                    o = o[:self.obs_dim]
-            fixed.append(o)
-        obs = torch.tensor(np.stack(fixed), dtype=torch.float32, device=self.device)
-        
-        # Handle actions
-        if self.is_factorized:
-            # batch_actions is list of tuples (a, b)
-            acts_a = torch.tensor([x[0] for x in batch_actions], dtype=torch.int64, device=self.device)
-            acts_b = torch.tensor([x[1] for x in batch_actions], dtype=torch.int64, device=self.device)
-        else:
-            actions = torch.tensor(batch_actions, dtype=torch.int64, device=self.device)
-            
         old_logps = torch.tensor(batch_logps_old, dtype=torch.float32, device=self.device)
         returns = torch.tensor(batch_returns, dtype=torch.float32, device=self.device)
         advs = torch.tensor(batch_advantages, dtype=torch.float32, device=self.device)
 
-        h = self.policy_backbone(obs)
-        values = self.critic(h).squeeze(1)
+        if self.is_factorized:
+            # batch_actions is list of (a, b)
+            acts_a = torch.tensor([x[0] for x in batch_actions], dtype=torch.int64, device=self.device)
+            acts_b = torch.tensor([x[1] for x in batch_actions], dtype=torch.int64, device=self.device)
+
+        if self.policy_type == "gnn":
+            # Batching logic for GNN
+            xs = [torch.tensor(o["x"], dtype=torch.float32, device=self.device) for o in batch_obs]
+            adjs = [torch.tensor(o["adj"], dtype=torch.float32, device=self.device) for o in batch_obs]
+            x = torch.stack(xs)
+            adj = torch.stack(adjs)
+            
+            h, values = self.policy_backbone(x, adj)
+            values = values.squeeze(1)
+        elif self.policy_type == "attention":
+            cells = [torch.tensor(o["cell"], dtype=torch.float32, device=self.device) for o in batch_obs]
+            sites_list = [torch.tensor(o["sites"], dtype=torch.float32, device=self.device) for o in batch_obs]
+            grids = [torch.tensor(o["map"], dtype=torch.float32, device=self.device) for o in batch_obs]
+            cell = torch.stack(cells)
+            sites = torch.stack(sites_list)
+            grid = torch.stack(grids).unsqueeze(1)
+            
+            global_feat = self.cnn(grid)
+            logits, values = self.policy_backbone(cell, sites, global_feat)
+            values = values.squeeze(1)
+        else:
+            fixed = []
+            for o in batch_obs:
+                if isinstance(o, np.ndarray):
+                    if o.shape[0] != self.obs_dim:
+                        if o.shape[0] < self.obs_dim:
+                            pad = np.zeros(self.obs_dim - o.shape[0], dtype=np.float32)
+                            o = np.concatenate([o, pad], axis=0)
+                        else:
+                            o = o[:self.obs_dim]
+                fixed.append(o)
+            obs = torch.tensor(np.stack(fixed), dtype=torch.float32, device=self.device)
+            h = self.policy_backbone(obs)
+            values = self.critic(h).squeeze(1)
 
         if self.is_factorized:
-            logits_a = self.actor_a(h)
-            logits_b = self.actor_b(h)
+            if self.policy_type == "gnn":
+                logits_a = self.actor_a(h).squeeze(2)
+                logits_b = self.actor_b(h).squeeze(2)
+                
+                # Apply conditional masks
+                # masks is [B, N, N]
+                if "mask" in batch_obs[0]:
+                    masks = [torch.tensor(o["mask"], dtype=torch.bool, device=self.device) for o in batch_obs]
+                    masks = torch.stack(masks)
+                    
+                    # Mask A
+                    valid_a = masks.any(dim=2) # [B, N]
+                    logits_a = logits_a.masked_fill(~valid_a, float('-1e9'))
+                    
+                    # Mask B
+                    # Select row masks based on acts_a
+                    # acts_a is [B]
+                    # We need to gather the rows: masks[b, acts_a[b], :]
+                    # acts_a.view(-1, 1, 1) -> [B, 1, 1]
+                    # expand -> [B, 1, N]
+                    # gather -> [B, 1, N]
+                    # squeeze -> [B, N]
+                    row_masks = masks.gather(1, acts_a.view(-1, 1, 1).expand(-1, 1, self.n_b)).squeeze(1)
+                    logits_b = logits_b.masked_fill(~row_masks, float('-1e9'))
+
+            else:
+                logits_a = self.actor_a(h)
+                logits_b = self.actor_b(h)
             
             probs_a = torch.softmax(logits_a, dim=1)
             m_a = Categorical(probs_a)
@@ -760,12 +1219,18 @@ class PPOAgent:
             new_logps = logp_a + logp_b
             entropy = ent_a + ent_b
         else:
-            logits = self.actor(h)
+            if self.policy_type == "attention":
+                # logits already computed
+                pass
+            else:
+                logits = self.actor(h)
+            
             if masks is not None:
                 msk_t = torch.tensor(masks, dtype=torch.bool, device=self.device)
                 logits = logits.masked_fill(~msk_t, float('-1e9'))
             probs = torch.softmax(logits, dim=1)
             m = Categorical(probs)
+            actions = torch.tensor(batch_actions, dtype=torch.int64, device=self.device)
             new_logps = m.log_prob(actions)
             entropy = m.entropy().mean()
 
@@ -781,8 +1246,8 @@ class PPOAgent:
         self.optimizer.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(list(self.policy_backbone.parameters()) + 
-                                 (list(self.actor_a.parameters()) + list(self.actor_b.parameters()) if self.is_factorized else list(self.actor.parameters())) + 
-                                 list(self.critic.parameters()), self.max_grad_norm)
+                                 (list(self.actor_a.parameters()) + list(self.actor_b.parameters()) if self.is_factorized else list(self.actor.parameters()) if self.actor else []) + 
+                                 (list(self.critic.parameters()) if self.policy_type == "mlp" else []), self.max_grad_norm)
         self.optimizer.step()
         return loss.item(), policy_loss.item(), value_loss.item(), entropy.item()
 
@@ -1101,8 +1566,18 @@ def pretrain_bc_swap_refiner(env_builder_fn,
                 else:
                     o = o[:agent.obs_dim]
             X.append(o)
-        X_t = torch.tensor(np.stack(X), dtype=torch.float32, device=agent.device)
-        H = agent.policy_backbone(X_t)
+        # FIX: Handle GNN graph observations vs MLP flat observations
+        if agent.policy_type == "gnn":
+            # GNN needs graph data
+            xs_batch = [torch.tensor(o["x"], dtype=torch.float32, device=agent.device) for o in xs]
+            adjs_batch = [torch.tensor(o["adj"], dtype=torch.float32, device=agent.device) for o in xs]
+            x_t = torch.stack(xs_batch)
+            adj_t = torch.stack(adjs_batch)
+            H, _ = agent.policy_backbone(x_t, adj_t)  # Unpack tuple (h, value)
+        else:
+            # MLP uses flattened observations
+            X_t = torch.tensor(np.stack(X), dtype=torch.float32, device=agent.device)
+            H = agent.policy_backbone(X_t)
         
         if agent.is_factorized:
             # ys is list of (i, j)
@@ -1170,7 +1645,7 @@ def apply_full_placer_agent(agent: PPOAgent, env: FullAssignEnv, eps: float = 0.
     done = False
     while not done:
         mask = env.action_mask()
-        a, logp, val = agent.get_action_and_value(obs, mask=mask, eps=eps)
+        a, logp, val = agent.get_action_and_value(obs, mask=mask, eps=eps, deterministic=True)
         obs, r, done = env.step(a)
     return env.current_assignment()
 
@@ -1200,7 +1675,7 @@ def apply_swap_refiner(agent: PPOAgent, batch_cells: List[str], placement_map: D
     hpwl_before = hpwl_of_nets(env.nets, _pos_map(), env.fixed, net_subset=nets_touch)
     for _ in range(steps):
         mask = env.action_mask()
-        a, logp, v = agent.get_action_and_value(obs, mask=mask, eps=0.0)
+        a, logp, v = agent.get_action_and_value(obs, mask=mask, deterministic=True)
         obs, r, _ = env.step(a)
     # greedy hill-climb: try a few best improving swaps
     def _local_delta(i: int, j: int) -> float:
@@ -1298,7 +1773,8 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
                                    ppo_value_coef: float = 1.0,
                                    ppo_entropy_coef: float = 0.01,
                                    ppo_max_grad_norm: float = 0.5,
-                                   validate_final: bool = False):
+                                   validate_final: bool = False,
+                                   sa_moves_per_temp: int = 5000):
     """
     1) Run Greedy+SA to get initial placement (calls your place_cells_greedy_sim_anneal).
     2) Train a small full-placer PPO (optionally) or use greedy to produce assignment order.
@@ -1318,9 +1794,13 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
     # 1) Greedy+SA
     t_total_start = time.perf_counter()
     t_greedy_start = time.perf_counter()
-    # place_cells_greedy_sim_anneal now returns (updated_pins, placement_df, validation_result)
-    updated_pins, placement_df, _greedy_validation = place_cells_greedy_sim_anneal(fabric, fabric_df, pins_df, ports_df, netlist_graph)
+    # place_cells_greedy_sim_anneal now returns (updated_pins, placement_df, validation_result, sa_hpwl)
+    updated_pins, placement_df, _greedy_validation, baseline_sa_hpwl = place_cells_greedy_sim_anneal(fabric, fabric_df, pins_df, ports_df, netlist_graph, sa_moves_per_temp=sa_moves_per_temp)
     t_greedy_end = time.perf_counter()
+    
+    # Keep a copy of the pure Greedy+SA placement for returning as baseline
+    greedy_sa_placement_df = placement_df.copy()
+    
     # placement_df columns: cell_name, site_id, x_um, y_um
     sites_df = build_sites_from_fabric_df(fabric_df)
     sites_map = {int(r.site_id): (float(r.x_um), float(r.y_um)) for r in sites_df.itertuples(index=False)}
@@ -1364,15 +1844,22 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
             window_cells = window_df["cell_name"].astype(str).tolist()
             start_assignments: Dict[str,int] = {c: int(placement_map[c][2]) for c in placement_map.keys() if c not in window_cells}
             window_order = [c for c in cells_order if c in set(window_cells)]
-            env0 = build_full_assign_env_from_data(window_order, sites_df, netlist_graph, updated_pins, start_assignments=start_assignments, max_action=min(max_action_full, 32))
-            obs0 = env0.reset(); obs_dim = obs0.shape[0]
+            env0 = build_full_assign_env_from_data(window_order, sites_df, netlist_graph, updated_pins, start_assignments=start_assignments, max_action=max_action_full)
+            obs0 = env0.reset()
+            # Extract dims for Attention policy
+            cell_dim = obs0["cell"].shape[0]
+            site_dim = obs0["sites"].shape[1]
+            obs_dim = (cell_dim, site_dim)
+            
             if full_agent is None:
                 # Size actor head to the env max_action (kept constant across windows)
+                # Use Attention policy
                 full_agent = PPOAgent(obs_dim=obs_dim, action_dim=env0.max_action, device=device,
                                       clip_eps=ppo_clip_eps, value_coef=ppo_value_coef,
-                                      entropy_coef=ppo_entropy_coef, max_grad_norm=ppo_max_grad_norm)
+                                      entropy_coef=ppo_entropy_coef, max_grad_norm=ppo_max_grad_norm,
+                                      policy_type="attention")
             train_ppo_full_placer(
-                lambda: build_full_assign_env_from_data(window_order, sites_df, netlist_graph, updated_pins, start_assignments=start_assignments, max_action=min(max_action_full, 32)),
+                lambda: build_full_assign_env_from_data(window_order, sites_df, netlist_graph, updated_pins, start_assignments=start_assignments, max_action=max_action_full),
                 full_agent,
                 total_episodes=eps_per,
                 steps_per_episode=full_steps_per_ep,
@@ -1380,20 +1867,92 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
                 log_csv_path=full_log_csv
             )
             assign_map = apply_full_placer_agent(full_agent, env0, eps=0.0)
+            
+            # Update placement_df immediately so next window sees the changes
+            if assign_map:
+                # Snapshot current state for potential revert
+                prev_placement_df = placement_df.copy()
+                
+                # Update the in-memory placement_df
+                rows = []
+                for r in placement_df.itertuples(index=False):
+                    cname = str(r.cell_name)
+                    if cname in assign_map:
+                        sid = int(assign_map[cname]); x,y = sites_map[sid]
+                        rows.append({"cell_name": cname, "site_id": sid, "x_um": x, "y_um": y})
+                    else:
+                        rows.append({"cell_name": cname, "site_id": int(r.site_id), "x_um": float(r.x_um), "y_um": float(r.y_um)})
+                current_placement_df = pd.DataFrame(rows)
+                
+                # Check HPWL improvement for this window
+                # We need to build a temp map for HPWL calc
+                temp_map = {r.cell_name: (float(r.x_um), float(r.y_um), int(r.site_id)) for r in current_placement_df.itertuples(index=False)}
+                # Use cached nets_map if available, else build
+                if 'nets_map_check' not in locals():
+                    nets_map_check = nets_map_from_graph_df(netlist_graph)
+                
+                # Calculate HPWL
+                # Note: This is global HPWL, which is what we care about
+                temp_pos = {c: (x,y) for c, (x,y,_) in temp_map.items()}
+                # We can reuse fixed_points_from_pins(updated_pins) if available, but let's rebuild to be safe/clean
+                # actually updated_pins is available in scope
+                if 'fixed_map_check' not in locals():
+                    fixed_map_check = fixed_points_from_pins(updated_pins)
+                
+                new_hpwl = hpwl_of_nets(nets_map_check, temp_pos, fixed_map_check)
+                
+                # Compare with previous best (which is tracked by placement_df state)
+                # We need the HPWL of placement_df before update. 
+                # Ideally we track current_best_hpwl variable.
+                if 'current_best_hpwl' not in locals():
+                    current_best_hpwl = baseline_sa_hpwl
+                
+                if new_hpwl < current_best_hpwl:
+                    print(f"[FullPlacer] Window {w}: Improved HPWL ({new_hpwl:.3f} < {current_best_hpwl:.3f}). Keeping.")
+                    placement_df = current_placement_df
+                    current_best_hpwl = new_hpwl
+                    # Update placement_map for next iteration
+                    placement_map = temp_map
+                else:
+                    print(f"[FullPlacer] Window {w}: Degraded HPWL ({new_hpwl:.3f} >= {current_best_hpwl:.3f}). Reverting.")
+                    placement_df = prev_placement_df
+                    # placement_map remains as is (from prev_placement_df)
+                
             t_win_end = time.perf_counter()
             t_full_train_total += (t_win_end - t_win_start)
             if enable_timing:
                 print(f"[RLTiming] full_placer_window size={w} eps={eps_per} time={t_win_end - t_win_start:.3f}s")
-        if assign_map:
-            rows = []
-            for r in placement_df.itertuples(index=False):
-                cname = str(r.cell_name)
-                if cname in assign_map:
-                    sid = int(assign_map[cname]); x,y = sites_map[sid]
-                    rows.append({"cell_name": cname, "site_id": sid, "x_um": x, "y_um": y})
-                else:
-                    rows.append({"cell_name": cname, "site_id": int(r.site_id), "x_um": float(r.x_um), "y_um": float(r.y_um)})
-            placement_df = pd.DataFrame(rows)
+        
+        # After all windows, placement_df is the final result (accumulated bests)
+        new_placement_df = placement_df
+        if True: # Indentation preservation hack
+            # Check if Full Placer improved or degraded the placement
+            # new_placement_df is already built
+            pass
+        
+        # After all windows, placement_df is the final result
+        new_placement_df = placement_df
+        if True: # Indentation preservation hack
+            # Check if Full Placer improved or degraded the placement
+            # new_placement_df is already built
+            pass
+            
+            # Build nets map for HPWL check (if not already built)
+            nets_map_check = nets_map_from_graph_df(netlist_graph)
+            
+            # Helper to build pos map from df
+            def _pos_map(df):
+                return {str(r.cell_name): (float(r.x_um), float(r.y_um)) for r in df.itertuples(index=False)}
+            
+            new_hpwl = hpwl_of_nets(nets_map_check, _pos_map(new_placement_df), fixed_pins)
+            
+            if new_hpwl > baseline_sa_hpwl:
+                print(f"[FullPlacer] WARNING: Training degraded HPWL ({new_hpwl:.3f} > {baseline_sa_hpwl:.3f}). Reverting to Greedy+SA placement.")
+                # placement_df remains unchanged (reverted to pre-training state effectively by not updating it)
+            else:
+                print(f"[FullPlacer] SUCCESS: Training improved HPWL ({new_hpwl:.3f} <= {baseline_sa_hpwl:.3f}). Keeping new placement.")
+                placement_df = new_placement_df
+
 
     # 3) Prepare batches for swap refiner training (hotspots + overlapping x-window + clustering)
     def selector(df: pd.DataFrame, i: int) -> List[str]:
@@ -1535,15 +2094,20 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
     cell_types_local = {c: cell_types_map_full.get(c, '') for c in batch_cells}
     env0 = SwapRefineEnv(batch_cells, placement_subset, sites_local, nets_local, fixed_local,
                          site_types_map=site_types_local, cell_types_map=cell_types_local)
+    env0 = SwapRefineEnv(batch_cells, placement_subset, sites_local, nets_local, fixed_local,
+                         site_types_map=site_types_local, cell_types_map=cell_types_local)
     obs0 = env0.reset()
-    obs_dim_swap = obs0.shape[0]
+    # Extract dim for GNN policy (node feature dim)
+    obs_dim_swap = obs0["x"].shape[1]
     
     # Factorized Action Space: (B, B)
     action_dim_swap = (batch_size, batch_size)
     
+    # Use GNN policy
     swap_agent = PPOAgent(obs_dim=obs_dim_swap, action_dim=action_dim_swap, device=device,
                           clip_eps=ppo_clip_eps, value_coef=ppo_value_coef,
-                          entropy_coef=ppo_entropy_coef, max_grad_norm=ppo_max_grad_norm)
+                          entropy_coef=ppo_entropy_coef, max_grad_norm=ppo_max_grad_norm,
+                          policy_type="gnn")
 
     # Optional: BC pretrain for swap agent to warm start
     if swap_bc_pretrain_epochs and swap_bc_pretrain_epochs > 0:
@@ -1622,7 +2186,7 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
         except Exception as e:
             print(f"[RLValidation] Validation failed: {e}")
     # Return baseline and refined placement to avoid re-running greedy+SA externally
-    return updated_pins, placement_df, refined_df
+    return updated_pins, greedy_sa_placement_df, refined_df, baseline_sa_hpwl
 
 # Simple note when executed directly
 if __name__ == "__main__":
@@ -1657,4 +2221,112 @@ if __name__ == "__main__":
     else:
         print("This module provides PPO-based placer/refiner helpers. Import and call run_greedy_sa_then_rl_pipeline(...) from your driver script.")
 
-# End of file
+# -------------------------
+# Offline RL / Perturb & Restore
+# -------------------------
+def train_perturb_restore(agent: PPOAgent, env_factory, num_episodes: int = 100, swaps_per_episode: int = 5):
+    """
+    Train agent to restore a perturbed placement.
+    env_factory: callable that returns a SwapRefineEnv initialized with a GOOD placement.
+    """
+    agent.policy_backbone.train()
+    
+    for ep in range(num_episodes):
+        env = env_factory()
+        # Perturb
+        # We need to manually swap cells in the env
+        # SwapRefineEnv doesn't expose a public swap method that doesn't step.
+        # But we can use step() and ignore reward, or modify internal state.
+        # Better to modify internal state to ensure we know the "correct" reverse action.
+        
+        # Record reverse actions
+        reverse_actions = []
+        
+        # Perform random swaps
+        for _ in range(swaps_per_episode):
+            i = random.randint(0, env.B - 1)
+            j = random.randint(0, env.B - 1)
+            if i == j: continue
+            
+            # Check validity
+            if not (env._is_type_compatible(env.batch[i], env.placement[env.batch[j]][2]) and 
+                    env._is_type_compatible(env.batch[j], env.placement[env.batch[i]][2])):
+                continue
+                
+            # Swap in env
+            ci = env.batch[i]; cj = env.batch[j]
+            xi, yi, sidi = env.placement[ci]
+            xj, yj, sidj = env.placement[cj]
+            
+            env.placement[ci] = (xj, yj, sidj)
+            env.placement[cj] = (xi, yi, sidi)
+            
+            # The reverse action is swapping (i, j) again
+            reverse_actions.append((i, j))
+            
+        # Now train to reverse
+        # We want the agent to predict the reverse actions.
+        # Since order matters, we should probably try to reverse the LAST swap first?
+        # Or just any swap that improves HPWL.
+        # But "Perturb & Restore" usually implies supervised learning (BC) on the reverse trajectory.
+        
+        # We will treat this as a single-step BC or multi-step.
+        # Let's try to reverse in LIFO order.
+        
+        for i, j in reversed(reverse_actions):
+            obs = env._obs()
+            
+            # Target action is (i, j)
+            # We want to maximize log_prob(i, j)
+            
+            # Forward pass
+            # We need to handle the dict obs
+            if isinstance(obs, dict):
+                batch_obs = [obs]
+            else:
+                batch_obs = [obs] # Should not happen with new env
+                
+            # Compute loss
+            # We can use PPOAgent's internal nets directly or add a manual BC step.
+            
+            # Prepare tensors
+            if agent.policy_type == "gnn":
+                xs = [torch.tensor(o["x"], dtype=torch.float32, device=agent.device) for o in batch_obs]
+                adjs = [torch.tensor(o["adj"], dtype=torch.float32, device=agent.device) for o in batch_obs]
+                x = torch.stack(xs)
+                adj = torch.stack(adjs)
+                h, _ = agent.policy_backbone(x, adj)
+            else:
+                # MLP
+                # Not implemented for MLP here as per request focusing on GNN
+                continue
+                
+            if agent.is_factorized:
+                # Target: i, j
+                target_a = torch.tensor([i], dtype=torch.int64, device=agent.device)
+                target_b = torch.tensor([j], dtype=torch.int64, device=agent.device)
+                
+                if agent.policy_type == "gnn":
+                    logits_a = agent.actor_a(h).squeeze(2)
+                    logits_b = agent.actor_b(h).squeeze(2)
+                    
+                    # Apply mask if present
+                    if "mask" in batch_obs[0]:
+                        mask = torch.tensor(batch_obs[0]["mask"], dtype=torch.bool, device=agent.device).unsqueeze(0)
+                        valid_a = mask.any(dim=2)
+                        logits_a = logits_a.masked_fill(~valid_a, float('-1e9'))
+                        
+                        # For B, we mask based on target A (teacher forcing)
+                        row_mask = mask[0, i]
+                        logits_b = logits_b.masked_fill(~row_mask.unsqueeze(0), float('-1e9'))
+                        
+                    loss_a = nn.functional.cross_entropy(logits_a, target_a)
+                    loss_b = nn.functional.cross_entropy(logits_b, target_b)
+                    loss = loss_a + loss_b
+                    
+                    agent.optimizer.zero_grad()
+                    loss.backward()
+                    agent.optimizer.step()
+            
+            # Execute the swap to continue the chain
+            env.step((i, j))

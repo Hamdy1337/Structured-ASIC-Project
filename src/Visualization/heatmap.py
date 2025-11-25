@@ -92,34 +92,13 @@ def plot_placement_heatmap(
         plt.show()
 
 
-# Example usage - uncomment and modify paths as needed
-# csv_files = [
-#     r"C:\College Work\AUC Study Work\Digital Design 2\Project\Structred-ASIC-Project\build\ppo_refined_placement.6502_mapped.greedy_sa_placement.csv"
-# ]
-# 
-# for csv in csv_files:
-#     out = os.path.splitext(csv)[0] + "_heatmap.png"
-#     plot_placement_heatmap(csv, bins=80, output_path=out)
-#     print(f"Saved {out}")
+csv_files = [
+    "build/6502.6502_mapped.greedy_sa_placement.csv",
+    "build/6502.6502_mapped.ppo_refined_placement.csv",
+    "build/6502/6502_placement.csv",
+]
 
-if __name__ == "__main__":
-    # Example: Generate heatmap for a placement CSV
-    # Modify the path below to point to your placement CSV file
-    import sys
-    from pathlib import Path
-    
-    if len(sys.argv) > 1:
-        csv_path = Path(sys.argv[1])
-    else:
-        # Default: look for placement CSV in build directory
-        project_root = Path(__file__).parent.parent.parent
-        csv_path = project_root / "build" / "6502" / "6502_placement.csv"
-    
-    if not csv_path.exists():
-        print(f"Error: CSV file not found: {csv_path}")
-        print(f"Usage: python -m src.Visualization.heatmap [path_to_csv]")
-        sys.exit(1)
-    
-    output_path = csv_path.with_suffix('.png').with_name(csv_path.stem + '_heatmap.png')
-    plot_placement_heatmap(csv_path, bins=80, output_path=output_path)
-    print(f"Saved heatmap to: {output_path}")
+for csv in csv_files:
+    out = os.path.splitext(csv)[0] + "_heatmap.png"
+    plot_placement_heatmap(csv, bins=80, output_path=out)
+    print(f"Saved {out}")
