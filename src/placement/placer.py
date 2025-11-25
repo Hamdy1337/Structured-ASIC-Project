@@ -28,6 +28,7 @@ from src.placement.placement_utils import (
     nearest_site,
     build_spatial_index,
     driver_points,
+    hpwl_for_nets,
 )
 from src.placement.simulated_annealing import anneal_batch
 from src.validation.placement_validator import validate_placement, print_validation_report
@@ -140,13 +141,13 @@ def place_cells_greedy_sim_anneal(
     pins_df: pd.DataFrame,
     ports_df: pd.DataFrame,
     netlist_graph: pd.DataFrame,
-    sa_moves_per_temp: int = 200,
-    sa_cooling_rate: float = 0.90,
+    sa_moves_per_temp: int = 5000,
+    sa_cooling_rate: float = 0.95,
     sa_T_initial: Optional[float] = None,
     sa_p_refine: float = 0.7,
     sa_p_explore: float = 0.3,
     sa_refine_max_distance: float = 100.0,
-    sa_W_initial: float = 0.5,
+    sa_W_initial: float = 0.1,
     sa_seed: int = 42,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Place cells on the fabric using a greedy simulated annealing algorithm.
@@ -337,61 +338,81 @@ def place_cells_greedy_sim_anneal(
         greedy_time_total += greedy_time
         print(f"[DEBUG] Level {lvl}: Greedy placement completed - placed {placed_count}/{len(level_cells)} cells in {greedy_time:.3f}s")
         
-        # ---- Small-batch SA within the level ----
-        print(f"[DEBUG] Level {lvl}: Starting simulated annealing...")
-        t_sa_start = time.perf_counter()
-        num_batches = 0
+        # (SA moved to global phase after all levels are placed)
+        per_level_times.append((int(lvl), greedy_time, 0.0))
         
-        # Group cells by type for efficient batching (only swap cells of same type)
-        cells_by_type: Dict[Optional[str], List[str]] = {}
-        for c in level_cells:
-            if c not in assignments:
-                continue
-            cell_type = cell_type_by_cell.get(c)
-            cells_by_type.setdefault(cell_type, []).append(c)
-        
-        # Calculate total batches for progress reporting
-        total_batches = sum((len(type_cells) + batch_size - 1) // batch_size 
-                           for type_cells in cells_by_type.values() 
-                           if len(type_cells) >= 2)
-        
-        # Process each cell type separately
-        for cell_type, type_cells in cells_by_type.items():
-            if len(type_cells) < 2:
-                continue  # Skip types with < 2 cells (can't swap)
-            
-            type_name = str(cell_type) if cell_type is not None else "unknown"
-            print(f"[DEBUG] Level {lvl}: Processing {len(type_cells)} cells of type '{type_name}'")
-            
-            # Batch cells of this type
-            for i in range(0, len(type_cells), batch_size):
-                batch: List[str] = type_cells[i:i + batch_size]
-                if len(batch) < 2:
-                    continue  # Skip batches with < 2 cells
-                num_batches += 1
-                print(f"[PROGRESS] L{lvl}: SA batch {num_batches}/{total_batches} ({len(batch)} cells, type: {type_name[:20]})", flush=True)
-                anneal_batch(
-                    batch, pos_cells, assignments, sites_df, cell_to_nets, fixed_pts,
-                    iters=sa_moves_per_temp,
-                    alpha=sa_cooling_rate,
-                    T_initial=sa_T_initial,
-                    p_refine=sa_p_refine,
-                    p_explore=sa_p_explore,
-                    refine_max_distance=sa_refine_max_distance,
-                    W_initial=sa_W_initial,
-                    seed=sa_seed,
-                    cell_types=cell_type_by_cell
-                )
-        t_sa_end = time.perf_counter()
-        sa_time = t_sa_end - t_sa_start
-        sa_time_total += sa_time
-        per_level_times.append((int(lvl), greedy_time, sa_time))
         t_level_processing_end = time.perf_counter()
         level_total_time = t_level_processing_end - t_level_processing_start
-        print(f"[DEBUG] Level {lvl}: Simulated annealing completed - {num_batches} batches in {sa_time:.3f}s")
-        print(f"[DEBUG] Level {lvl}: Total level processing time: {level_total_time:.3f}s (greedy: {greedy_time:.3f}s, SA: {sa_time:.3f}s)")
+        print(f"[DEBUG] Level {lvl}: Total level processing time: {level_total_time:.3f}s (greedy only)")
         print(f"[PROGRESS] L{lvl}: COMPLETE | Total placed so far: {len(assignments)} cells", flush=True)
         print()
+
+    # Calculate Greedy HPWL
+    all_nets = set()
+    for ns in cell_to_nets.values():
+        all_nets.update(ns)
+    greedy_hpwl = hpwl_for_nets(all_nets, pos_cells, cell_to_nets, fixed_pts)
+    print(f"[DEBUG] Greedy Placement HPWL: {greedy_hpwl:.3f}")
+
+    # ---- Phase 8.5: Global Simulated Annealing ----
+    print("[DEBUG] === PHASE 8.5: GLOBAL SIMULATED ANNEALING ===")
+    t_sa_start = time.perf_counter()
+    num_batches = 0
+    
+    # Collect all placed cells
+    all_placed_cells = list(assignments.keys())
+    
+    # Group cells by type for efficient batching
+    cells_by_type: Dict[Optional[str], List[str]] = {}
+    for c in all_placed_cells:
+        cell_type = cell_type_by_cell.get(c)
+        cells_by_type.setdefault(cell_type, []).append(c)
+    
+    # Calculate total batches
+    total_batches = sum((len(type_cells) + batch_size - 1) // batch_size 
+                       for type_cells in cells_by_type.values() 
+                       if len(type_cells) >= 2)
+    
+    print(f"[DEBUG] Global SA: Processing {len(all_placed_cells)} cells in {total_batches} batches")
+
+    for cell_type, type_cells in cells_by_type.items():
+        if len(type_cells) < 2:
+            continue
+        
+        type_name = str(cell_type) if cell_type is not None else "unknown"
+        
+        # Batch cells
+        for i in range(0, len(type_cells), batch_size):
+            batch = type_cells[i:i + batch_size]
+            if len(batch) < 2:
+                continue
+            num_batches += 1
+            if num_batches % 10 == 0 or num_batches == total_batches:
+                 print(f"[PROGRESS] Global SA: Batch {num_batches}/{total_batches} ({len(batch)} cells, type: {type_name[:20]})", flush=True)
+            
+            anneal_batch(
+                batch, pos_cells, assignments, sites_df, cell_to_nets, fixed_pts,
+                iters=sa_moves_per_temp,
+                alpha=sa_cooling_rate,
+                T_initial=sa_T_initial,
+                p_refine=sa_p_refine,
+                p_explore=sa_p_explore,
+                refine_max_distance=sa_refine_max_distance,
+                W_initial=sa_W_initial,
+                seed=sa_seed,
+                cell_types=cell_type_by_cell
+            )
+
+    t_sa_end = time.perf_counter()
+    sa_time_total = t_sa_end - t_sa_start
+    print(f"[DEBUG] Global SA completed in {sa_time_total:.3f}s")
+    
+    # Calculate SA HPWL
+    sa_hpwl = hpwl_for_nets(all_nets, pos_cells, cell_to_nets, fixed_pts)
+    print(f"[DEBUG] SA Refined HPWL: {sa_hpwl:.3f}")
+    if greedy_hpwl > 0:
+        print(f"[DEBUG] HPWL Improvement: {greedy_hpwl - sa_hpwl:.3f} ({(greedy_hpwl - sa_hpwl)/greedy_hpwl*100:.2f}%)")
+    print()
 
     # ---- Phase 9: Build Placement DataFrame ----
     print("[DEBUG] === PHASE 9: BUILDING PLACEMENT DATAFRAME ===")
@@ -470,31 +491,25 @@ def place_cells_greedy_sim_anneal(
         top_levels = sorted(per_level_times, key=lambda x: x[2], reverse=True)[:5]
         for lvl_id, g_t, sa_t in top_levels:
             print(f"[PlacerTiming] level={lvl_id} greedy={g_t:.3f}s sa={sa_t:.3f}s")
+    # Print Greedy and SA Total HPWL
+    print(f"[DEBUG] Final Greedy HPWL: {greedy_hpwl:.3f}")
+    print(f"[DEBUG] Final SA HPWL: {sa_hpwl:.3f}")
+    print(f"[DEBUG] Overall HPWL Improvement: {greedy_hpwl - sa_hpwl:.3f} ({(greedy_hpwl - sa_hpwl)/greedy_hpwl*100:.2f}%)")
     
-    return updated_pins, placement_df, validation_result
+    return updated_pins, placement_df, validation_result, sa_hpwl
+
+
 
 
 if __name__ == "__main__":
-    import sys
-    
-    # Get design name from command line argument, default to 6502
-    if len(sys.argv) > 1:
-        design_name = sys.argv[1]
-    else:
-        design_name = "6502"  # Default design
-    
-    # Construct file paths
-    project_root = Path(__file__).parent.parent.parent
-    fabric_file_path = project_root / "inputs" / "Platform" / "fabric.yaml"
-    fabric_cells_file_path = project_root / "inputs" / "Platform" / "fabric_cells.yaml"
-    pins_file_path = project_root / "inputs" / "Platform" / "pins.yaml"
-    netlist_file_path = project_root / "inputs" / "designs" / f"{design_name}_mapped.json"
-    
-    # Validate that netlist file exists
-    if not netlist_file_path.exists():
-        print(f"Error: Design file not found: {netlist_file_path}")
-        print(f"Available designs: 6502, arith, aes_128, z80")
-        sys.exit(1)
+    fabric_file_path = "inputs/Platform/fabric.yaml"
+    fabric_cells_file_path = "inputs/Platform/fabric_cells.yaml"
+    pins_file_path = "inputs/Platform/pins.yaml"
+    netlist_file_path = "inputs/designs/6502_mapped.json"
+
+    # Extract design name from netlist file path
+    # e.g., "inputs/designs/arith_mapped.json" -> "arith"
+    design_name = Path(netlist_file_path).stem.replace("_mapped", "")
     
     fabric, fabric_df = get_fabric_db(str(fabric_file_path), str(fabric_cells_file_path))
     # Parse fabric_cells once to reuse for mapping (avoid re-parsing)
