@@ -31,13 +31,6 @@ from src.placement.placement_utils import (
 )
 from src.placement.simulated_annealing import anneal_batch
 from src.validation.placement_validator import validate_placement, print_validation_report
-
-
-    hpwl_for_nets,
-
-)
-from src.placement.simulated_annealing import anneal_batch
-from src.validation.placement_validator import validate_placement, print_validation_report
 from src.Visualization.heatmap import plot_placement_heatmap
 from src.placement.placement_utils import hpwl_for_nets, nets_by_cell, fixed_points_from_pins
 
