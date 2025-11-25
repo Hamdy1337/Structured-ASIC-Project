@@ -221,12 +221,21 @@ def anneal_batch(
     
     # Initial HPWL (using optimized version)
     cur = _hpwl_for_nets_optimized(batch_nets, pos_cells, net_to_cells, fixed_pts)
+    start_hpwl = cur
     
     # Temperature schedule
     if T_initial is not None:
         T0 = T_initial
     else:
-        T0 = max(1.0, cur / 50.0)
+        # Auto-calculate T0 based on initial HPWL
+        # We want initial acceptance probability of bad moves to be low for refinement
+        # If typical delta is ~1% of HPWL, say delta = cur * 0.01
+        # We want exp(-delta/T) to be small, e.g. 0.1
+        # -delta/T = ln(0.1) ~ -2.3 => T = delta/2.3 ~ 0.004 * cur
+        # Let's use T0 = cur / 500.0 (0.2%)
+        T0 = max(0.1, cur / 500.0)
+        print(f"      [SA] Start Batch: Cells={len(batch_cells)} T0={T0:.3f} HPWL={cur:.1f}")
+
     temp = T0
     rng = random.Random(seed)
     
@@ -243,6 +252,8 @@ def anneal_batch(
         p_refine_norm = p_refine / total_prob
     else:
         p_refine_norm = 1.0
+    
+    accepted_moves = 0
     
     for i in range(iters):
         # Choose move type based on probability
@@ -310,6 +321,7 @@ def anneal_batch(
         accept = d <= 0 or rng.random() < math.exp(-d / max(temp, 1e-6))
         if accept:
             cur += d
+            accepted_moves += 1
         else:
             # Revert swap (using NumPy array lookups)
             assignments[a], assignments[b] = sa, sb
@@ -333,4 +345,9 @@ def anneal_batch(
         if (i + 1) % 20 == 0:
             temp *= alpha
             window_size *= alpha
+            
+        if (i + 1) % 200 == 0:
+            print(f"        [SA] Iter {i+1}: T={temp:.3f} HPWL={cur:.1f} Acc={accepted_moves/(i+1):.1%}")
+
+    print(f"      [SA] End Batch: {start_hpwl:.1f} -> {cur:.1f} ({cur-start_hpwl:+.1f})")
 

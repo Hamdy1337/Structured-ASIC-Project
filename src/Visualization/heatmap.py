@@ -44,9 +44,9 @@ def plot_placement_heatmap(
 
 
 csv_files = [
-    "/Users/hamdy47/Downloads/ppo_fullplacer_only.csv",
-    "/Users/hamdy47/Downloads/ppo_refined_placement_smoke.csv",
-    "/Users/hamdy47/Downloads/ppo_refined_placement.csv",
+    "build/6502.6502_mapped.greedy_sa_placement.csv",
+    "build/6502.6502_mapped.ppo_refined_placement.csv",
+    "build/6502/6502_placement.csv",
 ]
 
 for csv in csv_files:

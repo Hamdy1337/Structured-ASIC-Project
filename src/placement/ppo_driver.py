@@ -38,10 +38,10 @@ def main():
     ap.add_argument("--pins-yaml", default="inputs/Platform/pins.yaml", help="Path to pins.yaml")
     ap.add_argument("--fabric-cells-yaml", default="inputs/Platform/fabric_cells.yaml", help="Path to fabric_cells.yaml")
     ap.add_argument("--max-action-full", type=int, default=1024)
-    ap.add_argument("--full-placer-eps", type=int, default=80, help="PPO episodes for full placer (0 = skip training)")
+    ap.add_argument("--full-placer-eps", type=int, default=0, help="PPO episodes for full placer (0 = skip training)")
     ap.add_argument("--swap-train-eps", type=int, default=60, help="PPO episodes for swap refiner per-batch")
-    ap.add_argument("--swap-steps-per-ep", type=int, default=80, help="Environment steps per swap episode")
-    ap.add_argument("--batch-size", type=int, default=64)
+    ap.add_argument("--swap-steps-per-ep", type=int, default=50, help="Environment steps per swap episode")
+    ap.add_argument("--batch-size", type=int, default=300)
     ap.add_argument("--device", default="cpu", choices=["cpu", "cuda", "mps"])
     ap.add_argument("--max-train-batches", type=int, default=50, help="Max training batches for swap PPO")
     ap.add_argument("--max-apply-batches", type=int, default=None, help="Max batches to apply refinement; default all")
@@ -54,6 +54,7 @@ def main():
     ap.add_argument("--ppo-value-coef", type=float, default=1.0, help="Value loss coefficient")
     ap.add_argument("--ppo-entropy-coef", type=float, default=0.01, help="Entropy bonus coefficient")
     ap.add_argument("--ppo-max-grad-norm", type=float, default=0.5, help="Max gradient norm for clipping")
+    ap.add_argument("--sa-iters", type=int, default=5000, help="SA moves per temp")
     args = ap.parse_args()
 
     # Load inputs (use merged fabric DB to ensure cell_x/cell_y columns exist)
@@ -63,7 +64,7 @@ def main():
 
     # Run pipeline
     t_pipeline_start = time.perf_counter()
-    updated_pins, placement_df, refined_df = run_greedy_sa_then_rl_pipeline(
+    updated_pins, placement_df, refined_df, baseline_sa_hpwl = run_greedy_sa_then_rl_pipeline(
         fabric,
         fabric_df,
         pins_df,
@@ -85,12 +86,17 @@ def main():
         ppo_value_coef=args.ppo_value_coef,
         ppo_entropy_coef=args.ppo_entropy_coef,
         ppo_max_grad_norm=args.ppo_max_grad_norm,
+        sa_moves_per_temp=args.sa_iters,
     )
     t_pipeline_end = time.perf_counter()
 
+    # Determine output directory based on design name
+    design_name = Path(args.design_json).stem.replace("_mapped", "")
+    build_dir = Path("build") / design_name
+    build_dir.mkdir(parents=True, exist_ok=True)
+
     # Write baseline placement to CSV for later inspection
-    placement_out_path = Path(args.out_csv).with_suffix(f'.{Path(args.design_json).stem}.greedy_sa_placement.csv')
-    placement_out_path.parent.mkdir(parents=True, exist_ok=True)
+    placement_out_path = build_dir / f"{design_name}_greedy_sa_placement.csv"
     placement_df.to_csv(placement_out_path, index=False)
     print(f"Saved Greedy+SA placement to: {placement_out_path}")
 
@@ -98,7 +104,7 @@ def main():
     fixed_pts = fixed_points_from_pins(updated_pins)
 
     t_hpwl_start = time.perf_counter()
-    hpwl_before = hpwl_of_nets(nets, _pos_map_from_df(placement_df), fixed_pts)
+    hpwl_before = baseline_sa_hpwl
     hpwl_after = hpwl_of_nets(nets, _pos_map_from_df(refined_df), fixed_pts)
     t_hpwl_end = time.perf_counter()
 
@@ -106,8 +112,7 @@ def main():
     pct = (delta / hpwl_before * 100.0) if hpwl_before > 0 else 0.0
 
     # Prepare refined placement output path before printing
-    out_path = Path(args.out_csv).with_suffix(f'.{Path(args.design_json).stem}.ppo_refined_placement.csv')
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path = build_dir / f"{design_name}_ppo_refined_placement.csv"
 
     print("==== Greedy+SA Placement ====")
     print(f"Greedy+SA HPWL (all nets): {hpwl_before:.3f}")
