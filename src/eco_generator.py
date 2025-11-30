@@ -1,2 +1,0 @@
-# ECO netlist generation
-
