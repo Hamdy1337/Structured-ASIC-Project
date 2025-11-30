@@ -10,7 +10,7 @@ def plot_placement_heatmap(
     data: Union[str, Path, pd.DataFrame],
     x_col: str = "x_um",
     y_col: str = "y_um",
-    bins: int = 80,
+    bins: int = 500,
     cmap: str = "viridis",
     figsize: tuple = (10, 8),
     output_path: Optional[Union[str, Path]] = None,
@@ -92,13 +92,13 @@ def plot_placement_heatmap(
         plt.show()
 
 
-csv_files = [
-    "build/6502.6502_mapped.greedy_sa_placement.csv",
-    "build/6502.6502_mapped.ppo_refined_placement.csv",
-    "build/6502/6502_placement.csv",
-]
+if __name__ == "__main__":
+    csv_files = [
+        "build/6502/6502_greedy_sa_placement.csv",
+        "build/6502/6502_ppo_refined_placement.csv",
+    ]
 
-for csv in csv_files:
-    out = os.path.splitext(csv)[0] + "_heatmap.png"
-    plot_placement_heatmap(csv, bins=80, output_path=out)
-    print(f"Saved {out}")
+    for csv in csv_files:
+        out = os.path.splitext(csv)[0] + "_heatmap.png"
+        plot_placement_heatmap(csv, bins=800, output_path=out)
+        print(f"Saved {out}")
