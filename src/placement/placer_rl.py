@@ -580,6 +580,63 @@ class SwapRefineEnv:
         
         # Augmentation
         self.aug_mode = 0
+        
+        # Optimization: Precompute Adjacency Matrix (Static)
+        self._cached_adj = self._build_adj_matrix()
+        
+        # Optimization: Precompute Type Arrays for Vectorized Swap Mask
+        self._init_type_arrays()
+
+    def _build_adj_matrix(self) -> np.ndarray:
+        adj = np.eye(self.B, dtype=np.float32)
+        for i in range(self.B):
+            for j in range(i+1, self.B):
+                c1 = self.batch[i]
+                c2 = self.batch[j]
+                if not self.cell_to_nets[c1].isdisjoint(self.cell_to_nets[c2]):
+                    adj[i, j] = 1.0
+                    adj[j, i] = 1.0
+        
+        # Pad if needed
+        if self.B < self.target_B:
+            new_adj = np.eye(self.target_B, dtype=np.float32)
+            new_adj[:self.B, :self.B] = adj
+            adj = new_adj
+        elif self.B > self.target_B:
+            adj = adj[:self.target_B, :self.target_B]
+            
+        return adj
+
+    def _init_type_arrays(self):
+        # Map string types to integers for fast comparison
+        # 0 is reserved for "unknown/wildcard" (None)
+        self.type_to_int = {"__NONE__": 0}
+        next_id = 1
+        
+        # Collect all types
+        all_types = set(self.cell_types_map.values()) | set(self.site_types_map.values())
+        for t in all_types:
+            self.type_to_int[t] = next_id
+            next_id += 1
+            
+        # Build batch_ctypes array
+        self.batch_ctypes = np.zeros(self.B, dtype=np.int32)
+        for i, c in enumerate(self.batch):
+            t_str = self.cell_types_map.get(c)
+            self.batch_ctypes[i] = self.type_to_int.get(t_str, 0)
+            
+        # Build current_site_types array
+        self.current_site_types = np.zeros(self.B, dtype=np.int32)
+        for i, c in enumerate(self.batch):
+            sid = self.placement[c][2]
+            t_str = self.site_types_map.get(sid)
+            self.current_site_types[i] = self.type_to_int.get(t_str, 0)
+            
+        # Pad if needed (though we only use BxB slice usually)
+        if self.B < self.target_B:
+            pad = np.zeros(self.target_B - self.B, dtype=np.int32)
+            self.batch_ctypes = np.concatenate([self.batch_ctypes, pad])
+            self.current_site_types = np.concatenate([self.current_site_types, pad])
 
     def _apply_aug(self, x: float, y: float) -> Tuple[float, float]:
         if self.aug_mode == 0: return x, y
@@ -686,47 +743,49 @@ class SwapRefineEnv:
         feat = np.stack([xs_n, ys_n, deg_n, dens_n], axis=1)  # shape Bx4
         feat = np.concatenate([feat, force_arr, net_arr], axis=1)      # shape Bx7
         
-        # Adjacency Matrix
-        # A_ij = 1 if cell i and cell j share a net
-        adj = np.eye(self.B, dtype=np.float32) # Self-loops
-        for i in range(self.B):
-            for j in range(i+1, self.B):
-                c1 = self.batch[i]
-                c2 = self.batch[j]
-                # Check intersection of nets
-                if not self.cell_to_nets[c1].isdisjoint(self.cell_to_nets[c2]):
-                    adj[i, j] = 1.0
-                    adj[j, i] = 1.0
+        # Adjacency Matrix (Cached)
+        adj = self._cached_adj
         
-        # Swap Mask
+        # Swap Mask (Vectorized)
         # M_ij = 1 if swap (i, j) is valid
-        swap_mask = np.zeros((self.target_B, self.target_B), dtype=np.float32)
-        for i in range(self.B):
-            has_valid = False
-            for j in range(self.B):
-                if i == j: continue
-                # Check type compatibility
-                # i -> site(j), j -> site(i)
-                if self._is_type_compatible(self.batch[i], self.placement[self.batch[j]][2]) and \
-                   self._is_type_compatible(self.batch[j], self.placement[self.batch[i]][2]):
-                    swap_mask[i, j] = 1.0
-                    has_valid = True
-            if not has_valid:
-                swap_mask[i, i] = 1.0 # Allow self-loop if no other choice
+        # Valid if: compatible(c_i, site_j) AND compatible(c_j, site_i)
+        # compatible(c, s) = (type(c) == 0) OR (type(s) == 0) OR (type(c) == type(s))
         
-        # Pad adjacency if needed
+        # Slice to current B
+        b_ctypes = self.batch_ctypes[:self.B]
+        curr_stypes = self.current_site_types[:self.B]
+        
+        # Check i -> site(j)
+        # b_ctypes[i] vs curr_stypes[j]
+        # match_i_j[i, j] is True if cell i can go to site j
+        # Broadcasting: [B, 1] vs [1, B]
+        c_i = b_ctypes[:, None]
+        s_j = curr_stypes[None, :]
+        match_i_j = (c_i == 0) | (s_j == 0) | (c_i == s_j)
+        
+        # Check j -> site(i)
+        # b_ctypes[j] vs curr_stypes[i]
+        # match_j_i[i, j] is True if cell j can go to site i
+        c_j = b_ctypes[None, :]
+        s_i = curr_stypes[:, None]
+        match_j_i = (c_j == 0) | (s_i == 0) | (c_j == s_i)
+        
+        swap_mask = (match_i_j & match_j_i).astype(np.float32)
+        
+        # Pad swap_mask if needed
         if self.B < self.target_B:
-            pad_dim = self.target_B - self.B
             # Pad feat
+            pad_dim = self.target_B - self.B
             pad_rows = np.zeros((pad_dim, 7), dtype=np.float32)
             feat = np.concatenate([feat, pad_rows], axis=0)
-            # Pad adj
-            new_adj = np.eye(self.target_B, dtype=np.float32)
-            new_adj[:self.B, :self.B] = adj
-            adj = new_adj
+            
+            new_mask = np.zeros((self.target_B, self.target_B), dtype=np.float32)
+            new_mask[:self.B, :self.B] = swap_mask
+            # Allow self-loops in padded region? Usually masked out by adj anyway.
+            # But let's keep it zero.
+            swap_mask = new_mask
         elif self.B > self.target_B:
             feat = feat[:self.target_B, :]
-            adj = adj[:self.target_B, :self.target_B]
             swap_mask = swap_mask[:self.target_B, :self.target_B]
             
         return {"x": feat, "adj": adj, "mask": swap_mask}
@@ -750,14 +809,19 @@ class SwapRefineEnv:
             # No-op
             return self._obs(), 0.0, False
 
-        ci = self.batch[i]; cj = self.batch[j]
-        xi, yi, sidi = self.placement[ci]
-        xj, yj, sidj = self.placement[cj]
+        # Update current_site_types for vectorized mask
+        # Cell i moves to site(j), Cell j moves to site(i)
+        # So current_site_types[i] becomes old current_site_types[j]
+        # and current_site_types[j] becomes old current_site_types[i]
+        self.current_site_types[[i, j]] = self.current_site_types[[j, i]]
 
-        # Type compatibility check
+        # Check type compatibility (redundant if masked, but safe)
+        ci = self.batch[i]; cj = self.batch[j]
+        xi, yi, sidi = self.placement[ci]; xj, yj, sidj = self.placement[cj]
+        
         if not (self._is_type_compatible(ci, sidj) and self._is_type_compatible(cj, sidi)):
-            self.illegal_swap_count += 1
-            return self._obs(), -0.5, False # Penalty for illegal swap
+             self.illegal_swap_count += 1
+             return self._obs(), -1.0, False
 
         nets_aff = set(self.cell_to_nets.get(ci,set())) | set(self.cell_to_nets.get(cj,set()))
         
@@ -1658,6 +1722,32 @@ def build_swap_refine_env_from_batch(batch_cells: List[str],
                                      cell_types_map: Optional[Dict[str,str]] = None) -> SwapRefineEnv:
     nets_map = nets_map_from_graph_df(netlist_graph)
     fixed = fixed_points_from_pins(pins_df)
+    
+    # CRITICAL FIX: Add cells outside the batch as fixed points
+    # 1. Identify all nets touching the batch
+    batch_set = set(batch_cells)
+    nets_touching_batch = set()
+    # We need a reverse map: cell -> nets. 
+    # nets_map is net_id -> {cells}. 
+    # It's expensive to build full reverse map every time.
+    # But we can iterate nets_map once or rely on caller passing it?
+    # For now, let's build a quick local reverse map or iterate nets_map.
+    # Iterating nets_map is O(N_nets).
+    
+    # Better approach: The caller usually has this info, but to keep signature simple:
+    for net_id, cells in nets_map.items():
+        if not batch_set.isdisjoint(cells):
+            nets_touching_batch.add(net_id)
+            
+    # 2. For each touching net, find cells NOT in batch and add their pos to fixed
+    for net_id in nets_touching_batch:
+        for cell in nets_map[net_id]:
+            if cell not in batch_set and cell in placement_map:
+                x, y, _ = placement_map[cell]
+                if net_id not in fixed:
+                    fixed[net_id] = []
+                fixed[net_id].append((float(x), float(y)))
+
     env = SwapRefineEnv(batch_cells, placement_map, sites_map, nets_map, fixed,
                         site_types_map=site_types_map, cell_types_map=cell_types_map)
     return env
@@ -1709,47 +1799,54 @@ def apply_swap_refiner(agent: PPOAgent, batch_cells: List[str], placement_map: D
         env.placement[ci] = (xj, yj, sidj)
         env.placement[cj] = (xi, yi, sidi)
         limit -= 1
-    # Global acceptance check: compute exact delta only on nets touching this batch
-    nets_all = nets_map_from_graph_df(netlist_graph)
-    fixed_all = fixed_points_from_pins(pins_df)
-    def _hpwl_subset_with_positions(nets_subset: Set[int], use_env_positions: bool) -> float:
-        total = 0.0
-        for nb in nets_subset:
-            cells = nets_all.get(nb, set())
-            if not cells:
-                continue
-            xs: List[float] = []
-            ys: List[float] = []
-            for c in cells:
-                if use_env_positions and c in env.placement:
-                    x, y, _ = env.placement[c]
-                    xs.append(float(x)); ys.append(float(y))
-                elif c in placement_map:
-                    x, y, _ = placement_map[c]
-                    xs.append(float(x)); ys.append(float(y))
-            for (fx, fy) in fixed_all.get(nb, []):
-                xs.append(float(fx)); ys.append(float(fy))
-            if len(xs) >= 2:
-                total += (max(xs) - min(xs)) + (max(ys) - min(ys))
-        return total
-
+    # Global acceptance check
+    # Now that we fixed build_swap_refine_env_from_batch to include external cells as fixed pins,
+    # env.nets and env.fixed should accurately reflect the global connectivity for the touched nets.
+    # So we can trust env's HPWL calculation if we update the placement.
+    
     # Snapshot original placements for this batch
     original_batch = {c: placement_map[c] for c in batch_cells}
-    hpwl_global_before = _hpwl_subset_with_positions(nets_touch, use_env_positions=False)
-    # Tentative commit in placement_map to reflect env outcome
-    for c in batch_cells:
-        placement_map[c] = env.placement[c]
-    hpwl_after = hpwl_of_nets(env.nets, _pos_map(), env.fixed, net_subset=nets_touch)
-    delta_local = hpwl_after - hpwl_before
-    hpwl_global_after = _hpwl_subset_with_positions(nets_touch, use_env_positions=True)
-    delta_global = hpwl_global_after - hpwl_global_before
-    if delta_global > 0.0:
+    
+    # Calculate "Global" HPWL using the environment's view (which is now accurate)
+    # Note: hpwl_before was calculated at start using env.nets/fixed.
+    # We should re-calculate it here to be safe, or trust hpwl_before?
+    # Let's re-calculate to be 100% sure we compare apples to apples.
+    
+    # Re-build pos map for batch
+    def _pos_map_batch(p_map):
+        return {c: (p_map[c][0], p_map[c][1]) for c in batch_cells}
+
+    # "Global" here means "HPWL of all nets touching the batch".
+    # Since env.fixed now includes external cells, hpwl_of_nets on env.nets IS the global HPWL for these nets.
+    
+    # 1. HPWL before (using original placement)
+    # We need to revert env.placement to original to measure "before" correctly if it changed during hill-climb
+    # Actually, env.placement might have changed in the hill-climb loop.
+    # But we want to compare "start of function" vs "end of function".
+    # Wait, the hill-climb modifies env.placement.
+    # So let's measure "after" first (current state of env.placement).
+    
+    # CRITICAL FIX: Pass net_weights to match environment's objective
+    net_weights = getattr(env, 'net_weights', None)
+    
+    hpwl_after = hpwl_of_nets(env.nets, _pos_map_batch(env.placement), env.fixed, net_subset=nets_touch, net_weights=net_weights)
+    
+    # 2. HPWL before (using original_batch)
+    hpwl_before_recalc = hpwl_of_nets(env.nets, _pos_map_batch(original_batch), env.fixed, net_subset=nets_touch, net_weights=net_weights)
+    
+    delta = hpwl_after - hpwl_before_recalc
+    
+    if delta > 0.0:
         # revert
         for c in batch_cells:
             placement_map[c] = original_batch[c]
-        print(f"[SwapRefine] REVERT batch {len(batch_cells)}: local Δ={delta_local:.3f}, global Δ={delta_global:.3f} (worse).")
+        print(f"[SwapRefine] REVERT batch {len(batch_cells)}: Δ={delta:.3f} (worse).")
     else:
-        print(f"[SwapRefine] COMMIT batch {len(batch_cells)}: local Δ={delta_local:.3f}, global Δ={delta_global:.3f} (improved/neutral).")
+        # commit (already in env.placement, just need to update placement_map)
+        for c in batch_cells:
+            placement_map[c] = env.placement[c]
+        print(f"[SwapRefine] COMMIT batch {len(batch_cells)}: Δ={delta:.3f} (improved/neutral).")
+        
     return placement_map
 
 # -------------------------

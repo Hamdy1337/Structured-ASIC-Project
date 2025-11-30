@@ -32,9 +32,6 @@ from src.placement.placement_utils import (
 )
 from src.placement.simulated_annealing import anneal_batch
 from src.validation.placement_validator import validate_placement, print_validation_report
-
-
-
 from src.placement.simulated_annealing import anneal_batch
 from src.validation.placement_validator import validate_placement, print_validation_report
 from src.Visualization.heatmap import plot_placement_heatmap
@@ -286,7 +283,7 @@ def place_cells_greedy_sim_anneal(
 
     # ---- Phase 8: Level-by-Level Placement (Growing) ----
     print("[DEBUG] === PHASE 8: LEVEL-BY-LEVEL PLACEMENT (GROWING) ===")
-    batch_size = 4
+    batch_size = 120
     greedy_time_total = 0.0
     sa_time_total = 0.0
     per_level_times: List[Tuple[int, float, float]] = []
@@ -507,10 +504,13 @@ def place_cells_greedy_sim_anneal(
 
 
 if __name__ == "__main__":
+    # Define project root (assuming this file is in src/placement/)
+    project_root = Path(__file__).resolve().parent.parent.parent
+    
     fabric_file_path = "inputs/Platform/fabric.yaml"
     fabric_cells_file_path = "inputs/Platform/fabric_cells.yaml"
     pins_file_path = "inputs/Platform/pins.yaml"
-    netlist_file_path = "inputs/designs/6502_mapped.json"
+    netlist_file_path = "inputs/designs/arith_mapped.json"
 
     # Extract design name from netlist file path
     # e.g., "inputs/designs/arith_mapped.json" -> "arith"
@@ -527,7 +527,7 @@ if __name__ == "__main__":
     
     # Time overall placement
     placement_start = time.time()
-    assigned_pins, placement_df, validation_result = place_cells_greedy_sim_anneal(
+    assigned_pins, placement_df, validation_result, _ = place_cells_greedy_sim_anneal(
         fabric=fabric,
         fabric_df=fabric_df,
         pins_df=pins_df,
