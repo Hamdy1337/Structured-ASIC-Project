@@ -558,13 +558,134 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
     
     print(f"Found port_directions for {len(cell_type_port_directions)} cell types")
     
-    # Step 2: Claim one conb_1 cell for tie-low AND tie-high
+    # Step 2: Distributed tie cell approach
     if not unused_ties:
         print("Warning: No unused tie cells (conb_1) found. Skipping Power-Down ECO.")
     else:
-        # Get the first unused tie cell
-        tie_cell_physical_name = unused_ties[0]
-        print(f"Claiming tie cell: {tie_cell_physical_name}")
+        # Pre-count how many unused logic cells will actually be tied
+        # (Many get filtered out: taps, decaps, no inputs, no port info)
+        cells_that_will_be_tied = 0
+        skipped_taps_decap = 0
+        skipped_no_inputs = 0
+        skipped_no_port_info = 0
+        skipped_unknown = 0
+        
+        for phys_name in unused_logic:
+            # Get cell type from physical name
+            if '__' in phys_name:
+                template = phys_name.split('__', 1)[1]
+                cell_type = template_to_type.get(template, 'UNKNOWN')
+            else:
+                cell_type = physical_to_type.get(phys_name, 'UNKNOWN')
+            
+            if cell_type == 'UNKNOWN':
+                skipped_unknown += 1
+                continue
+            
+            # Skip cells that don't have logic inputs (taps, decaps, conb, etc.)
+            if 'tap' in cell_type.lower() or 'decap' in cell_type.lower() or 'conb' in cell_type.lower():
+                skipped_taps_decap += 1
+                continue
+            
+            # Get port_directions for this cell type
+            port_directions = cell_type_port_directions.get(cell_type)
+            if not port_directions:
+                # Try to find a similar cell type
+                for known_type, known_dirs in cell_type_port_directions.items():
+                    base_known = known_type.split('__')[-1].split('_')[0] if '__' in known_type else known_type.split('_')[0]
+                    base_current = cell_type.split('__')[-1].split('_')[0] if '__' in cell_type else cell_type.split('_')[0]
+                    if base_known == base_current:
+                        port_directions = known_dirs
+                        break
+                
+                if not port_directions:
+                    skipped_no_port_info += 1
+                    continue
+            
+            # Extract input ports only
+            input_ports = [port for port, direction in port_directions.items() 
+                          if direction.lower() == 'input']
+            
+            if not input_ports:
+                skipped_no_inputs += 1
+                continue
+            
+            cells_that_will_be_tied += 1
+        
+        # Calculate how many tie cells we need based on ACTUAL cells that will be tied
+        # Fanout limit: 1000 cells per tie cell (reasonable for power/ground nets)
+        MAX_FANOUT_PER_TIE = 1000
+        num_tie_cells_needed = max(1, math.ceil(cells_that_will_be_tied / MAX_FANOUT_PER_TIE))
+        num_tie_cells_needed = min(num_tie_cells_needed, len(unused_ties))  # Don't exceed available
+        
+        print(f"Power-Down ECO: {len(unused_logic)} unused logic cells identified")
+        print(f"  - Will tie: {cells_that_will_be_tied} cells")
+        print(f"  - Skipped: {skipped_taps_decap} (taps/decap/conb), {skipped_no_inputs} (no inputs), {skipped_no_port_info} (no port info), {skipped_unknown} (unknown type)")
+        print(f"  - Need {num_tie_cells_needed} tie cells (fanout limit: {MAX_FANOUT_PER_TIE} per tie cell)")
+        print(f"  - Available: {len(unused_ties)} unused tie cells")
+        
+        # Select tie cells distributed spatially across the fabric
+        # Get coordinates for all unused tie cells
+        tie_cell_coords = []
+        for tie_phys_name in unused_ties:
+            coords = physical_to_coords.get(tie_phys_name)
+            if coords:
+                tie_cell_coords.append((tie_phys_name, coords[0], coords[1]))
+        
+        if not tie_cell_coords:
+            print("Warning: Could not get coordinates for tie cells. Using first available.")
+            selected_tie_cells = unused_ties[:num_tie_cells_needed]
+        else:
+            # Sort by coordinates and select evenly distributed ones
+            # Simple approach: divide into grid regions and pick one from each
+            tie_df = pd.DataFrame(tie_cell_coords, columns=['physical_name', 'x', 'y'])
+            
+            # Use k-means-like approach: divide into num_tie_cells_needed regions
+            if num_tie_cells_needed == 1:
+                # Just pick the one closest to center
+                center_x = tie_df['x'].mean()
+                center_y = tie_df['y'].mean()
+                tie_df['dist_to_center'] = ((tie_df['x'] - center_x)**2 + (tie_df['y'] - center_y)**2)**0.5
+                selected_tie_cells = [tie_df.loc[tie_df['dist_to_center'].idxmin(), 'physical_name']]
+            else:
+                # Divide into grid and pick closest to center of each grid cell
+                x_min, x_max = tie_df['x'].min(), tie_df['x'].max()
+                y_min, y_max = tie_df['y'].min(), tie_df['y'].max()
+                
+                # Calculate grid dimensions (roughly square)
+                grid_size = int(math.ceil(math.sqrt(num_tie_cells_needed)))
+                x_step = (x_max - x_min) / grid_size if x_max > x_min else 1
+                y_step = (y_max - y_min) / grid_size if y_max > y_min else 1
+                
+                selected_tie_cells = []
+                for i in range(grid_size):
+                    for j in range(grid_size):
+                        if len(selected_tie_cells) >= num_tie_cells_needed:
+                            break
+                        # Center of this grid cell
+                        grid_center_x = x_min + (i + 0.5) * x_step
+                        grid_center_y = y_min + (j + 0.5) * y_step
+                        
+                        # Find tie cell closest to this grid center
+                        tie_df['dist_to_grid_center'] = (
+                            (tie_df['x'] - grid_center_x)**2 + 
+                            (tie_df['y'] - grid_center_y)**2
+                        )**0.5
+                        
+                        # Exclude already selected cells
+                        available = tie_df[~tie_df['physical_name'].isin(selected_tie_cells)]
+                        if len(available) > 0:
+                            closest = available.loc[available['dist_to_grid_center'].idxmin(), 'physical_name']
+                            selected_tie_cells.append(closest)
+                    if len(selected_tie_cells) >= num_tie_cells_needed:
+                        break
+                
+                # If we didn't get enough, fill with remaining
+                remaining = [t for t in unused_ties if t not in selected_tie_cells]
+                while len(selected_tie_cells) < num_tie_cells_needed and remaining:
+                    selected_tie_cells.append(remaining.pop(0))
+        
+        print(f"Selected {len(selected_tie_cells)} tie cells for distribution")
         
         # Find max net bit (in case CTS added nets)
         max_net_bit = 0
@@ -576,7 +697,7 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
                 if isinstance(bit, int):
                     max_net_bit = max(max_net_bit, bit)
         
-        # Create both tie-low and tie-high nets
+        # Create both tie-low and tie-high nets (shared by all tie cells)
         tie_low_net_bit = max_net_bit + 1
         tie_high_net_bit = max_net_bit + 2
         tie_low_net_name = "tie_low_net"
@@ -587,27 +708,29 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
         module['netnames'][tie_high_net_name] = {'bits': [tie_high_net_bit], 'attributes': {}}
         print(f"Created tie nets: {tie_low_net_name} (bit {tie_low_net_bit}), {tie_high_net_name} (bit {tie_high_net_bit})")
         
-        # Step 4: Add conb_1 cell to netlist with both outputs
-        tie_cell_logical_name = f"tie_cell_{tie_low_net_bit}"
-        
+        # Step 4: Add all selected conb_1 cells to netlist (all drive same nets)
         # Get port_directions for conb_1 if available, otherwise use known structure
         conb_port_directions = cell_type_port_directions.get('sky130_fd_sc_hd__conb_1', {
             'LO': 'output',
             'HI': 'output'
         })
         
-        module['cells'][tie_cell_logical_name] = {
-            'type': 'sky130_fd_sc_hd__conb_1',
-            'connections': {
-                'LO': [tie_low_net_bit],   # LO outputs 0 (tie-low)
-                'HI': [tie_high_net_bit]   # HI outputs 1 (tie-high)
-            },
-            'port_directions': conb_port_directions,
-            'attributes': {
-                'physical_name': tie_cell_physical_name
+        for idx, tie_cell_physical_name in enumerate(selected_tie_cells):
+            tie_cell_logical_name = f"tie_cell_{tie_low_net_bit}_{idx}"
+            
+            module['cells'][tie_cell_logical_name] = {
+                'type': 'sky130_fd_sc_hd__conb_1',
+                'connections': {
+                    'LO': [tie_low_net_bit],   # LO outputs 0 (tie-low)
+                    'HI': [tie_high_net_bit]   # HI outputs 1 (tie-high)
+                },
+                'port_directions': conb_port_directions,
+                'attributes': {
+                    'physical_name': tie_cell_physical_name
+                }
             }
-        }
-        print(f"Added tie cell to netlist: {tie_cell_logical_name}")
+        
+        print(f"Added {len(selected_tie_cells)} tie cells to netlist (all driving shared tie nets)")
         
         # Step 5: Helper function to determine if a port should be tied high or low
         def should_tie_high(port_name: str) -> bool:
@@ -625,7 +748,18 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
             # Default: tie low
             return False
         
-        # Step 6: Add unused logic cells to netlist with tied inputs
+        # Step 6: Build spatial assignment map (which tie cell is nearest to each unused cell)
+        # This is for statistics - all unused cells connect to the same tie nets
+        tie_cell_coords_map = {}
+        for idx, tie_phys_name in enumerate(selected_tie_cells):
+            coords = physical_to_coords.get(tie_phys_name)
+            if coords:
+                tie_cell_coords_map[idx] = (coords[0], coords[1])
+        
+        # Track assignment statistics
+        tie_cell_assignments = {idx: 0 for idx in range(len(selected_tie_cells))}
+        
+        # Step 7: Add unused logic cells to netlist with tied inputs
         unused_logic_added = 0
         cells_without_port_info = set()
         
@@ -671,6 +805,20 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
             # Create logical name for this unused cell
             logical_name = f"unused_{phys_name}"
             
+            # Find nearest tie cell for statistics (all connect to same nets anyway)
+            if tie_cell_coords_map:
+                unused_coords = physical_to_coords.get(phys_name)
+                if unused_coords:
+                    min_dist = float('inf')
+                    nearest_tie_idx = 0
+                    for tie_idx, tie_coords in tie_cell_coords_map.items():
+                        dist = ((unused_coords[0] - tie_coords[0])**2 + 
+                               (unused_coords[1] - tie_coords[1])**2)**0.5
+                        if dist < min_dist:
+                            min_dist = dist
+                            nearest_tie_idx = tie_idx
+                    tie_cell_assignments[nearest_tie_idx] += 1
+            
             # Build connections: tie inputs appropriately
             connections = {}
             for port in input_ports:
@@ -697,6 +845,19 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
         print(f"Power-Down ECO complete: Tied {unused_logic_added} unused logic cells")
         print(f"  - Tie-low net: {tie_low_net_name} (bit {tie_low_net_bit})")
         print(f"  - Tie-high net: {tie_high_net_name} (bit {tie_high_net_bit})")
+        print(f"  - Using {len(selected_tie_cells)} distributed tie cells")
+        
+        # Print assignment statistics
+        if tie_cell_assignments:
+            print(f"  - Tie cell assignment statistics:")
+            total_assigned = sum(tie_cell_assignments.values())
+            actual_avg = total_assigned / len(selected_tie_cells) if len(selected_tie_cells) > 0 else 0
+            for tie_idx in sorted(tie_cell_assignments.keys()):
+                count = tie_cell_assignments[tie_idx]
+                print(f"    Tie cell {tie_idx}: {count} cells assigned")
+            max_fanout = max(tie_cell_assignments.values()) if tie_cell_assignments else 0
+            min_fanout = min(tie_cell_assignments.values()) if tie_cell_assignments else 0
+            print(f"  - Fanout: {min_fanout} - {max_fanout} cells per tie cell (avg: {actual_avg:.0f})")
         
         # Count cells added during ECO
         cts_buffers_added = len([c for c in module['cells'].keys() if c.startswith('cts_htree_')])

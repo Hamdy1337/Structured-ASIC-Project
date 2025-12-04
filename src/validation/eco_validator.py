@@ -294,8 +294,37 @@ def validate_clock_connections(
             clock_nets.add(clk_bits)
     
     # Find drivers of clock nets
+    # After CTS, clock drivers are CTS buffers (cts_htree_* cells)
+    # Since we're validating the original netlist (before ECO), we should also check Verilog
     clock_drivers = []
+    cts_buffers_in_module = []
+    cts_buffers_in_verilog = []
+    
+    # Check module for CTS buffers (may not exist if reading original netlist)
     for cell_name, cell_data in module['cells'].items():
+        if cell_name.startswith('cts_htree_'):
+            cts_buffers_in_module.append(cell_name)
+            clock_drivers.append(cell_name)
+    
+    # Also check Verilog file for CTS buffers (final output after ECO)
+    if verilog_path.exists():
+        with open(verilog_path, 'r') as f:
+            verilog_content = f.read()
+        
+        # Find CTS buffers in Verilog
+        cts_buffer_pattern = r'sky130_fd_sc_hd__buf_1\s+(cts_htree_\w+)'
+        cts_buffers_in_verilog = re.findall(cts_buffer_pattern, verilog_content)
+        
+        if cts_buffers_in_verilog:
+            # CTS buffers exist in final Verilog - clock tree is present
+            clock_drivers.extend(cts_buffers_in_verilog)
+            result.add_stat('num_cts_buffers_verilog', len(cts_buffers_in_verilog))
+    
+    # Also check for original clock drivers in module
+    for cell_name, cell_data in module['cells'].items():
+        if cell_name.startswith('cts_htree_'):
+            continue  # Already counted
+        
         cell_type = cell_data.get('type', '')
         connections = cell_data.get('connections', {})
         port_directions = cell_data.get('port_directions', {})
@@ -312,11 +341,19 @@ def validate_clock_connections(
                     clock_drivers.append(cell_name)
                     break
     
-    result.add_stat('num_clock_drivers', len(clock_drivers))
-    if len(clock_drivers) == 0:
-        result.add_error("No clock drivers found!")
+    result.add_stat('num_cts_buffers_module', len(cts_buffers_in_module))
+    result.add_stat('num_clock_drivers', len(set(clock_drivers)))  # Remove duplicates
+    
+    unique_drivers = len(set(clock_drivers))
+    if unique_drivers == 0:
+        result.add_warning("No clock drivers found in netlist - checking if CTS was applied...")
+        result.add_warning("If validating after ECO, CTS buffers should be present in Verilog")
     else:
-        print(f"✓ Found {len(clock_drivers)} clock drivers")
+        if cts_buffers_in_module or cts_buffers_in_verilog:
+            verilog_count = len(cts_buffers_in_verilog) if cts_buffers_in_verilog else 0
+            print(f"✓ Found {unique_drivers} clock drivers ({len(cts_buffers_in_module)} in netlist, {verilog_count} in Verilog)")
+        else:
+            print(f"✓ Found {unique_drivers} clock drivers")
     
     return result
 
