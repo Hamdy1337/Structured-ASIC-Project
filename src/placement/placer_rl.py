@@ -31,8 +31,10 @@ def hpwl_of_nets(nets: Dict[int, Set[str]],
                  pos_cells: Dict[str, Tuple[float, float]],
                  fixed_pts: Dict[int, List[Tuple[float, float]]],
                  net_subset: Optional[Set[int]] = None,
-                 net_weights: Optional[Dict[int, float]] = None) -> float:
+                 net_weights: Optional[Dict[int, float]] = None,
+                 return_max: bool = False) -> Union[float, Tuple[float, float]]:
     total = 0.0
+    max_len = 0.0
     for net, cells in nets.items():
         if net_subset is not None and net not in net_subset:
             continue
@@ -45,9 +47,13 @@ def hpwl_of_nets(nets: Dict[int, Set[str]],
             xs.append(fx); ys.append(fy)
         if len(xs) >= 2:
             wl = (max(xs) - min(xs)) + (max(ys) - min(ys))
+            if wl > max_len:
+                max_len = wl
             if net_weights is not None:
                 wl *= float(net_weights.get(net, 1.0))
             total += wl
+    if return_max:
+        return total, max_len
     return total
 
 def build_sites_from_fabric_df(fabric_df: pd.DataFrame) -> pd.DataFrame:
@@ -831,7 +837,7 @@ class SwapRefineEnv:
             relevant_cells.update(self.nets.get(n, set()))
         pos_map = {c: self.placement[c][:2] for c in relevant_cells if c in self.placement}
 
-        before = hpwl_of_nets(self.nets, pos_map, self.fixed, net_subset=nets_aff, net_weights=self.net_weights)
+        before, max_len_before = hpwl_of_nets(self.nets, pos_map, self.fixed, net_subset=nets_aff, net_weights=self.net_weights, return_max=True)
         
         # swap
         self.placement[ci] = (xj, yj, sidj)
@@ -841,7 +847,7 @@ class SwapRefineEnv:
         pos_map[ci] = (xj, yj)
         pos_map[cj] = (xi, yi)
         
-        after = hpwl_of_nets(self.nets, pos_map, self.fixed, net_subset=nets_aff, net_weights=self.net_weights)
+        after, max_len_after = hpwl_of_nets(self.nets, pos_map, self.fixed, net_subset=nets_aff, net_weights=self.net_weights, return_max=True)
         d_hpwl = after - before
         # congestion-aware penalty: change in local density around the swapped locations
         def _density_at(x: float, y: float) -> int:
@@ -849,8 +855,15 @@ class SwapRefineEnv:
         dens_before = _density_at(xi, yi) + _density_at(xj, yj)
         dens_after = _density_at(self.placement[ci][0], self.placement[ci][1]) + _density_at(self.placement[cj][0], self.placement[cj][1])
         d_dens = dens_after - dens_before
+        
+        # Max Length Penalty (Soft Constraint)
+        # If max_len > 500um, apply penalty.
+        max_len_penalty = 0.0
+        if max_len_after > 500.0:
+            max_len_penalty = 0.5 * (max_len_after - 500.0)
+            
         # Scale HPWL delta (0.01) to keep rewards in reasonable range
-        reward = -d_hpwl * 0.01 - self.congestion_weight * float(d_dens)
+        reward = -d_hpwl * 0.01 - self.congestion_weight * float(d_dens) - max_len_penalty * 0.01
         
         # Clip negative reward to avoid instability
         if reward < -10.0:
