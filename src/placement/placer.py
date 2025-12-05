@@ -364,6 +364,14 @@ def place_cells_greedy_sim_anneal(
     # Collect all placed cells
     all_placed_cells = list(assignments.keys())
     
+    # Pre-compute net_to_cells mapping for SA optimization
+    # This is static (connectivity doesn't change), so we compute it once
+    print("[DEBUG] Pre-computing net_to_cells map for SA...")
+    net_to_cells: Dict[int, List[str]] = {}
+    for cell in all_placed_cells:
+        for net in cell_to_nets.get(cell, set()):
+            net_to_cells.setdefault(net, []).append(cell)
+    
     # Group cells by type for efficient batching
     cells_by_type: Dict[Optional[str], List[str]] = {}
     for c in all_placed_cells:
@@ -402,7 +410,8 @@ def place_cells_greedy_sim_anneal(
                 refine_max_distance=sa_refine_max_distance,
                 W_initial=sa_W_initial,
                 seed=sa_seed,
-                cell_types=cell_type_by_cell
+                cell_types=cell_type_by_cell,
+                net_to_cells=net_to_cells
             )
 
     t_sa_end = time.perf_counter()
@@ -503,19 +512,19 @@ def place_cells_greedy_sim_anneal(
 
 
 
-if __name__ == "__main__":
+def run_placement(design_name: str = "arith") -> None:
     # Define project root (assuming this file is in src/placement/)
     project_root = Path(__file__).resolve().parent.parent.parent
     
-    fabric_file_path = "inputs/Platform/fabric.yaml"
-    fabric_cells_file_path = "inputs/Platform/fabric_cells.yaml"
-    pins_file_path = "inputs/Platform/pins.yaml"
-    netlist_file_path = "inputs/designs/arith_mapped.json"
+    fabric_file_path = project_root / "inputs/Platform/fabric.yaml"
+    fabric_cells_file_path = project_root / "inputs/Platform/fabric_cells.yaml"
+    pins_file_path = project_root / "inputs/Platform/pins.yaml"
+    netlist_file_path = project_root / f"inputs/designs/{design_name}_mapped.json"
 
-    # Extract design name from netlist file path
-    # e.g., "inputs/designs/arith_mapped.json" -> "arith"
-    design_name = Path(netlist_file_path).stem.replace("_mapped", "")
-    
+    if not netlist_file_path.exists():
+        print(f"Error: Netlist file not found: {netlist_file_path}")
+        return
+
     fabric, fabric_df = get_fabric_db(str(fabric_file_path), str(fabric_cells_file_path))
     # Parse fabric_cells once to reuse for mapping (avoid re-parsing)
     _, fabric_cells_df = parse_fabric_cells_file(str(fabric_cells_file_path))
@@ -590,6 +599,14 @@ if __name__ == "__main__":
         output_path=heatmap_output,
         title=f"Placement Density Heatmap - {design_name} ({len(placement_df)} cells)",
     )
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) > 1:
+        design = sys.argv[1]
+    else:
+        design = "arith"
+    run_placement(design)
     
     # Calculate additional statistics for summary
     total_cells_netlist = len(netlist_graph['cell_name'].unique())

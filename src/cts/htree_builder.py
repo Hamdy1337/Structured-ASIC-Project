@@ -1,5 +1,5 @@
 """
-eco_generator.py: Generates ECO netlist with H-tree Clock Tree Synthesis (CTS).
+htree_builder.py: Generates ECO netlist with H-tree Clock Tree Synthesis (CTS).
 """
 
 import json
@@ -19,6 +19,7 @@ from src.parsers.fabric_cells_parser import parse_fabric_cells_file
 from src.parsers.fabric_db import get_fabric_db
 from src.parsers.netlist_parser import NetlistParser
 from src.placement.placement_mapper import map_placement_to_physical_cells
+from src.parsers.pins_parser import load_and_validate as load_pins_df
 
 def parse_map_file(map_file_path: str) -> pd.DataFrame:
     """
@@ -154,7 +155,7 @@ class VerilogWriter:
         lines.append("endmodule")
         return "\n".join(lines)
 
-def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric_cells_path: str, fabric_path: str, output_dir: str):
+def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric_cells_path: str, fabric_path: str, output_dir: str, pins_path: str = None):
     """
     Run ECO flow with CTS and Power-Down ECO.
     
@@ -164,7 +165,9 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
         map_file_path: Path to the .map file (logical -> physical mapping from placement)
         fabric_cells_path: Path to fabric_cells.yaml
         fabric_path: Path to fabric.yaml
+        fabric_path: Path to fabric.yaml
         output_dir: Directory for output files
+        pins_path: Path to pins.yaml (optional, for connecting clock pin)
     """
     print(f"Starting ECO Flow for {design_name}...")
     
@@ -508,16 +511,77 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
                 traverse_update(child, output_net_bit)
 
         if isinstance(root_node, TreeNode):
-            traverse_update(root_node, clock_net_bit)
-            print("CTS Netlist update complete.")
-            
-            # Save CTS Data for Visualization
-            print("Saving CTS data for visualization...")
+            # Initialize CTS Data for Visualization EARLY
             cts_data = {
                 'sinks': [{'name': s.cell_name, 'x': float(s.x), 'y': float(s.y)} for s in sinks],
                 'buffers': [],
                 'connections': []
             }
+            
+            # NEW: Connect Clock Pin to Root Node
+            if pins_path:
+                print(f"Loading pins from {pins_path} to find clock pin...")
+                pins_df, _ = load_pins_df(pins_path)
+                # Look for clock pin (usually 'clk' or similar)
+                # We can check the netlist for the top-level port name connected to the clock net
+                # But for now, let's assume 'clk' or try to find it.
+                
+                # Find the port name connected to clock_net_name in the top module
+                clock_port_name = None
+                for port_name, port_data in module['ports'].items():
+                    # Check if this port is connected to the clock net
+                    # Port bits are usually mapped to net bits
+                    # This is a bit complex to reverse without a full netlist graph, 
+                    # but usually the port name IS the net name for top-level ports.
+                    if port_name == clock_net_name:
+                        clock_port_name = port_name
+                        break
+                
+                if not clock_port_name:
+                    # Fallback: look for 'clk' in pins
+                    clock_port_name = 'clk'
+                
+                print(f"Looking for pin location for port: {clock_port_name}")
+                clk_pin_row = pins_df[pins_df['name'] == clock_port_name]
+                
+                if not clk_pin_row.empty:
+                    pin_x = float(clk_pin_row.iloc[0]['x_um'])
+                    pin_y = float(clk_pin_row.iloc[0]['y_um'])
+                    print(f"Found clock pin at ({pin_x}, {pin_y})")
+                    
+                    # Create a node for the pin
+                    pin_node = TreeNode(
+                        x=pin_x, y=pin_y,
+                        cell_name=f"PIN_{clock_port_name}",
+                        is_sink=False, # It's a source, but for visualization we treat it as a node
+                        physical_name="PIN",
+                        level=-1
+                    )
+                    
+                    # Connect pin to root
+                    # Add to visualization data
+                    cts_data['buffers'].append({
+                        'name': pin_node.cell_name,
+                        'physical_name': "PIN",
+                        'x': pin_x,
+                        'y': pin_y,
+                        'level': -1
+                    })
+                    
+                    cts_data['connections'].append({
+                        'from': {'x': pin_x, 'y': pin_y},
+                        'to': {'x': float(root_node.x), 'y': float(root_node.y)}
+                    })
+                    print("Added clock pin connection to visualization data.")
+                    
+                else:
+                    print(f"Warning: Clock pin '{clock_port_name}' not found in pins file.")
+
+            traverse_update(root_node, clock_net_bit)
+            print("CTS Netlist update complete.")
+            
+            # Save CTS Data for Visualization
+            print("Saving CTS data for visualization...")
             
             def collect_cts_data(node):
                 if not node.is_sink:
@@ -697,26 +761,39 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
                 if isinstance(bit, int):
                     max_net_bit = max(max_net_bit, bit)
         
-        # Create both tie-low and tie-high nets (shared by all tie cells)
-        tie_low_net_bit = max_net_bit + 1
-        tie_high_net_bit = max_net_bit + 2
-        tie_low_net_name = "tie_low_net"
-        tie_high_net_name = "tie_high_net"
+        # Create local tie nets for each tie cell
+        # We will store the net bits for each tie cell index
+        tie_nets_map = {} # idx -> {'low': bit, 'high': bit}
         
-        # Step 3: Add tie nets to netlist
-        module['netnames'][tie_low_net_name] = {'bits': [tie_low_net_bit], 'attributes': {}}
-        module['netnames'][tie_high_net_name] = {'bits': [tie_high_net_bit], 'attributes': {}}
-        print(f"Created tie nets: {tie_low_net_name} (bit {tie_low_net_bit}), {tie_high_net_name} (bit {tie_high_net_bit})")
-        
-        # Step 4: Add all selected conb_1 cells to netlist (all drive same nets)
+        # Step 3 & 4: Add tie nets and cells to netlist
         # Get port_directions for conb_1 if available, otherwise use known structure
         conb_port_directions = cell_type_port_directions.get('sky130_fd_sc_hd__conb_1', {
             'LO': 'output',
             'HI': 'output'
         })
         
+        current_net_bit = max_net_bit + 1
+        
         for idx, tie_cell_physical_name in enumerate(selected_tie_cells):
-            tie_cell_logical_name = f"tie_cell_{tie_low_net_bit}_{idx}"
+            # Create local nets for this tie cell
+            tie_low_net_bit = current_net_bit
+            tie_high_net_bit = current_net_bit + 1
+            current_net_bit += 2
+            
+            tie_low_net_name = f"tie_low_net_{idx}"
+            tie_high_net_name = f"tie_high_net_{idx}"
+            
+            module['netnames'][tie_low_net_name] = {'bits': [tie_low_net_bit], 'attributes': {}}
+            module['netnames'][tie_high_net_name] = {'bits': [tie_high_net_bit], 'attributes': {}}
+            
+            tie_nets_map[idx] = {
+                'low': tie_low_net_bit,
+                'high': tie_high_net_bit,
+                'low_name': tie_low_net_name,
+                'high_name': tie_high_net_name
+            }
+            
+            tie_cell_logical_name = f"tie_cell_{idx}"
             
             module['cells'][tie_cell_logical_name] = {
                 'type': 'sky130_fd_sc_hd__conb_1',
@@ -730,7 +807,7 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
                 }
             }
         
-        print(f"Added {len(selected_tie_cells)} tie cells to netlist (all driving shared tie nets)")
+        print(f"Added {len(selected_tie_cells)} tie cells with local nets")
         
         # Step 5: Helper function to determine if a port should be tied high or low
         def should_tie_high(port_name: str) -> bool:
@@ -820,12 +897,19 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
                     tie_cell_assignments[nearest_tie_idx] += 1
             
             # Build connections: tie inputs appropriately
+            # Use the local tie nets from the nearest tie cell
+            tie_nets = tie_nets_map.get(nearest_tie_idx)
+            if not tie_nets:
+                # Fallback if something went wrong (shouldn't happen)
+                print(f"Error: No tie nets found for index {nearest_tie_idx}")
+                continue
+                
             connections = {}
             for port in input_ports:
                 if should_tie_high(port):
-                    connections[port] = [tie_high_net_bit]
+                    connections[port] = [tie_nets['high']]
                 else:
-                    connections[port] = [tie_low_net_bit]
+                    connections[port] = [tie_nets['low']]
             
             # Add cell to netlist
             module['cells'][logical_name] = {

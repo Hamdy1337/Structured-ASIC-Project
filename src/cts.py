@@ -1,2 +1,0 @@
-# Clock tree synthesis
-
