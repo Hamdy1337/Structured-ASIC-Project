@@ -145,7 +145,8 @@ def anneal_batch(
     refine_max_distance: float = 100.0,
     W_initial: float = 0.5,
     seed: int = 42,
-    cell_types: Optional[Dict[str, Optional[str]]] = None
+    cell_types: Optional[Dict[str, Optional[str]]] = None,
+    net_to_cells: Optional[Dict[int, List[str]]] = None
 ) -> None:
     """Perform simulated annealing on a batch of cells with hybrid move set.
     
@@ -167,6 +168,8 @@ def anneal_batch(
         W_initial: Initial exploration window size as fraction of die size (default: 0.5 = 50%)
         seed: Random seed for reproducibility
         cell_types: Optional dict mapping cell_name -> cell_type for compatibility checking
+        net_to_cells: Optional precomputed dict mapping net_bit -> list of cell names. 
+                      If None, will be computed from pos_cells (slow).
     """
     if len(batch_cells) < 2:
         return
@@ -211,10 +214,11 @@ def anneal_batch(
     
     # Build net_to_cells mapping for ALL nets (needed for correct HPWL calculation)
     # This includes all cells on each net, not just batch cells
-    net_to_cells: Dict[int, List[str]] = {}
-    for cell in pos_cells.keys():  # Iterate over ALL placed cells
-        for net in cell_nets.get(cell, set()):
-            net_to_cells.setdefault(net, []).append(cell)
+    if net_to_cells is None:
+        net_to_cells = {}
+        for cell in pos_cells.keys():  # Iterate over ALL placed cells
+            for net in cell_nets.get(cell, set()):
+                net_to_cells.setdefault(net, []).append(cell)
     
     # Initial HPWL 
     cur = _hpwl_for_nets_optimized(batch_nets, pos_cells, net_to_cells, fixed_pts)

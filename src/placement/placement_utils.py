@@ -187,21 +187,46 @@ def hpwl_for_nets(
     nets: Set[int],
     pos_cells: Dict[str, Tuple[float, float]],
     cell_to_nets: Dict[str, Set[int]],
-    fixed_pts: Dict[int, List[Tuple[float, float]]]
+    fixed_pts: Dict[int, List[Tuple[float, float]]],
+    net_to_cells: Optional[Dict[int, List[str]]] = None
 ) -> float:
     total = 0.0
+    
+    # If net_to_cells is not provided, we must iterate all cells (slow)
+    # or build a temporary map. Building it once is O(N_cells), 
+    # iterating all cells for each net is O(N_nets * N_cells).
+    # Since N_nets ~ N_cells, building it is better.
+    if net_to_cells is None:
+        net_to_cells = {}
+        for cell, cell_nets_set in cell_to_nets.items():
+            if cell in pos_cells:
+                for net in cell_nets_set:
+                    net_to_cells.setdefault(net, []).append(cell)
+    
     for nb in nets:
         xs: List[float] = []
         ys: List[float] = []
+        
         # Placed cells contributing to this net
-        for cell, pos in pos_cells.items():
-            if nb in cell_to_nets.get(cell, set()):
-                xs.append(pos[0])
-                ys.append(pos[1])
+        # Use the map!
+        if net_to_cells:
+            for cell in net_to_cells.get(nb, []):
+                if cell in pos_cells:
+                    pos = pos_cells[cell]
+                    xs.append(pos[0])
+                    ys.append(pos[1])
+        else:
+            # Fallback (shouldn't be reached if we built the map above)
+            for cell, pos in pos_cells.items():
+                if nb in cell_to_nets.get(cell, set()):
+                    xs.append(pos[0])
+                    ys.append(pos[1])
+
         # Fixed pins on this net
         for (fx, fy) in fixed_pts.get(nb, []):
             xs.append(fx)
             ys.append(fy)
+            
         if len(xs) >= 2:
             total += (max(xs) - min(xs)) + (max(ys) - min(ys))
     return total

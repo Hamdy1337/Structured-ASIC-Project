@@ -100,5 +100,5 @@ if __name__ == "__main__":
 
     for csv in csv_files:
         out = os.path.splitext(csv)[0] + "_heatmap.png"
-        plot_placement_heatmap(csv, bins=800, output_path=out)
+        plot_placement_heatmap(csv, bins=80, output_path=out)
         print(f"Saved {out}")

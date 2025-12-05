@@ -33,6 +33,25 @@ def hpwl_of_nets(nets: Dict[int, Set[str]],
                  net_subset: Optional[Set[int]] = None,
                  net_weights: Optional[Dict[int, float]] = None,
                  return_max: bool = False) -> Union[float, Tuple[float, float]]:
+    """
+    Compute the total half-perimeter wirelength (HPWL) for a set of nets.
+
+    Args:
+        nets: Mapping from net ID to set of cell names connected to the net.
+        pos_cells: Mapping from cell name to (x, y) position.
+        fixed_pts: Mapping from net ID to list of fixed (x, y) points (e.g., IO pins).
+        net_subset: Optional set of net IDs to restrict the calculation to a subset of nets.
+        net_weights: Optional mapping from net ID to weight (scaling factor) for each net.
+        return_max: If True, also return the maximum individual net wirelength (max_len) among the selected nets.
+
+    Returns:
+        If return_max is False (default):
+            float: The total HPWL over all selected nets.
+        If return_max is True:
+            Tuple[float, float]: (total HPWL, max_len), where max_len is the maximum HPWL of any individual net in the subset.
+
+    max_len represents the largest individual net HPWL among the selected nets.
+    """
     total = 0.0
     max_len = 0.0
     for net, cells in nets.items():
@@ -47,10 +66,10 @@ def hpwl_of_nets(nets: Dict[int, Set[str]],
             xs.append(fx); ys.append(fy)
         if len(xs) >= 2:
             wl = (max(xs) - min(xs)) + (max(ys) - min(ys))
-            if wl > max_len:
-                max_len = wl
             if net_weights is not None:
                 wl *= float(net_weights.get(net, 1.0))
+            if wl > max_len:
+                max_len = wl
             total += wl
     if return_max:
         return total, max_len
@@ -559,6 +578,11 @@ class SwapRefineEnv:
         self.fixed = fixed_pins
         self.neighbor_radius = neighbor_radius
         self.congestion_weight = congestion_weight
+        
+        # Max Length Penalty Constants
+        self.max_wire_length_threshold = 500.0
+        self.max_wire_length_penalty_weight = 0.5
+        
         self.B = len(self.batch)
         self.target_B = target_B if target_B is not None else self.B
         # precompute mapping and nets
@@ -837,7 +861,7 @@ class SwapRefineEnv:
             relevant_cells.update(self.nets.get(n, set()))
         pos_map = {c: self.placement[c][:2] for c in relevant_cells if c in self.placement}
 
-        before, max_len_before = hpwl_of_nets(self.nets, pos_map, self.fixed, net_subset=nets_aff, net_weights=self.net_weights, return_max=True)
+        before, _ = hpwl_of_nets(self.nets, pos_map, self.fixed, net_subset=nets_aff, net_weights=self.net_weights, return_max=True)
         
         # swap
         self.placement[ci] = (xj, yj, sidj)
@@ -857,10 +881,12 @@ class SwapRefineEnv:
         d_dens = dens_after - dens_before
         
         # Max Length Penalty (Soft Constraint)
-        # If max_len > 500um, apply penalty.
+        # If max_len > threshold, apply penalty.
+        # 500um threshold chosen based on typical wirelength constraints for this design;
+        # may need adjustment for different designs or technologies.
         max_len_penalty = 0.0
-        if max_len_after > 500.0:
-            max_len_penalty = 0.5 * (max_len_after - 500.0)
+        if max_len_after > self.max_wire_length_threshold:
+            max_len_penalty = self.max_wire_length_penalty_weight * (max_len_after - self.max_wire_length_threshold)
             
         # Scale HPWL delta (0.01) to keep rewards in reasonable range
         reward = -d_hpwl * 0.01 - self.congestion_weight * float(d_dens) - max_len_penalty * 0.01
