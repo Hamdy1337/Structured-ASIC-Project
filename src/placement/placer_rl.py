@@ -1807,10 +1807,13 @@ def apply_swap_refiner(agent: PPOAgent, batch_cells: List[str], placement_map: D
         a, logp, v = agent.get_action_and_value(obs, mask=mask, deterministic=True)
         obs, r, _ = env.step(a)
     # greedy hill-climb: try a few best improving swaps
+    # greedy hill-climb: stochastic first-improving to avoid O(N^2)
     def _local_delta(i: int, j: int) -> float:
         ci = env.batch[i]; cj = env.batch[j]
         xi, yi, sidi = env.placement[ci]; xj, yj, sidj = env.placement[cj]
+        # only check nets touching these two cells
         nets_aff = set(env.cell_to_nets.get(ci,set())) | set(env.cell_to_nets.get(cj,set()))
+        # simple HPWL diff
         before = hpwl_of_nets(env.nets, {c:(env.placement[c][0], env.placement[c][1]) for c in env.batch}, env.fixed, net_subset=nets_aff, net_weights=getattr(env, 'net_weights', None))
         
         # swap virtually
@@ -1821,23 +1824,36 @@ def apply_swap_refiner(agent: PPOAgent, batch_cells: List[str], placement_map: D
         # revert
         env.placement[ci] = (xi, yi, sidi); env.placement[cj] = (xj, yj, sidj)
         return after - before
-    limit = min(20, max(1, len(batch_cells)//2))
-    while limit > 0:
-        best_pair = None
-        best_delta = 0.0
-        for i in range(len(batch_cells)):
-            for j in range(i+1, len(batch_cells)):
-                d = _local_delta(i,j)
-                if d < best_delta:
-                    best_delta = d; best_pair = (i,j)
-        if best_pair is None:
-            break
-        i,j = best_pair
-        ci = env.batch[i]; cj = env.batch[j]
-        xi, yi, sidi = env.placement[ci]; xj, yj, sidj = env.placement[cj]
-        env.placement[ci] = (xj, yj, sidj)
-        env.placement[cj] = (xi, yi, sidi)
-        limit -= 1
+
+    import random
+    n_cells = len(batch_cells)
+    if n_cells < 2:
+        return
+
+    # number of successful swaps we want to target
+    target_swaps = min(20, max(1, n_cells // 2))
+    # max tries (samples) to find these swaps
+    max_samples = 2000 
+    
+    samples_done = 0
+    swaps_done = 0
+    
+    while swaps_done < target_swaps and samples_done < max_samples:
+        i = random.randint(0, n_cells - 1)
+        j = random.randint(0, n_cells - 1)
+        if i == j:
+            continue
+            
+        samples_done += 1
+        d = _local_delta(i, j)
+        
+        # First-improving: if it helps, do it immediately
+        if d < -1e-9: # small epsilon for float stability
+            ci = env.batch[i]; cj = env.batch[j]
+            xi, yi, sidi = env.placement[ci]; xj, yj, sidj = env.placement[cj]
+            env.placement[ci] = (xj, yj, sidj)
+            env.placement[cj] = (xi, yi, sidi)
+            swaps_done += 1
     # Global acceptance check
     # Now that we fixed build_swap_refine_env_from_batch to include external cells as fixed pins,
     # env.nets and env.fixed should accurately reflect the global connectivity for the touched nets.
@@ -2275,11 +2291,31 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
         if enable_timing:
             print(f"[RLTiming] swap_train_batch index={bidx} time={t_batch_end - t_batch_start:.3f}s")
 
-    # 4) Apply swap refiner across all batches
+    # 4) Apply swap refiner across batches
+    t_swap_apply_total = 0.0
+    
+    # Phase A: Apply to the "smart" batches defined during training (Hotspots + Clusters)
+    # This ensures we optimize the topological structures we cared about.
+    # train_batches is a list of tuples: (cells, placement_map_snapshot, ...)
+    print(f"[SwapRefine] Applying to {len(train_batches)} identified clusters/hotspots first...")
+    for bidx, batch_tuple in enumerate(train_batches):
+        t_apply_start = time.perf_counter()
+        cells = batch_tuple[0] # extracting cell names
+        if not cells: continue
+        placement_map = apply_swap_refiner(swap_agent, cells, placement_map, sites_map, netlist_graph, updated_pins, steps=50,
+                           site_types_map=site_types_map_full, cell_types_map=cell_types_map_full)
+        t_apply_end = time.perf_counter()
+        t_swap_apply_total += (t_apply_end - t_apply_start)
+        if enable_timing:
+            print(f"[RLTiming] swap_apply_cluster index={bidx} time={t_apply_end - t_apply_start:.3f}s")
+
+    # Phase B: Coverage Pass (Sliding Window)
+    # Ensures we didn't miss anything that wasn't in a hotspot/cluster
+    print(f"[SwapRefine] Running coverage pass (sliding window)...")
     total_apply = len(placement_df)//batch_size
     if max_apply_batches is not None:
         total_apply = min(total_apply, max_apply_batches)
-    t_swap_apply_total = 0.0
+    
     for bidx in range(0, total_apply):
         t_apply_start = time.perf_counter()
         cells = selector(placement_df, bidx)
@@ -2290,7 +2326,7 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
         t_apply_end = time.perf_counter()
         t_swap_apply_total += (t_apply_end - t_apply_start)
         if enable_timing:
-            print(f"[RLTiming] swap_apply_batch index={bidx} time={t_apply_end - t_apply_start:.3f}s")
+            print(f"[RLTiming] swap_apply_window index={bidx} time={t_apply_end - t_apply_start:.3f}s")
 
     # rebuild placement_df from placement_map
     rows = []
