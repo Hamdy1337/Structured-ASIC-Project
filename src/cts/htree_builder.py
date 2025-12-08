@@ -840,6 +840,16 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
         unused_logic_added = 0
         cells_without_port_info = set()
         
+        # Load leakage optimal vectors
+        optimal_vectors = {}
+        json_path = Path("inputs") / "leakage_optimal_vectors.json"
+        if json_path.exists():
+            print(f"Loading leakage optimization vectors from {json_path}")
+            with open(json_path, 'r') as f:
+                optimal_vectors = json.load(f)
+        else:
+            print("Warning: leakage_optimal_vectors.json not found. Using default tying logic.")
+
         for phys_name in unused_logic:
             # Get cell type from physical name
             if '__' in phys_name:
@@ -896,6 +906,7 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
                             nearest_tie_idx = tie_idx
                     tie_cell_assignments[nearest_tie_idx] += 1
             
+
             # Build connections: tie inputs appropriately
             # Use the local tie nets from the nearest tie cell
             tie_nets = tie_nets_map.get(nearest_tie_idx)
@@ -905,8 +916,25 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
                 continue
                 
             connections = {}
+            
+            # Check for optimal vector for this cell type
+            # Strip template if present to match parser output names if needed?
+            # Parser seems to use full names like "sky130_fd_sc_hd__nand2_1"
+            # Our cell_type variable should match that.
+            
+            cell_optimal = optimal_vectors.get(cell_type, {})
+            
             for port in input_ports:
-                if should_tie_high(port):
+                # Determine tie value (0 or 1)
+                tie_val = 0 # Default low
+                
+                if port in cell_optimal:
+                    tie_val = cell_optimal[port]
+                else:
+                    # Fallback to heuristic
+                    tie_val = 1 if should_tie_high(port) else 0
+                
+                if tie_val == 1:
                     connections[port] = [tie_nets['high']]
                 else:
                     connections[port] = [tie_nets['low']]

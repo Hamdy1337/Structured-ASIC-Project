@@ -10,7 +10,7 @@ def plot_placement_heatmap(
     data: Union[str, Path, pd.DataFrame],
     x_col: str = "x_um",
     y_col: str = "y_um",
-    bins: int = 500,
+    bins: int = 80,
     cmap: str = "viridis",
     figsize: tuple = (10, 8),
     output_path: Optional[Union[str, Path]] = None,
