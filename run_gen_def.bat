@@ -1,0 +1,1 @@
+python -u scripts/generate_def.py --design_name z80 --fabric_cells inputs/Platform/fabric_cells.yaml --pins inputs/Platform/pins.yaml --map build/z80/z80.map --fabric_def inputs/Platform/fabric.yaml --output build/z80/z80_fixed_REGENERATED.def

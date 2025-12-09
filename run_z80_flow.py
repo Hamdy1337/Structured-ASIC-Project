@@ -93,6 +93,8 @@ def main():
         print(f"  - Placement Heatmap: {design_name}_placement_heatmap.png")
         print(f"  - CTS Visualization: {design_name}_cts.html")
         print(f"  - Final Verilog: {design_name}_final.v")
+        print(f"  - ECO Map File: {design_name}_eco.map (use this for DEF generation)")
+
     
     except Exception as e:
         print(f"\n❌ ERROR: Flow failed with exception: {e}")

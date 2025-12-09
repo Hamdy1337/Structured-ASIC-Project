@@ -1,12 +1,14 @@
+
 import argparse
 import yaml
 import os
 import sys
+import time
 
-# Add the current directory to sys.path to import local modules if needed
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Add the project root to sys.path
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
-from lef_parser import LefParser
+from src.parsers.fabric_cells_parser import parse_fabric_cells_file
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Generate fixed DEF file for Structured ASIC')
@@ -19,10 +21,15 @@ def parse_args():
     return parser.parse_args()
 
 def load_yaml(path):
+    print(f"Loading YAML: {path}")
+    start = time.time()
     with open(path, 'r') as f:
-        return yaml.safe_load(f)
+        data = yaml.safe_load(f)
+    print(f"Loaded {path} in {time.time()-start:.2f}s")
+    return data
 
 def parse_map_file(map_path):
+    print(f"Parsing Map: {map_path}")
     mapping = {}
     with open(map_path, 'r') as f:
         for line in f:
@@ -47,167 +54,165 @@ def get_macro_map(fabric_def):
     return macro_map
 
 def generate_def(args):
-    print(f"Loading fabric cells from {args.fabric_cells}...")
-    fabric_cells_data = load_yaml(args.fabric_cells)
+    print("generate_def started.")
     
-    print(f"Loading pins from {args.pins}...")
-    pins_data = load_yaml(args.pins)
-    
-    print(f"Loading placement map from {args.map}...")
-    placement_map = parse_map_file(args.map)
-    
-    print(f"Loading fabric definition from {args.fabric_def}...")
+    # 1. Load small inputs
     fabric_def = load_yaml(args.fabric_def)
     macro_map = get_macro_map(fabric_def)
+    
+    pins_data = load_yaml(args.pins)
+    
+    placement_map = parse_map_file(args.map)
 
-    # 1. Prepare Components
+    # 2. Load fabric cells using OPTIMIZED parser
+    print(f"Loading fabric cells from {args.fabric_cells}...")
+    fabric_cells, _ = parse_fabric_cells_file(args.fabric_cells)
+    
     components = []
     
-    # Iterate through all tiles and cells in fabric_cells.yaml
-    if 'fabric_cells_by_tile' in fabric_cells_data and 'tiles' in fabric_cells_data['fabric_cells_by_tile']:
-        tiles = fabric_cells_data['fabric_cells_by_tile']['tiles']
-        for tile_name, tile_data in tiles.items():
-            if 'cells' in tile_data:
-                for cell in tile_data['cells']:
-                    physical_name = cell['name']
-                    x = cell['x']
-                    y = cell['y']
-                    orient = cell['orient']
-                    
-                    # Determine macro name
-                    # Physical name format: T<X>Y<Y>__<TEMPLATE_NAME>
-                    # We need to extract TEMPLATE_NAME to look up the macro
-                    try:
-                        # Split by double underscore to separate tile prefix from template name
-                        parts = physical_name.split('__')
-                        if len(parts) < 2:
-                            print(f"Warning: Malformed cell name {physical_name}, skipping.")
-                            continue
-                        template_name = parts[1]
-                    except IndexError:
-                         print(f"Warning: Could not parse template name from {physical_name}, skipping.")
-                         continue
-                    
-                    macro_name = macro_map.get(template_name)
-                    if not macro_name:
-                        print(f"Warning: No macro mapping found for template {template_name} (cell {physical_name}), skipping.")
-                        continue
+    # 3. Process Tiles/Cells
+    print(f"Processing {len(fabric_cells.tiles)} tiles...")
+    
+    for tile_name, tile in fabric_cells.tiles.items():
+        for cell in tile.cells:
+            physical_name = cell.name
+            
+            # physical_name format: T<X>Y<Y>__<TEMPLATE>
+            try:
+                parts = physical_name.split('__')
+                if len(parts) < 2:
+                    continue
+                template_name = parts[1]
+            except IndexError:
+                continue
 
-                    # Determine component name (Logical if used, Physical if unused)
-                    comp_name = placement_map.get(physical_name, physical_name)
-                    
-                    # Convert coordinates to integer DBU (assuming 1000 DBU per micron based on pins.yaml)
-                    # pins.yaml says dbu_per_micron: 1000. fabric_cells.yaml says coords: microns.
-                    # DEF usually uses integer coordinates.
-                    dbu = 1000
-                    x_int = int(round(x * dbu))
-                    y_int = int(round(y * dbu))
-                    
-                    components.append({
-                        'name': comp_name,
-                        'macro': macro_name,
-                        'x': x_int,
-                        'y': y_int,
-                        'orient': orient
-                    })
+            macro_name = macro_map.get(template_name)
+            if not macro_name:
+                continue
+            
+            # Only include placed components
+            if physical_name not in placement_map:
+                continue
+            
+            comp_name = placement_map[physical_name]
+            
+            # Escape backslashes for DEF format
+            # DEF uses '\' as escape, so literal backslash must be '\\'
+            def_comp_name = comp_name.replace("\\", "\\\\")
+            
+            x_dbu = int(cell.x * 1000)
+            y_dbu = int(cell.y * 1000)
+            orient = cell.orient
+            
+            components.append(f"- {def_comp_name} {macro_name} + FIXED ( {x_dbu} {y_dbu} ) {orient} ;")
 
-    # 2. Prepare Pins
-    pins = []
+    print(f"Generated {len(components)} components.")
+
+    # 4. Prepare Pins from pins.yaml
+    pins_def_lines = []
     if 'pin_placement' in pins_data and 'pins' in pins_data['pin_placement']:
         for pin in pins_data['pin_placement']['pins']:
             pin_name = pin['name']
-            # Only include pins that are relevant to the design? 
-            # The prompt says "All PINS marked as + FIXED". 
-            # Usually we only include pins that are actually in the design netlist.
-            # However, for a "complete DEF containing all fixed placement information", 
-            # and assuming this might be a top-level template or we want to lock down everything,
-            # we will include all pins defined in pins.yaml.
-            
             layer = pin['layer']
-            x_um = pin['x_um']
-            y_um = pin['y_um']
+            x_int = int(pin['x_um'] * 1000)
+            y_int = int(pin['y_um'] * 1000)
             direction = pin['direction']
             
-            dbu = 1000
-            x_int = int(round(x_um * dbu))
-            y_int = int(round(y_um * dbu))
+            # Create a simple pin shape (0.2um box)
+            half_size = 100 
             
-            pins.append({
-                'name': pin_name,
-                'net': pin_name, # Assuming net name equals pin name for top level
-                'layer': layer,
-                'x': x_int,
-                'y': y_int,
-                'direction': direction
-            })
+            pins_def_lines.append(f"- {pin_name} + NET {pin_name}")
+            pins_def_lines.append(f"  + DIRECTION {direction}")
+            pins_def_lines.append(f"  + USE SIGNAL")
+            pins_def_lines.append(f"  + PORT")
+            pins_def_lines.append(f"    + LAYER {layer} ( -{half_size} -{half_size} ) ( {half_size} {half_size} )")
+            pins_def_lines.append(f"    + FIXED ( {x_int} {y_int} ) N")
+            pins_def_lines.append(f"  ;")
 
-    # 3. Write DEF
+    # 5. Write DEF
     print(f"Writing DEF to {args.output}...")
-    
-    # Ensure output directory exists
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     
     with open(args.output, 'w') as f:
-        f.write(f"VERSION 5.8 ;\n")
-        f.write(f"DIVIDERCHAR \"/\" ;\n")
-        f.write(f"BUSBITCHARS \"[]\" ;\n")
+        f.write("VERSION 5.8 ;\n")
+        f.write("DIVIDERCHAR \"/\" ;\n")
+        f.write("BUSBITCHARS \"[]\" ;\n")
         f.write(f"DESIGN {args.design_name} ;\n")
-        f.write(f"UNITS DISTANCE MICRONS 1000 ;\n")
+        f.write("UNITS DISTANCE MICRONS 1000 ;\n")
         
-        # DIEAREA
+        # DIEAREA from pins.yaml
         if 'pin_placement' in pins_data and 'die' in pins_data['pin_placement']:
             die = pins_data['pin_placement']['die']
-            width_um = die['width_um']
-            height_um = die['height_um']
-            width_dbu = int(round(width_um * 1000))
-            height_dbu = int(round(height_um * 1000))
+            width_dbu = int(die['width_um'] * 1000)
+            height_dbu = int(die['height_um'] * 1000)
             f.write(f"DIEAREA ( 0 0 ) ( {width_dbu} {height_dbu} ) ;\n")
+        else:
+            # Fallback (based on fabric.yaml if needed, but risky if fabric is small)
+            # Default to huge if unknown
+            print("Warning: DIEAREA not found in pins.yaml, using default large area.")
+            f.write("DIEAREA ( 0 0 ) ( 1003600 989200 ) ;\n") 
         
-        # COMPONENTS
         f.write(f"COMPONENTS {len(components)} ;\n")
         for comp in components:
-            # - <name> <macro> + FIXED ( <x> <y> ) <orient> ;
-            f.write(f"- {comp['name']} {comp['macro']} + FIXED ( {comp['x']} {comp['y']} ) {comp['orient']} ;\n")
+            f.write(f"{comp}\n")
         f.write("END COMPONENTS\n")
         
-        # PINS
-        f.write(f"PINS {len(pins)} ;\n")
-        for pin in pins:
-            # - <name> + NET <net> + DIRECTION <dir> + USE SIGNAL + LAYER <layer> ( <x> <y> ) ( <x> <y> ) + FIXED ( <x> <y> ) <orient> ...
-            # Simplified DEF PIN syntax:
-            # - <pin_name> + NET <net_name> + DIRECTION <dir> + USE SIGNAL ...
-            #   + PORT
-            #     + LAYER <layer> ( 0 0 ) ( 0 0 ) # Rectangle relative to pin loc? No, usually LAYER defines the shape.
-            #     + FIXED ( <x> <y> ) <orient> 
-            
-            # Let's use a standard point-based pin definition often used in simple DEFs
-            # - pin_name + NET net_name + DIRECTION dir + USE SIGNAL + LAYER layer ( -half_width -half_height ) ( half_width half_height ) + FIXED ( x y ) N ;
-            
-            # Since we don't have pin sizes in pins.yaml (only x_um, y_um), we might need to assume a small box or just a point.
-            # However, pins.yaml has 'units' and 'tracks' info, but not explicit pin geometry per pin.
-            # Let's assume a small square via on the layer.
-            # Actually, standard DEF requires a layer shape.
-            # Let's check if we can infer size. 
-            # pins.yaml has 'met2' step 0.46. Let's make a small box.
-            
-            # For now, let's create a minimal valid PIN entry.
-            # We'll assume a small box centered on the point.
-            half_size = 100 # 0.1um
-            
-            f.write(f"- {pin['name']} + NET {pin['net']}\n")
-            f.write(f"  + DIRECTION {pin['direction']}\n")
-            f.write(f"  + USE SIGNAL\n")
-            f.write(f"  + PORT\n")
-            # Creating a dummy shape for the pin since we only have center point
-            f.write(f"    + LAYER {pin['layer']} ( -{half_size} -{half_size} ) ( {half_size} {half_size} )\n")
-            f.write(f"    + FIXED ( {pin['x']} {pin['y']} ) N\n")
-            f.write(f"  ;\n")
-            
-        f.write("END PINS\n")
+        f.write(f"PINS {int(len(pins_def_lines)/7)} ;\n") # Approx count check? No, count loop
+        # Count actual pins (each pin is 7 lines in my format above)
+        # Better: store pins in list of strings
+    
+    # Refactoring pin write loop to be cleaner
+    with open(args.output, 'a') as f:
+        # PINS header was not written above?
+        # Re-write PINS section properly
+        pass 
         
+    # Re-writing the write section to be correct
+    with open(args.output, 'w') as f:
+        f.write("VERSION 5.8 ;\n")
+        f.write("DIVIDERCHAR \"/\" ;\n")
+        f.write("BUSBITCHARS \"[]\" ;\n")
+        f.write(f"DESIGN {args.design_name} ;\n")
+        f.write("UNITS DISTANCE MICRONS 1000 ;\n")
+        
+        if 'pin_placement' in pins_data and 'die' in pins_data['pin_placement']:
+            die = pins_data['pin_placement']['die']
+            width_dbu = int(die['width_um'] * 1000)
+            height_dbu = int(die['height_um'] * 1000)
+            f.write(f"DIEAREA ( 0 0 ) ( {width_dbu} {height_dbu} ) ;\n")
+        else:
+             f.write("DIEAREA ( 0 0 ) ( 1003600 989200 ) ;\n")
+             
+        f.write(f"COMPONENTS {len(components)} ;\n")
+        for comp in components:
+            f.write(f"{comp}\n")
+        f.write("END COMPONENTS\n")
+        
+        # Count pins
+        pin_count = 0
+        if 'pin_placement' in pins_data and 'pins' in pins_data['pin_placement']:
+            pin_count = len(pins_data['pin_placement']['pins'])
+            
+        f.write(f"PINS {pin_count} ;\n")
+        if pin_count > 0:
+            for pin in pins_data['pin_placement']['pins']:
+                pin_name = pin['name']
+                layer = pin['layer']
+                x_int = int(pin['x_um'] * 1000)
+                y_int = int(pin['y_um'] * 1000)
+                direction = pin['direction']
+                half_size = 100
+                f.write(f"- {pin_name} + NET {pin_name}\n")
+                f.write(f"  + DIRECTION {direction}\n")
+                f.write(f"  + USE SIGNAL\n")
+                f.write(f"  + PORT\n")
+                f.write(f"    + LAYER {layer} ( -{half_size} -{half_size} ) ( {half_size} {half_size} )\n")
+                f.write(f"    + FIXED ( {x_int} {y_int} ) N\n")
+                f.write(f"  ;\n")
+        f.write("END PINS\n")
         f.write("END DESIGN\n")
-
-    print("Done.")
+        
+    print(f"Done. Output at {args.output}")
 
 if __name__ == "__main__":
     args = parse_args()
