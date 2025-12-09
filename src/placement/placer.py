@@ -151,6 +151,7 @@ def place_cells_greedy_sim_anneal(
     sa_refine_max_distance: float = 100.0,
     sa_W_initial: float = 0.1,
     sa_seed: int = 42,
+    sa_batch_size: int = 150,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Place cells on the fabric using a greedy simulated annealing algorithm.
 
@@ -175,6 +176,9 @@ def place_cells_greedy_sim_anneal(
         sa_refine_max_distance: Maximum Manhattan distance for refine moves in microns (default: 100.0)
         sa_W_initial: Initial exploration window size as fraction of die size (default: 0.5 = 50%)
         sa_seed: Random seed for reproducibility (default: 42)
+        sa_batch_size: Number of cells per batch for global SA (default: 500). Smaller batches
+            localize swaps and reduce risk of global HPWL degradation; larger batches explore
+            more combinations but can hurt global HPWL if too large.
 
     Returns:
         (updated_pins_df, placement_df, validation_result)
@@ -283,7 +287,7 @@ def place_cells_greedy_sim_anneal(
 
     # ---- Phase 8: Level-by-Level Placement (Growing) ----
     print("[DEBUG] === PHASE 8: LEVEL-BY-LEVEL PLACEMENT (GROWING) ===")
-    batch_size = 120
+    batch_size = 500  # Reduced from 2900 to prevent global HPWL degradation
     greedy_time_total = 0.0
     sa_time_total = 0.0
     per_level_times: List[Tuple[int, float, float]] = []
@@ -361,6 +365,13 @@ def place_cells_greedy_sim_anneal(
     t_sa_start = time.perf_counter()
     num_batches = 0
     
+    # Store initial global HPWL to prevent degradation
+    all_nets_global = set()
+    for ns in cell_to_nets.values():
+        all_nets_global.update(ns)
+    initial_global_hpwl = hpwl_for_nets(all_nets_global, pos_cells, cell_to_nets, fixed_pts)
+    print(f"[DEBUG] Initial Global HPWL before SA: {initial_global_hpwl:.3f}")
+    
     # Collect all placed cells
     all_placed_cells = list(assignments.keys())
     
@@ -377,10 +388,10 @@ def place_cells_greedy_sim_anneal(
     for c in all_placed_cells:
         cell_type = cell_type_by_cell.get(c)
         cells_by_type.setdefault(cell_type, []).append(c)
-    
+
     # Calculate total batches
-    total_batches = sum((len(type_cells) + batch_size - 1) // batch_size 
-                       for type_cells in cells_by_type.values() 
+    total_batches = sum((len(type_cells) + sa_batch_size - 1) // sa_batch_size
+                       for type_cells in cells_by_type.values()
                        if len(type_cells) >= 2)
     
     print(f"[DEBUG] Global SA: Processing {len(all_placed_cells)} cells in {total_batches} batches")
@@ -392,8 +403,8 @@ def place_cells_greedy_sim_anneal(
         type_name = str(cell_type) if cell_type is not None else "unknown"
         
         # Batch cells
-        for i in range(0, len(type_cells), batch_size):
-            batch = type_cells[i:i + batch_size]
+        for i in range(0, len(type_cells), sa_batch_size):
+            batch = type_cells[i:i + sa_batch_size]
             if len(batch) < 2:
                 continue
             num_batches += 1
@@ -422,7 +433,10 @@ def place_cells_greedy_sim_anneal(
     sa_hpwl = hpwl_for_nets(all_nets, pos_cells, cell_to_nets, fixed_pts)
     print(f"[DEBUG] SA Refined HPWL: {sa_hpwl:.3f}")
     if greedy_hpwl > 0:
-        print(f"[DEBUG] HPWL Improvement: {greedy_hpwl - sa_hpwl:.3f} ({(greedy_hpwl - sa_hpwl)/greedy_hpwl*100:.2f}%)")
+        improvement = greedy_hpwl - sa_hpwl
+        print(f"[DEBUG] HPWL Improvement: {improvement:.3f} ({(improvement)/greedy_hpwl*100:.2f}%)")
+        if improvement < 0:
+            print(f"[WARNING] SA made HPWL WORSE by {abs(improvement):.3f}! Consider reducing batch_size or adjusting SA parameters.")
     print()
 
     # ---- Phase 9: Build Placement DataFrame ----
@@ -607,145 +621,3 @@ if __name__ == "__main__":
     else:
         design = "arith"
     run_placement(design)
-    
-    # Calculate additional statistics for summary
-    total_cells_netlist = len(netlist_graph['cell_name'].unique())
-    placed_cells_count = len(placement_df)
-    placement_rate = (placed_cells_count / total_cells_netlist * 100) if total_cells_netlist > 0 else 0.0
-    
-    # Build data structures for HPWL calculation
-    pos_cells: Dict[str, Tuple[float, float]] = {}
-    for _, row in placement_df.iterrows():
-        pos_cells[row['cell_name']] = (row['x_um'], row['y_um'])
-    cell_to_nets = nets_by_cell(netlist_graph)
-    fixed_pts = fixed_points_from_pins(assigned_pins)
-    
-    # Get all nets
-    all_nets_set: Set[int] = set()
-    for nets in cell_to_nets.values():
-        all_nets_set |= nets
-    all_nets_set |= set(fixed_pts.keys())
-    num_nets = len(all_nets_set)
-    
-    # Get HPWL from validation result or calculate it
-    total_hpwl = validation_result.stats.get('total_hpwl', None)
-    if total_hpwl is None:
-        # Calculate HPWL if not in validation result
-        try:
-            total_hpwl = hpwl_for_nets(all_nets_set, pos_cells, cell_to_nets, fixed_pts)
-        except Exception as e:
-            total_hpwl = None
-    
-    # Calculate HPWL per net to find min/max
-    min_hpwl_per_net = None
-    max_hpwl_per_net = None
-    if total_hpwl is not None:
-        try:
-            # Calculate HPWL for each net individually
-            hpwl_per_net: List[float] = []
-            for nb in all_nets_set:
-                xs: List[float] = []
-                ys: List[float] = []
-                # Placed cells contributing to this net
-                for cell, pos in pos_cells.items():
-                    if nb in cell_to_nets.get(cell, set()):
-                        xs.append(pos[0])
-                        ys.append(pos[1])
-                # Fixed pins on this net
-                for (fx, fy) in fixed_pts.get(nb, []):
-                    xs.append(fx)
-                    ys.append(fy)
-                if len(xs) >= 2:
-                    net_hpwl = (max(xs) - min(xs)) + (max(ys) - min(ys))
-                    hpwl_per_net.append(net_hpwl)
-            
-            if hpwl_per_net:
-                min_hpwl_per_net = min(hpwl_per_net)
-                max_hpwl_per_net = max(hpwl_per_net)
-        except Exception:
-            # If calculation fails, leave as None
-            pass
-    
-    avg_hpwl_per_net = (total_hpwl / num_nets) if (total_hpwl is not None and num_nets > 0) else None
-    
-    # Rebuild sites_df for statistics (needed for site count and die dimensions)
-    sites_df_summary = build_sites(fabric_df)
-    total_sites = len(sites_df_summary)
-    site_utilization = validation_result.stats.get('site_utilization_percent', 
-                                                   (placed_cells_count / total_sites * 100) if total_sites > 0 else 0.0)
-    
-    # Get placement bounds
-    placement_bounds = validation_result.stats.get('placement_bounds', {})
-    x_span = validation_result.stats.get('x_span', None)
-    y_span = validation_result.stats.get('y_span', None)
-    
-    # Get die dimensions from fabric
-    die_width = float(sites_df_summary["x_um"].max()) if len(sites_df_summary) > 0 else 0.0
-    die_height = float(sites_df_summary["y_um"].max()) if len(sites_df_summary) > 0 else 0.0
-    
-    # Calculate cells per second
-    cells_per_sec = (placed_cells_count / total_time_with_overhead) if total_time_with_overhead > 0 else 0.0
-    
-    # Print comprehensive statistics summary
-    print("\n" + "="*80)
-    print(" " * 25 + "PLACEMENT SUMMARY")
-    print("="*80)
-    
-    # Design Information
-    print("\n📋 DESIGN INFORMATION")
-    print(f"  Design Name:              {design_name}")
-    print(f"  Total Cells (Netlist):    {total_cells_netlist:,}")
-    print(f"  Cells Successfully Placed: {placed_cells_count:,}")
-    print(f"  Placement Success Rate:   {placement_rate:.1f}%")
-    if validation_result.stats.get('missing_cells', 0) > 0:
-        print(f"  ⚠️  Missing Cells:         {validation_result.stats.get('missing_cells', 0):,}")
-    
-    # Placement Quality
-    print("\n📊 PLACEMENT QUALITY")
-    if total_hpwl is not None:
-        print(f"  Total HPWL:               {total_hpwl:,.2f} μm")
-        if avg_hpwl_per_net is not None:
-            print(f"  Average HPWL per Net:     {avg_hpwl_per_net:.2f} μm")
-        if min_hpwl_per_net is not None and max_hpwl_per_net is not None:
-            print(f"  Min HPWL per Net:         {min_hpwl_per_net:.2f} μm")
-            print(f"  Max HPWL per Net:         {max_hpwl_per_net:.2f} μm")
-    else:
-        print(f"  Total HPWL:               (calculation failed)")
-    print(f"  Number of Nets:           {num_nets:,}")
-    print(f"  Site Utilization:         {site_utilization:.1f}% ({placed_cells_count:,}/{total_sites:,} sites)")
-    
-    # Spatial Distribution
-    print("\n🗺️  SPATIAL DISTRIBUTION")
-    print(f"  Die Dimensions:           {die_width:.1f} × {die_height:.1f} μm")
-    if x_span is not None and y_span is not None:
-        print(f"  Placement Span:           {x_span:.1f} × {y_span:.1f} μm")
-        if placement_bounds:
-            print(f"  Placement Bounds:         X=[{placement_bounds.get('x_min', 0):.1f}, {placement_bounds.get('x_max', 0):.1f}] μm")
-            print(f"                            Y=[{placement_bounds.get('y_min', 0):.1f}, {placement_bounds.get('y_max', 0):.1f}] μm")
-    
-    # Performance Metrics
-    print("\n⚡ PERFORMANCE METRICS")
-    print(f"  Total Placement Time:     {total_time_with_overhead:.3f} seconds")
-    print(f"  Cells per Second:         {cells_per_sec:.1f} cells/sec")
-    
-    # Validation Status
-    print("\n✅ VALIDATION STATUS")
-    if validation_result.passed:
-        print(f"  Status:                   ✓ PASSED")
-    else:
-        print(f"  Status:                   ✗ FAILED")
-    if len(validation_result.errors) > 0:
-        print(f"  Errors:                   {len(validation_result.errors)}")
-    if len(validation_result.warnings) > 0:
-        print(f"  Warnings:                 {len(validation_result.warnings)}")
-    
-    print("\n" + "="*80)
-    
-    # Check validation result
-    if not validation_result.passed:
-        print("\n⚠️  WARNING: Placement validation found errors (see report above)")
-        # Uncomment below to exit on validation failure:
-        # import sys
-        # sys.exit(1)
-    else:
-        print("\n✅ Placement validation passed!")
