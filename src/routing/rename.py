@@ -2,6 +2,29 @@ import os
 import sys
 import re
 
+# Keywords to preserve (not an exhaustive list, but covers structural Verilog)
+KEYWORDS = {
+    "module", "endmodule", "input", "output", "inout", "wire", "reg", "assign",
+    "always", "begin", "end", "case", "endcase", "default", "if", "else",
+    "parameter", "localparam", "generate", "endgenerate", "genvar", "for",
+    "posedge", "negedge", "or", "and", "nand", "nor", "xor", "xnor", "not",
+    "buf", "tran", "pullup", "pulldown", "primitive", "endprimitive",
+    "table", "endtable", "specify", "endspecify", "initial"
+}
+
+def sanitize_token(match):
+    token = match.group(0)
+    # If it's a keyword, return as is
+    if token in KEYWORDS:
+        return token
+    
+    # Replace invalid characters with underscore
+    # $ . : \
+    new_token = token.replace("$", "_").replace(".", "_").replace(":", "_").replace("\\", "_")
+    
+    # Collapse multiple underscores if desired, but simple replacement is safer for uniqueness
+    return new_token
+
 def rename_instances(design_name):
     # Paths
     build_dir = os.path.join("build", design_name)
@@ -21,9 +44,7 @@ def rename_instances(design_name):
         print(f"Error: Verilog file not found: {verilog_path}")
         sys.exit(1)
 
-    # Load mapping
-    # logical -> physical
-    # Note: formatting in valid file lines: "logical physical"
+    # 1. Load mapping and sanitize keys
     mapping = {}
     with open(map_path, 'r') as f:
         for line in f:
@@ -34,72 +55,67 @@ def rename_instances(design_name):
             if len(parts) != 2:
                 continue
             logical, physical = parts
-            mapping[logical] = physical
+            
+            # Sanitize the LOGICAL key using the same logic we will apply to Verilog
+            # We must use the regex logic to simulate how it would be tokenized/sanitized
+            # But the key is a single token.
+            # We just apply the replacement directly.
+            clean_logical = logical.replace("$", "_").replace(".", "_").replace(":", "_").replace("\\", "_")
+            mapping[clean_logical] = physical
 
-    print(f"Loaded {len(mapping)} mappings.")
+    print(f"Loaded {len(mapping)} mappings (sanitized keys).")
 
-    # Regex to find instance instantiations
-    # Pattern: 
-    #   spaces cell_type spaces instance_name spaces (
-    # We want to capture instance_name
-    # instance_name can be escaped (starts with \) or simple.
+    # Regex to find identifiers
+    # Matches words starting with letter, _, $, or \
+    # Followed by any number of word chars, ., :, $, \
+    # We use a negative lookahead to avoid capturing ranges? No, ranges start with [
+    # This regex is for individual tokens.
+    identifier_pattern = re.compile(r'(?<![\w\.])([a-zA-Z_\\$][\w\.:\\$]*)')
+    # (?<![\w\.]) is a lookbehind to ensure we match start of word.
     
-    # Simple ident: [a-zA-Z_][a-zA-Z0-9_$]*
-    # Escaped ident: \\[^\s]+
-    
-    # We'll use a broader match for the instance name token: \S+
-    # And then check if it's in our map.
-    
-    # Regex:
-    # ^\s* (starts with optional space)
-    # [a-zA-Z0-9_$]+ (cell type - assuming simple identifier for cell type, which are usually standard cells)
-    # \s+ (at least one space)
-    # (\S+) (capture instance name - non-whitespace characters)
-    # \s* (optional space)
-    # \( (opening parenthesis)
-    
-    instance_pattern = re.compile(r"^(\s*[a-zA-Z0-9_$]+\s+)(\S+)(\s*\()", re.MULTILINE)
+    # Regex to capture instance declarations for renaming
+    # This assumes the line has been sanitized already!
+    # Pattern: spaces cell_type spaces instance_name spaces (
+    instance_pattern = re.compile(r"^(\s*[\w]+\s+)([\w]+)(\s*\()", re.MULTILINE)
 
     replaced_count = 0
     
     with open(verilog_path, 'r') as fin, open(output_path, 'w') as fout:
         for line in fin:
-            match = instance_pattern.match(line)
+            if not line.strip():
+                fout.write(line)
+                continue
+
+            # 2. Sanitize the entire line first
+            # This converts "wire $abc;" to "wire _abc;"
+            # And "sky130.. $abc (..)" to "sky130.. _abc (..)"
+            sanitized_line = identifier_pattern.sub(sanitize_token, line)
+            
+            # 3. Check for instance renaming on the sanitized line
+            # Also rename top module if it is sasic_top
+            if "module sasic_top" in sanitized_line:
+                 sanitized_line = sanitized_line.replace("module sasic_top", f"module {design_name}")
+
+            match = instance_pattern.match(sanitized_line)
             if match:
                 prefix = match.group(1)
-                raw_instance_name = match.group(2)
+                lookup_name = match.group(2)
                 suffix = match.group(3)
-                
-                # Normalize instance name for lookup
-                # If escaped (starts with \), key might be the name without \
-                # But typically map file keys are the "internal" names.
-                # If map file has "$abc...", in Verilog it appears as "\$abc... " (escaped).
-                # So we should strip leading '\' if present to check typical keys.
-                # HOWEVER, we must be careful.
-                
-                lookup_name = raw_instance_name
-                if lookup_name.startswith('\\'):
-                    lookup_name = lookup_name[1:]
                 
                 if lookup_name in mapping:
                     physical_name = mapping[lookup_name]
-                    # Check if physical name needs escaping? 
-                    # Physical names are like TILEX10Y20_NAND2, so no.
-                    # Reconstruct line
-                    # We keep the raw instance name if we don't replace, 
-                    # but if we replace, we use physical_name.
-                    
-                    # Verilog instance names usually don't need escaping if they are simple.
-                    # If physical_name is simple, just use it.
-                    
-                    new_line = f"{prefix}{physical_name}{suffix}{line[match.end():]}"
+                    # Reconstruct line with physical name
+                    # Note: prefix and suffix come from sanitized_line, so they are clean.
+                    # rest of line (pins) is also from sanitized_line.
+                    new_line = f"{prefix}{physical_name}{suffix}{sanitized_line[match.end():]}"
                     fout.write(new_line)
                     replaced_count += 1
                 else:
-                    # Not in map, keep as is (e.g. unused cells or other things)
-                    fout.write(line)
+                    # Instance found but not in map (maybe standard cell or IO?)
+                    fout.write(sanitized_line)
             else:
-                fout.write(line)
+                # Not an instance declaration, just write sanitized line
+                fout.write(sanitized_line)
 
     print(f"Renamed {replaced_count} instances.")
     print("Done.")
