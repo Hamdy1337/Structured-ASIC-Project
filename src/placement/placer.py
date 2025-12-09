@@ -37,6 +37,183 @@ from src.validation.placement_validator import validate_placement, print_validat
 from src.Visualization.heatmap import plot_placement_heatmap
 from src.placement.placement_utils import hpwl_for_nets, nets_by_cell, fixed_points_from_pins
 
+# For animation
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    print("[WARNING] PIL/Pillow not available. Animation will be disabled.")
+
+try:
+    import imageio
+    IMAGEIO_AVAILABLE = True
+except ImportError:
+    IMAGEIO_AVAILABLE = False
+    print("[WARNING] imageio not available. MP4 animation will use PIL fallback to GIF.")
+
+
+
+def capture_placement_frame(
+    pos_cells: Dict[str, Tuple[float, float]],
+    sites_df: pd.DataFrame,
+    frame_path: Path,
+    frame_number: int,
+    total_cells: int,
+    current_level: Optional[int] = None,
+    title_suffix: str = "",
+) -> None:
+    """
+    Capture a single frame of the placement animation showing currently placed cells.
+    
+    Args:
+        pos_cells: Dictionary mapping cell_name -> (x, y) coordinates
+        sites_df: DataFrame with site information (for bounds)
+        frame_path: Path to save the frame
+        frame_number: Frame number for title
+        total_cells: Total number of cells to place
+        current_level: Current dependency level being placed (optional)
+        title_suffix: Additional text for title
+    """
+    if len(pos_cells) == 0:
+        return
+    
+    # Extract coordinates
+    x_coords = [pos[0] for pos in pos_cells.values()]
+    y_coords = [pos[1] for pos in pos_cells.values()]
+    
+    # Get bounds from sites_df for proper scaling
+    x_min = float(sites_df["x_um"].min())
+    x_max = float(sites_df["x_um"].max())
+    y_min = float(sites_df["y_um"].min())
+    y_max = float(sites_df["y_um"].max())
+    
+    # Create figure
+    fig, ax = plt.subplots(figsize=(12, 10))
+    
+    # Plot placed cells as scatter
+    ax.scatter(x_coords, y_coords, s=2, alpha=0.6, c='blue', marker='o', edgecolors='none')
+    
+    # Set bounds with small margin
+    margin_x = (x_max - x_min) * 0.05
+    margin_y = (y_max - y_min) * 0.05
+    ax.set_xlim(x_min - margin_x, x_max + margin_x)
+    ax.set_ylim(y_min - margin_y, y_max + margin_y)
+    
+    # Labels and title
+    ax.set_xlabel("X Position (μm)", fontsize=12)
+    ax.set_ylabel("Y Position (μm)", fontsize=12)
+    
+    placed_count = len(pos_cells)
+    pct = (placed_count / total_cells * 100) if total_cells > 0 else 0
+    
+    level_text = f" | Level {current_level}" if current_level is not None else ""
+    title = f"Placement Progress - Frame {frame_number}{level_text}\n{placed_count}/{total_cells} cells placed ({pct:.1f}%){title_suffix}"
+    ax.set_title(title, fontsize=14, fontweight='bold')
+    
+    # Add grid
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    ax.set_aspect('equal', adjustable='box')
+    
+    # Save frame
+    frame_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(frame_path, dpi=100, bbox_inches='tight')
+    plt.close(fig)
+
+
+def create_placement_animation(
+    frame_dir: Path,
+    output_path: Path,
+    frame_prefix: str = "frame_",
+    duration: float = 0.2,
+    loop: int = 0,
+    format: str = "mp4",
+) -> None:
+    """
+    Create an animated video (MP4) or GIF from placement frames.
+    
+    Args:
+        frame_dir: Directory containing frame images
+        output_path: Path to save the animation (MP4 or GIF)
+        frame_prefix: Prefix of frame files (default: "frame_")
+        duration: Duration of each frame in seconds (default: 0.2)
+        loop: Number of loops (0 = infinite, only for GIF)
+        format: Output format - "mp4" or "gif" (default: "mp4")
+    """
+    if not PIL_AVAILABLE:
+        print("[WARNING] PIL/Pillow not available. Cannot create animation.")
+        return
+    
+    # Collect all frame files
+    frame_files = sorted(frame_dir.glob(f"{frame_prefix}*.png"))
+    
+    if len(frame_files) == 0:
+        print(f"[WARNING] No frames found in {frame_dir} with prefix '{frame_prefix}'")
+        return
+    
+    print(f"[DEBUG] Creating {format.upper()} animation from {len(frame_files)} frames...")
+    
+    # Read frames
+    frames = []
+    for frame_file in frame_files:
+        try:
+            img = Image.open(frame_file)
+            frames.append(img)
+        except Exception as e:
+            print(f"[WARNING] Failed to load frame {frame_file}: {e}")
+            continue
+    
+    if len(frames) == 0:
+        print(f"[WARNING] No valid frames to create animation")
+        return
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Create MP4 using imageio if available
+    if format.lower() == "mp4" and IMAGEIO_AVAILABLE:
+        try:
+            # Convert PIL images to numpy arrays for imageio
+            import numpy as np
+            frame_arrays = []
+            for img in frames:
+                # Convert PIL image to RGB numpy array
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                frame_arrays.append(np.array(img))
+            
+            # Write MP4
+            fps = 1.0 / duration
+            imageio.mimwrite(
+                str(output_path),
+                frame_arrays,
+                fps=fps,
+                codec='libx264',
+                quality=8,  # 0-10, higher is better quality
+                pixelformat='yuv420p'  # Ensures compatibility
+            )
+            print(f"[DEBUG] Saved placement animation (MP4) to: {output_path}")
+        except Exception as e:
+            print(f"[WARNING] Failed to create MP4 with imageio: {e}")
+            print(f"[DEBUG] Falling back to GIF format...")
+            format = "gif"
+            output_path = output_path.with_suffix('.gif')
+    
+    # Fallback to GIF if MP4 failed or format is GIF
+    if format.lower() == "gif":
+        frames[0].save(
+            output_path,
+            save_all=True,
+            append_images=frames[1:],
+            duration=int(duration * 1000),  # Convert to milliseconds
+            loop=loop,
+            optimize=False,
+        )
+        print(f"[DEBUG] Saved placement animation (GIF) to: {output_path}")
+    
+    # Clean up individual frames (optional - comment out if you want to keep them)
+    # for frame_file in frame_files:
+    #     frame_file.unlink()
+    # print(f"[DEBUG] Cleaned up {len(frame_files)} frame files")
 
 
 def generate_net_hpwl_histogram(
@@ -152,6 +329,7 @@ def place_cells_greedy_sim_anneal(
     sa_W_initial: float = 0.1,
     sa_seed: int = 42,
     sa_batch_size: int = 150,
+    design_name: Optional[str] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Place cells on the fabric using a greedy simulated annealing algorithm.
 
@@ -293,6 +471,26 @@ def place_cells_greedy_sim_anneal(
     per_level_times: List[Tuple[int, float, float]] = []
     total_levels = len(unique_levels)
     
+    # Animation setup
+    animation_enabled = PIL_AVAILABLE  # Enable if PIL is available
+    animation_frames_dir = None
+    frame_counter = 0
+    total_cells_to_place = len(order)
+    frame_interval = max(1, total_cells_to_place // 50)  # Capture ~50 frames total
+    
+    if animation_enabled:
+        # Use design-specific directory if available
+        project_root = Path(__file__).parent.parent.parent
+        if design_name:
+            animation_frames_dir = project_root / "build" / design_name / "placement_animation_frames"
+            output_mp4_path = project_root / "build" / design_name / f"{design_name}_placement_animation.mp4"
+        else:
+            animation_frames_dir = project_root / "build" / "placement_animation_frames"
+            output_mp4_path = project_root / "build" / "placement_animation.mp4"
+        animation_frames_dir.mkdir(parents=True, exist_ok=True)
+        print(f"[DEBUG] Placement animation enabled. Frames will be saved to: {animation_frames_dir}")
+        print(f"[DEBUG] Animation will show: Greedy placement progression → Final greedy → SA optimization → Final SA result")
+    
     for level_idx, lvl in enumerate(sorted(unique_levels), 1):
         print(f"[DEBUG] --- Processing Level {lvl} ({level_idx}/{total_levels}) ---")
         t_level_processing_start = time.perf_counter()
@@ -338,11 +536,39 @@ def place_cells_greedy_sim_anneal(
                 pct = (cell_idx / total_cells) * 100
                 print(f"[PROGRESS] L{lvl}: {cell_idx}/{total_cells} ({pct:.1f}%) | Placed: {placed_count} | Latest: {c[:20]} @ ({pos_x:.1f}, {pos_y:.1f})", flush=True)
                 last_progress = cell_idx
+            
+            # Capture animation frame periodically
+            if animation_enabled and animation_frames_dir is not None and len(pos_cells) % frame_interval == 0:
+                frame_counter += 1
+                frame_path = animation_frames_dir / f"frame_{frame_counter:04d}.png"
+                capture_placement_frame(
+                    pos_cells=pos_cells,
+                    sites_df=sites_df,
+                    frame_path=frame_path,
+                    frame_number=frame_counter,
+                    total_cells=total_cells_to_place,
+                    current_level=int(lvl),
+                    title_suffix=f" | Level {lvl}"
+                )
         
         t_greedy_end = time.perf_counter()
         greedy_time = t_greedy_end - t_greedy_start
         greedy_time_total += greedy_time
         print(f"[DEBUG] Level {lvl}: Greedy placement completed - placed {placed_count}/{len(level_cells)} cells in {greedy_time:.3f}s")
+        
+        # Capture frame after each level
+        if animation_enabled and animation_frames_dir is not None:
+            frame_counter += 1
+            frame_path = animation_frames_dir / f"frame_{frame_counter:04d}.png"
+            capture_placement_frame(
+                pos_cells=pos_cells,
+                sites_df=sites_df,
+                frame_path=frame_path,
+                frame_number=frame_counter,
+                total_cells=total_cells_to_place,
+                current_level=int(lvl),
+                title_suffix=f" | Level {lvl} Complete"
+            )
         
         # (SA moved to global phase after all levels are placed)
         per_level_times.append((int(lvl), greedy_time, 0.0))
@@ -359,6 +585,20 @@ def place_cells_greedy_sim_anneal(
         all_nets.update(ns)
     greedy_hpwl = hpwl_for_nets(all_nets, pos_cells, cell_to_nets, fixed_pts)
     print(f"[DEBUG] Greedy Placement HPWL: {greedy_hpwl:.3f}")
+    
+    # Capture final greedy placement frame
+    if animation_enabled and animation_frames_dir is not None:
+        frame_counter += 1
+        frame_path = animation_frames_dir / f"frame_{frame_counter:04d}.png"
+        capture_placement_frame(
+            pos_cells=pos_cells,
+            sites_df=sites_df,
+            frame_path=frame_path,
+            frame_number=frame_counter,
+            total_cells=total_cells_to_place,
+            current_level=None,
+            title_suffix=" | Greedy Placement Complete"
+        )
 
     # ---- Phase 8.5: Global Simulated Annealing ----
     print("[DEBUG] === PHASE 8.5: GLOBAL SIMULATED ANNEALING ===")
@@ -438,6 +678,32 @@ def place_cells_greedy_sim_anneal(
         if improvement < 0:
             print(f"[WARNING] SA made HPWL WORSE by {abs(improvement):.3f}! Consider reducing batch_size or adjusting SA parameters.")
     print()
+    
+    # Capture final SA placement frame and create animation
+    if animation_enabled and animation_frames_dir is not None:
+        frame_counter += 1
+        frame_path = animation_frames_dir / f"frame_{frame_counter:04d}.png"
+        capture_placement_frame(
+            pos_cells=pos_cells,
+            sites_df=sites_df,
+            frame_path=frame_path,
+            frame_number=frame_counter,
+            total_cells=total_cells_to_place,
+            current_level=None,
+            title_suffix=f" | SA Complete | HPWL: {sa_hpwl:.0f} μm"
+        )
+        
+        # Create animated MP4 (or GIF fallback)
+        create_placement_animation(
+            frame_dir=animation_frames_dir,
+            output_path=output_mp4_path,
+            frame_prefix="frame_",
+            duration=0.15,  # 150ms per frame
+            loop=0,  # Infinite loop (only for GIF)
+            format="mp4",  # Prefer MP4, falls back to GIF if imageio unavailable
+        )
+        print(f"[DEBUG] Placement animation saved to: {output_mp4_path}")
+        print(f"[DEBUG] Final frame shows placement AFTER Simulated Annealing optimization (HPWL: {sa_hpwl:.0f} μm)")
 
     # ---- Phase 9: Build Placement DataFrame ----
     print("[DEBUG] === PHASE 9: BUILDING PLACEMENT DATAFRAME ===")
@@ -556,6 +822,7 @@ def run_placement(design_name: str = "arith") -> None:
         pins_df=pins_df,
         ports_df=ports_df,
         netlist_graph=netlist_graph,
+        design_name=design_name,
     )
     placement_end = time.time()
     total_time_with_overhead = placement_end - placement_start
