@@ -273,16 +273,32 @@ def place_cells_greedy_sim_anneal(
     assignments: Dict[str, int] = {}  # cell_name -> site_id
     pos_cells: Dict[str, Tuple[float, float]] = {}
 
-    # Helper to get driver/source points for a cell
+    # Build a list of all I/O pin positions for fallback spreading
+    io_pin_positions: List[Tuple[float, float]] = []
+    if 'x_um' in updated_pins.columns and 'y_um' in updated_pins.columns:
+        for _, row in updated_pins.iterrows():
+            if pd.notna(row.get('x_um')) and pd.notna(row.get('y_um')):
+                io_pin_positions.append((float(row['x_um']), float(row['y_um'])))
+    print(f"[DEBUG] Built {len(io_pin_positions)} I/O pin positions for fallback")
+
+    # Helper to get driver/source points for a cell (now includes OUTPUT awareness)
     def _driver_points(cell: str) -> List[Tuple[float, float]]:
         pts: List[Tuple[float, float]] = []
+        
+        # 1. Input-driven: cells driving this cell's input nets
         for nb in ins_by_cell.get(cell, set()):
             # Placed driver cell on this net?
             for other, pos in pos_cells.items():
                 if nb in outs_by_cell.get(other, set()):
                     pts.append(pos)
-            # Top-level pins on this net
+            # Top-level INPUT pins on this net
             pts.extend(fixed_pts.get(nb, []))
+        
+        # 2. Output-driven: I/O pins this cell drives (NEW!)
+        #    If this cell's outputs go to a top-level pin, pull toward that pin
+        for nb in outs_by_cell.get(cell, set()):
+            pts.extend(fixed_pts.get(nb, []))
+        
         return pts
 
     # ---- Phase 8: Level-by-Level Placement (Growing) ----
@@ -292,6 +308,9 @@ def place_cells_greedy_sim_anneal(
     sa_time_total = 0.0
     per_level_times: List[Tuple[int, float, float]] = []
     total_levels = len(unique_levels)
+    
+    # For fallback spreading, we use a round-robin index into io_pin_positions
+    io_fallback_idx = 0
     
     for level_idx, lvl in enumerate(sorted(unique_levels), 1):
         print(f"[DEBUG] --- Processing Level {lvl} ({level_idx}/{total_levels}) ---")
@@ -318,9 +337,14 @@ def place_cells_greedy_sim_anneal(
                 tx = median([p[0] for p in pts])
                 ty = median([p[1] for p in pts])
             else:
-                # fallback: center of available sites
-                tx = float(sites_df["x_um"].median())
-                ty = float(sites_df["y_um"].median())
+                # NEW FALLBACK: round-robin through I/O pin positions for spreading
+                if io_pin_positions:
+                    tx, ty = io_pin_positions[io_fallback_idx % len(io_pin_positions)]
+                    io_fallback_idx += 1
+                else:
+                    # Ultimate fallback: center of available sites
+                    tx = float(sites_df["x_um"].median())
+                    ty = float(sites_df["y_um"].median())
             required_type = cell_type_by_cell.get(c)
             sid = nearest_site((tx, ty), is_free, sites_df, site_x, site_y, site_type_arr, minx, miny, cell_w, cell_h, gx, gy, bins, required_type=required_type)
             if sid is None:

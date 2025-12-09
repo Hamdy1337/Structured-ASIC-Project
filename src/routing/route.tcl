@@ -78,7 +78,7 @@ if {[info exists ::env(GR_ADJUST)]} {
     set_global_routing_layer_adjustment * $::env(GR_ADJUST)
 }
 
-if {[catch {global_route -congestion_iterations 50 -verbose} error_msg]} {
+if {[catch {global_route -congestion_iterations 100 -verbose} error_msg]} {
     puts "\[Generic-Route\] Global Routing failed with error: $error_msg"
     puts "\[Generic-Route\] Saving partial database for debugging..."
     write_db $::env(OUTPUT_DIR)/${design_name}_failed_route.odb

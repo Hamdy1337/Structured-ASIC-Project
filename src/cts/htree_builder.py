@@ -1044,26 +1044,8 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
         print("Skipping Verilog generation as requested.")
 
     
-    # ... (rest of loading logic is fine, avoiding re-indenting everything if possible, but replace_file_content needs context)
-    # To minimize context issues, I will target specific lines for signature update and the end of function.
-    pass
 
-# ... (I will use separate calls or a larger chunk to handle the signature + main block because they are far apart. 
-# Actually, I can replace the function def and the end logic. Let's do the main block first as it's cleaner to swap.)
 
-if __name__ == "__main__":
-    import argparse
-    import sys
-    
-    parser = argparse.ArgumentParser(description="Run H-Tree CTS and ECO generation.")
-    parser.add_argument("design", nargs="?", default="arith", help="Design name (default: arith)")
-    parser.add_argument("--skip_verilog", action="store_true", help="Skip Verilog netlist generation (useful for CTS visualization only)")
-    
-    args = parser.parse_args()
-    design_name = args.design
-        
-    print(f"Verilog written to {output_path}")
-    
     # =========================================================================
     # Generate ECO-updated .map file
     # This includes original placements + CTS buffers + tie cells + unused cells
@@ -1116,6 +1098,18 @@ if __name__ == "__main__":
     print(f"  - Tie cells: {tie_count}")
     print(f"  - Unused cells: {unused_count}")
     print(f"  - Total: {original_count + cts_count + tie_count + unused_count}")
+
+if __name__ == "__main__":
+    import argparse
+    import sys
+    
+    parser = argparse.ArgumentParser(description="Run H-Tree CTS and ECO generation.")
+    parser.add_argument("design", nargs="?", default="arith", help="Design name (default: arith)")
+    parser.add_argument("--skip_verilog", action="store_true", help="Skip Verilog netlist generation (useful for CTS visualization only)")
+    
+    args = parser.parse_args()
+    design_name = args.design
+    
     # Define paths relative to project root
     # script is in src/cts/htree_builder.py, so root is parent of parent of parent
     project_root = Path(__file__).resolve().parent.parent.parent
