@@ -195,6 +195,15 @@ def plot_cts_tree_interactive(
     )
     print(f"[CTS] Interactive HTML written to {out}")
 
+    # Write to PNG
+    # Assuming output_path ends in .html, we replace it or append .png
+    png_out = out.with_suffix(".png")
+    try:
+        fig.write_image(str(png_out), width=1600, height=1200)
+        print(f"[CTS] Static PNG written to {png_out}")
+    except Exception as e:
+        print(f"[CTS] Warning: Could not write PNG image. Is 'kaleido' installed? Error: {e}")
+
 
 # ---------------------------------------------------------------------------
 # CLI entry point

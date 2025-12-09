@@ -14,6 +14,7 @@ packaging==25.0
 pandas==2.3.3
 pillow==12.0.0
 plotly==5.24.1
+kaleido==0.2.1
 pyparsing==3.2.5
 python-dateutil==2.9.0.post0
 pytz==2025.2
@@ -21,9 +22,5 @@ PyYAML==6.0.3
 setuptools==80.9.0
 six==1.17.0
 sympy==1.14.0
-# torch==2.9.1
-# torchaudio==2.9.1
-# torchvision==0.24.1
-#comment added to test new merge
 typing_extensions==4.15.0
 tzdata==2025.2
