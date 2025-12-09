@@ -1,0 +1,5 @@
+
+According to some quick research I did,
+
+z80: runs around 2 MHz to 8.5MHz (constraint could be higher)
+6502: runs around 1 MHz to 3MHz  (constraint could be higher)
