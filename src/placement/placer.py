@@ -151,6 +151,7 @@ def place_cells_greedy_sim_anneal(
     sa_refine_max_distance: float = 100.0,
     sa_W_initial: float = 0.1,
     sa_seed: int = 42,
+    sa_batch_size: int = 150,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Place cells on the fabric using a greedy simulated annealing algorithm.
 
@@ -175,6 +176,9 @@ def place_cells_greedy_sim_anneal(
         sa_refine_max_distance: Maximum Manhattan distance for refine moves in microns (default: 100.0)
         sa_W_initial: Initial exploration window size as fraction of die size (default: 0.5 = 50%)
         sa_seed: Random seed for reproducibility (default: 42)
+        sa_batch_size: Number of cells per batch for global SA (default: 500). Smaller batches
+            localize swaps and reduce risk of global HPWL degradation; larger batches explore
+            more combinations but can hurt global HPWL if too large.
 
     Returns:
         (updated_pins_df, placement_df, validation_result)
@@ -283,7 +287,7 @@ def place_cells_greedy_sim_anneal(
 
     # ---- Phase 8: Level-by-Level Placement (Growing) ----
     print("[DEBUG] === PHASE 8: LEVEL-BY-LEVEL PLACEMENT (GROWING) ===")
-    batch_size = 120
+    batch_size = 500  # Reduced from 2900 to prevent global HPWL degradation
     greedy_time_total = 0.0
     sa_time_total = 0.0
     per_level_times: List[Tuple[int, float, float]] = []
@@ -361,6 +365,13 @@ def place_cells_greedy_sim_anneal(
     t_sa_start = time.perf_counter()
     num_batches = 0
     
+    # Store initial global HPWL to prevent degradation
+    all_nets_global = set()
+    for ns in cell_to_nets.values():
+        all_nets_global.update(ns)
+    initial_global_hpwl = hpwl_for_nets(all_nets_global, pos_cells, cell_to_nets, fixed_pts)
+    print(f"[DEBUG] Initial Global HPWL before SA: {initial_global_hpwl:.3f}")
+    
     # Collect all placed cells
     all_placed_cells = list(assignments.keys())
     
@@ -377,10 +388,10 @@ def place_cells_greedy_sim_anneal(
     for c in all_placed_cells:
         cell_type = cell_type_by_cell.get(c)
         cells_by_type.setdefault(cell_type, []).append(c)
-    
+
     # Calculate total batches
-    total_batches = sum((len(type_cells) + batch_size - 1) // batch_size 
-                       for type_cells in cells_by_type.values() 
+    total_batches = sum((len(type_cells) + sa_batch_size - 1) // sa_batch_size
+                       for type_cells in cells_by_type.values()
                        if len(type_cells) >= 2)
     
     print(f"[DEBUG] Global SA: Processing {len(all_placed_cells)} cells in {total_batches} batches")
@@ -392,8 +403,8 @@ def place_cells_greedy_sim_anneal(
         type_name = str(cell_type) if cell_type is not None else "unknown"
         
         # Batch cells
-        for i in range(0, len(type_cells), batch_size):
-            batch = type_cells[i:i + batch_size]
+        for i in range(0, len(type_cells), sa_batch_size):
+            batch = type_cells[i:i + sa_batch_size]
             if len(batch) < 2:
                 continue
             num_batches += 1
@@ -422,7 +433,10 @@ def place_cells_greedy_sim_anneal(
     sa_hpwl = hpwl_for_nets(all_nets, pos_cells, cell_to_nets, fixed_pts)
     print(f"[DEBUG] SA Refined HPWL: {sa_hpwl:.3f}")
     if greedy_hpwl > 0:
-        print(f"[DEBUG] HPWL Improvement: {greedy_hpwl - sa_hpwl:.3f} ({(greedy_hpwl - sa_hpwl)/greedy_hpwl*100:.2f}%)")
+        improvement = greedy_hpwl - sa_hpwl
+        print(f"[DEBUG] HPWL Improvement: {improvement:.3f} ({(improvement)/greedy_hpwl*100:.2f}%)")
+        if improvement < 0:
+            print(f"[WARNING] SA made HPWL WORSE by {abs(improvement):.3f}! Consider reducing batch_size or adjusting SA parameters.")
     print()
 
     # ---- Phase 9: Build Placement DataFrame ----
