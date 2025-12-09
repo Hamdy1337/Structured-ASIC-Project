@@ -13,6 +13,7 @@ help:
 	@echo "  make venv       - create local virtualenv (.venv)"
 	@echo "  make install    - install Python dependencies from requirements.txt"
 	@echo "  make parsers    - run all parsers in src/parsers/"
+	@echo "  make all        - run full flow (validate -> placer -> eco)"
 	@echo "  make placer     - run placement (use DESIGN=<name> to specify design, default: 6502)"
 	@echo "  make cts        - run src/cts.py"
 	@echo "  make eco        - run src/eco_generator.py"
@@ -50,7 +51,7 @@ cts: install
 
 # Run ECO generator
 eco: install
-	$(PY) -m src.eco_generator
+	$(PY) -m src.eco_generator $(if $(DESIGN),$(DESIGN),aes_128)
 
 # Run design validator
 validate: install
@@ -59,6 +60,14 @@ validate: install
 # Run visualization (also sees DESIGN if set)
 visualize: install
 	DESIGN=$(DESIGN) $(PY) -m src.Visualization.sasics_visualisation
+
+# Handle lowercase design variable
+ifdef design
+    DESIGN := $(design)
+endif
+
+# Run full flow: validate -> placer -> eco
+all: validate placer eco
 
 # Phase 1: run both validate and visualize
 phase1: validate visualize
