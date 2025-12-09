@@ -13,8 +13,8 @@ numpy==2.3.5
 packaging==25.0
 pandas==2.3.3
 pillow==12.0.0
-imageio==2.36.1
-imageio-ffmpeg==0.5.2
+imageio
+imageio-ffmpeg
 plotly==5.24.1
 kaleido==0.2.1
 pyparsing==3.2.5
