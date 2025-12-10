@@ -8,6 +8,25 @@ import time
 # Add the project root to sys.path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
+def snap_to_grid(value_um, grid_um=0.17):
+    """
+    Snap a coordinate to the manufacturing grid to ensure pin accessibility.
+    
+    Default grid is 170nm (0.17um) which is a common divisor of common routing grids.
+    This prevents DRT-0073 "No access point" errors caused by off-grid placements.
+    
+    Args:
+        value_um: Coordinate in micrometers
+        grid_um: Grid spacing in micrometers (default 170nm)
+    
+    Returns:
+        Snapped value in database units (1000 DBU = 1um)
+    """
+    # Round to nearest grid point
+    snapped_um = round(value_um / grid_um) * grid_um
+    # Convert to DBU
+    return int(snapped_um * 1000)
+
 from src.parsers.fabric_cells_parser import parse_fabric_cells_file
 
 def parse_args():
@@ -100,8 +119,9 @@ def generate_def(args):
             # DEF uses '\' as escape, so literal backslash must be '\\'
             def_comp_name = comp_name.replace("\\", "\\\\")
             
-            x_dbu = int(cell.x * 1000)
-            y_dbu = int(cell.y * 1000)
+            # Snap coordinates to routing grid to prevent pin access errors (DRT-0073)
+            x_dbu = snap_to_grid(cell.x)
+            y_dbu = snap_to_grid(cell.y)
             orient = cell.orient
             
             components.append(f"- {def_comp_name} {macro_name} + FIXED ( {x_dbu} {y_dbu} ) {orient} ;")
@@ -114,12 +134,13 @@ def generate_def(args):
         for pin in pins_data['pin_placement']['pins']:
             pin_name = pin['name']
             layer = pin['layer']
-            x_int = int(pin['x_um'] * 1000)
-            y_int = int(pin['y_um'] * 1000)
+            # Snap pin coordinates to routing grid to prevent pin access errors (DRT-0074)
+            x_int = snap_to_grid(pin['x_um'])
+            y_int = snap_to_grid(pin['y_um'])
             direction = pin['direction']
             
-            # Create a simple pin shape (0.2um box)
-            half_size = 100 
+            # Create a simple pin shape (0.4um box) - Increased from 0.2um to fit met3 (0.3um width) and vias
+            half_size = 200 
             
             pins_def_lines.append(f"- {pin_name} + NET {pin_name}")
             pins_def_lines.append(f"  + DIRECTION {direction}")
@@ -201,7 +222,8 @@ def generate_def(args):
                 x_int = int(pin['x_um'] * 1000)
                 y_int = int(pin['y_um'] * 1000)
                 direction = pin['direction']
-                half_size = 100
+                # FIXED: Increased pin size to 0.4um (half_size=200) to fit met3 (0.3um)
+                half_size = 200
                 f.write(f"- {pin_name} + NET {pin_name}\n")
                 f.write(f"  + DIRECTION {direction}\n")
                 f.write(f"  + USE SIGNAL\n")

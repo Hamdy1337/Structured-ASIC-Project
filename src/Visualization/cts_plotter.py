@@ -194,6 +194,15 @@ def plot_cts_tree_interactive(
         auto_open=False,
     )
     print(f"[CTS] Interactive HTML written to {out}")
+    
+    # Write to PNG (requires kaleido)
+    png_out = out.with_suffix(".png")
+    try:
+        fig.write_image(str(png_out), width=1600, height=1200)
+        print(f"[CTS] Static PNG written to {png_out}")
+    except Exception as e:
+        print(f"[CTS] Warning: Could not write PNG. Error: {e}")
+
 
 
 # ---------------------------------------------------------------------------

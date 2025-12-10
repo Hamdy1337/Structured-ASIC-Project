@@ -64,6 +64,57 @@ class TreeNode:
     level: int = 0
     physical_name: str = "" # The physical name of the buffer used
 
+
+def escape_verilog_name(name: str) -> str:
+    r"""
+    Escape Verilog identifiers that contain special characters.
+    
+    Standard Verilog identifiers can only contain [a-zA-Z0-9_$].
+    If a name contains other characters (like ':', '.', '[', ']'),
+    it needs to be escaped using the \identifier syntax (backslash + name + space).
+    
+    Backslashes from Yosys hierarchical names are replaced with underscores
+    to avoid conflicts with Verilog's escape syntax.
+    """
+    if not name:
+        return name
+    
+    # First, sanitize backslashes AND brackets by replacing with underscores
+    # Backslashes conflict with escape syntax
+    # Brackets [ ] in names confuse parsers (look like ranges)
+    sanitized_name = name.replace('\\', '_').replace('[', '_').replace(']', '_')
+    
+    # Characters that require escaping (not including $ and _ which are valid)
+    special_chars = ':./[]<>!@#%^&*()-+={}|;,?"\'`~'
+    
+    # Check if escaping is needed
+    needs_escape = False
+    
+    # Cannot start with a digit or $ (dollar sign is allowed inside but not at start)
+    if sanitized_name[0].isdigit() or sanitized_name.startswith('$'):
+        needs_escape = True
+    else:
+        for ch in sanitized_name:
+            if ch in special_chars:
+                needs_escape = True
+                break
+    
+    if needs_escape:
+        # Escaped identifier format: \name<space>
+        # The trailing space is required to delimit the identifier
+        return f"\\{sanitized_name} "
+    
+    return sanitized_name
+
+
+def sanitize_cell_name(name: str) -> str:
+    """
+    Sanitize cell names by replacing characters that cause issues.
+    This MUST match the sanitization done in escape_verilog_name for consistency.
+    """
+    return name.replace('\\', '_').replace('[', '_').replace(']', '_')
+
+
 class VerilogWriter:
     """Simple Verilog writer for the modified netlist."""
     def __init__(self, module_name: str, ports: Dict, cells: Dict, netnames: Dict):
@@ -74,7 +125,8 @@ class VerilogWriter:
         
     def generate(self) -> str:
         lines = []
-        lines.append(f"module {self.module_name} (")
+        # Escape module name (e.g., 6502 starts with digit, needs \6502 )
+        lines.append(f"module {escape_verilog_name(self.module_name)} (")
         
         # Ports
         port_lines = []
@@ -111,10 +163,11 @@ class VerilogWriter:
                 bits = self.netnames[net_name]['bits']
                 if not isinstance(bits, list): bits = [bits]
                 width = len(bits)
+                escaped_name = escape_verilog_name(net_name)
                 if width > 1:
-                    lines.append(f"    wire [{width-1}:0] {net_name};")
+                    lines.append(f"    wire [{width-1}:0] {escaped_name};")
                 else:
-                    lines.append(f"    wire {net_name};")
+                    lines.append(f"    wire {escaped_name};")
         
         lines.append("")
         
@@ -137,9 +190,9 @@ class VerilogWriter:
                 for bit in bits:
                     if isinstance(bit, int):
                         net_name = net_bit_to_name.get(bit, f"net_{bit}")
-                        net_names_for_port.append(net_name)
+                        net_names_for_port.append(escape_verilog_name(net_name))
                     else:
-                        net_names_for_port.append(str(bit))
+                        net_names_for_port.append(escape_verilog_name(str(bit)))
                 
                 if len(net_names_for_port) == 1:
                     conn_strs.append(f".{port}({net_names_for_port[0]})")
@@ -147,7 +200,7 @@ class VerilogWriter:
                     conn_str = "{" + ", ".join(reversed(net_names_for_port)) + "}" # Verilog concat is {MSB, ..., LSB}
                     conn_strs.append(f".{port}({conn_str})")
             
-            lines.append(f"    {cell_type} {cell_name} (")
+            lines.append(f"    {cell_type} {escape_verilog_name(cell_name)} (")
             lines.append("        " + ", ".join(conn_strs))
             lines.append("    );")
             lines.append("")
@@ -178,6 +231,7 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
     
     # Access the parsed JSON data from parser (no need to parse twice!)
     netlist_data = parser.data
+    # Revert to using parser's module name for LOOKUP (to avoid KeyError)
     top_module_name = parser.top_module
     
     # Parse .map file to get logical -> physical mappings
@@ -1026,7 +1080,8 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
     print(f"Sanitization Complete. Fixed {count_fixed} buffers (skipped inverters).")
     
     print("Generating Verilog...")
-    writer = VerilogWriter(top_module_name, module['ports'], module['cells'], module['netnames'])
+    # Use design_name for the OUTPUT module name (e.g. 6502), even if input was sasic_top
+    writer = VerilogWriter(design_name, module['ports'], module['cells'], module['netnames'])
     verilog_code = writer.generate()
     
     output_path = Path(output_dir) / f"{design_name}_final.v"
@@ -1051,14 +1106,18 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
         # 1. Original mappings from placement
         original_count = 0
         for _, row in map_df.iterrows():
-            f.write(f"{row['cell_name']} {row['physical_cell_name']}\n")
+            # Sanitize logical cell name to match Verilog output
+            sanitized_logical_name = sanitize_cell_name(row['cell_name'])
+            f.write(f"{sanitized_logical_name} {row['physical_cell_name']}\n")
             original_count += 1
         
         f.write(f"\n# CTS buffer mappings\n")
         # 2. CTS buffer mappings
         cts_count = 0
         for buf in cts_data['buffers']:
-            f.write(f"{buf['name']} {buf['physical_name']}\n")
+            # Sanitize logical cell name to match Verilog output
+            sanitized_logical_name = sanitize_cell_name(buf['name'])
+            f.write(f"{sanitized_logical_name} {buf['physical_name']}\n")
             cts_count += 1
         
         f.write(f"\n# Tie cell mappings\n")

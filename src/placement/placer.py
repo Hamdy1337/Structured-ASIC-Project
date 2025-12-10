@@ -37,6 +37,135 @@ from src.validation.placement_validator import validate_placement, print_validat
 from src.Visualization.heatmap import plot_placement_heatmap
 from src.placement.placement_utils import hpwl_for_nets, nets_by_cell, fixed_points_from_pins
 
+# Optional imports for animation
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+
+try:
+    import imageio
+    IMAGEIO_AVAILABLE = True
+except ImportError:
+    IMAGEIO_AVAILABLE = False
+
+
+def capture_placement_frame(
+    pos_cells: Dict[str, Tuple[float, float]],
+    sites_df: pd.DataFrame,
+    frame_path: Path,
+    frame_number: int,
+    total_cells: int,
+    current_level: Optional[int] = None,
+    title_suffix: str = "",
+) -> None:
+    """Capture a single frame of placement progress."""
+    if not PIL_AVAILABLE:
+        return
+    
+    # Extract coordinates
+    x_coords = [pos[0] for pos in pos_cells.values()]
+    y_coords = [pos[1] for pos in pos_cells.values()]
+    
+    # Get bounds from sites_df for proper scaling
+    x_min = float(sites_df["x_um"].min())
+    x_max = float(sites_df["x_um"].max())
+    y_min = float(sites_df["y_um"].min())
+    y_max = float(sites_df["y_um"].max())
+    
+    # Create figure
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    # Plot placed cells as scatter
+    ax.scatter(x_coords, y_coords, s=2, alpha=0.6, c='blue', marker='o', edgecolors='none')
+    
+    # Set bounds with small margin
+    margin_x = (x_max - x_min) * 0.05
+    margin_y = (y_max - y_min) * 0.05
+    ax.set_xlim(x_min - margin_x, x_max + margin_x)
+    ax.set_ylim(y_min - margin_y, y_max + margin_y)
+    
+    # Labels and title
+    ax.set_xlabel("X Position (μm)", fontsize=12)
+    ax.set_ylabel("Y Position (μm)", fontsize=12)
+    
+    placed_count = len(pos_cells)
+    pct = (placed_count / total_cells * 100) if total_cells > 0 else 0
+    
+    level_text = f" | Level {current_level}" if current_level is not None else ""
+    title = f"Placement Progress - Frame {frame_number}{level_text}\n{placed_count}/{total_cells} cells ({pct:.1f}%){title_suffix}"
+    ax.set_title(title, fontsize=12, fontweight='bold')
+    
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    ax.set_aspect('equal', adjustable='box')
+    
+    # Save frame
+    frame_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(frame_path, dpi=80, bbox_inches='tight')
+    plt.close(fig)
+
+
+def create_placement_animation(
+    frame_dir: Path,
+    output_path: Path,
+    frame_prefix: str = "frame_",
+    duration: float = 0.15,
+) -> None:
+    """Create an animated video (MP4) or GIF from placement frames."""
+    if not PIL_AVAILABLE:
+        print("[WARNING] PIL/Pillow not available. Cannot create animation.")
+        return
+    
+    # Collect all frame files
+    frame_files = sorted(frame_dir.glob(f"{frame_prefix}*.png"))
+    
+    if len(frame_files) == 0:
+        print(f"[WARNING] No frames found in {frame_dir}")
+        return
+    
+    print(f"[DEBUG] Creating animation from {len(frame_files)} frames...")
+    
+    # Read frames
+    frames = []
+    for frame_file in frame_files:
+        try:
+            img = Image.open(frame_file)
+            frames.append(img)
+        except Exception as e:
+            print(f"[WARNING] Failed to load frame {frame_file}: {e}")
+            continue
+    
+    if len(frames) == 0:
+        print(f"[WARNING] No valid frames to create animation")
+        return
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Create MP4 using imageio if available
+    if IMAGEIO_AVAILABLE:
+        try:
+            frame_arrays = [np.array(img.convert('RGB')) for img in frames]
+            fps = 1.0 / duration
+            imageio.mimwrite(str(output_path), frame_arrays, fps=fps)
+            print(f"[DEBUG] Saved animation (MP4) to: {output_path}")
+            return
+        except Exception as e:
+            print(f"[WARNING] Failed to create MP4: {e}")
+    
+    # Fallback to GIF
+    gif_path = output_path.with_suffix('.gif')
+    try:
+        frames[0].save(
+            gif_path,
+            save_all=True,
+            append_images=frames[1:],
+            duration=int(duration * 1000),
+            loop=0
+        )
+        print(f"[DEBUG] Saved animation (GIF) to: {gif_path}")
+    except Exception as e:
+        print(f"[WARNING] Failed to create GIF: {e}")
 
 
 def generate_net_hpwl_histogram(
@@ -151,6 +280,10 @@ def place_cells_greedy_sim_anneal(
     sa_refine_max_distance: float = 100.0,
     sa_W_initial: float = 0.1,
     sa_seed: int = 42,
+    sa_batch_size: int = 150,
+    design_name: Optional[str] = None,
+    enable_animation: bool = True,
+    animation_output_dir: Optional[Path] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Place cells on the fabric using a greedy simulated annealing algorithm.
 
@@ -204,6 +337,27 @@ def place_cells_greedy_sim_anneal(
     print(f"[DEBUG] Spatial index built: grid={gx}x{gy}, {len(sites_df)} sites")
     print(f"[DEBUG] Building sites and spatial index completed in {build_sites_dur:.3f}s")
     print()
+
+    # ---- Animation Setup ----
+    animation_enabled = enable_animation and PIL_AVAILABLE and design_name is not None
+    animation_frames_dir: Optional[Path] = None
+    output_mp4_path: Optional[Path] = None
+    frame_counter = 0
+    total_cells_to_place = len(netlist_graph["cell_name"].unique()) if "cell_name" in netlist_graph.columns else 0
+    
+    if animation_enabled:
+        if animation_output_dir is not None:
+            animation_frames_dir = animation_output_dir / "placement_frames"
+        else:
+            animation_frames_dir = Path("build") / design_name / "placement_frames"
+        animation_frames_dir.mkdir(parents=True, exist_ok=True)
+        output_mp4_path = animation_frames_dir.parent / f"{design_name}_animation.mp4"
+        print(f"[DEBUG] Animation enabled: frames will be saved to {animation_frames_dir}")
+    else:
+        if enable_animation and not PIL_AVAILABLE:
+            print("[DEBUG] Animation disabled: PIL not available")
+        elif enable_animation and design_name is None:
+            print("[DEBUG] Animation disabled: design_name not provided")
 
     # ---- Phase 3: Build Fixed Points ----
     print("[DEBUG] === PHASE 3: BUILDING FIXED POINTS ===")
@@ -270,15 +424,31 @@ def place_cells_greedy_sim_anneal(
     pos_cells: Dict[str, Tuple[float, float]] = {}
 
     # Helper to get driver/source points for a cell
+    # Collect all I/O pin positions for round-robin fallback
+    io_pin_positions: List[Tuple[float, float]] = []
+    for net_pts in fixed_pts.values():
+        io_pin_positions.extend(net_pts)
+    io_pin_idx = [0]  # Round-robin counter for fallback (list for mutability)
+    
     def _driver_points(cell: str) -> List[Tuple[float, float]]:
+        """Get target points for cell placement, considering both inputs AND outputs."""
         pts: List[Tuple[float, float]] = []
+        
+        # 1) INPUT connections: find placed driver cells
         for nb in ins_by_cell.get(cell, set()):
             # Placed driver cell on this net?
             for other, pos in pos_cells.items():
                 if nb in outs_by_cell.get(other, set()):
                     pts.append(pos)
-            # Top-level pins on this net
+            # Top-level input pins on this net
             pts.extend(fixed_pts.get(nb, []))
+        
+        # 2) OUTPUT connections: pull toward output pins if this cell drives a top-level output
+        for nb in outs_by_cell.get(cell, set()):
+            if nb in fixed_pts:
+                # This cell drives a top-level output pin, add those positions
+                pts.extend(fixed_pts.get(nb, []))
+        
         return pts
 
     # ---- Phase 8: Level-by-Level Placement (Growing) ----
@@ -314,9 +484,14 @@ def place_cells_greedy_sim_anneal(
                 tx = median([p[0] for p in pts])
                 ty = median([p[1] for p in pts])
             else:
-                # fallback: center of available sites
-                tx = float(sites_df["x_um"].median())
-                ty = float(sites_df["y_um"].median())
+                # IMPROVED fallback: round-robin through I/O pin positions instead of center
+                if io_pin_positions:
+                    tx, ty = io_pin_positions[io_pin_idx[0] % len(io_pin_positions)]
+                    io_pin_idx[0] += 1
+                else:
+                    # Ultimate fallback if no I/O pins: center
+                    tx = float(sites_df["x_um"].median())
+                    ty = float(sites_df["y_um"].median())
             required_type = cell_type_by_cell.get(c)
             sid = nearest_site((tx, ty), is_free, sites_df, site_x, site_y, site_type_arr, minx, miny, cell_w, cell_h, gx, gy, bins, required_type=required_type)
             if sid is None:
@@ -334,11 +509,39 @@ def place_cells_greedy_sim_anneal(
                 pct = (cell_idx / total_cells) * 100
                 print(f"[PROGRESS] L{lvl}: {cell_idx}/{total_cells} ({pct:.1f}%) | Placed: {placed_count} | Latest: {c[:20]} @ ({pos_x:.1f}, {pos_y:.1f})", flush=True)
                 last_progress = cell_idx
+            
+            # Capture frame every 100 cells for animation
+            if animation_enabled and animation_frames_dir is not None and placed_count % 100 == 0:
+                frame_counter += 1
+                frame_path = animation_frames_dir / f"frame_{frame_counter:04d}.png"
+                capture_placement_frame(
+                    pos_cells=pos_cells,
+                    sites_df=sites_df,
+                    frame_path=frame_path,
+                    frame_number=frame_counter,
+                    total_cells=total_cells_to_place,
+                    current_level=lvl,
+                    title_suffix=f" | L{lvl} {placed_count} cells"
+                )
         
         t_greedy_end = time.perf_counter()
         greedy_time = t_greedy_end - t_greedy_start
         greedy_time_total += greedy_time
         print(f"[DEBUG] Level {lvl}: Greedy placement completed - placed {placed_count}/{len(level_cells)} cells in {greedy_time:.3f}s")
+        
+        # Capture frame after each level (for animation)
+        if animation_enabled and animation_frames_dir is not None:
+            frame_counter += 1
+            frame_path = animation_frames_dir / f"frame_{frame_counter:04d}.png"
+            capture_placement_frame(
+                pos_cells=pos_cells,
+                sites_df=sites_df,
+                frame_path=frame_path,
+                frame_number=frame_counter,
+                total_cells=total_cells_to_place,
+                current_level=lvl,
+                title_suffix=f" | After Greedy L{lvl}"
+            )
         
         # (SA moved to global phase after all levels are placed)
         per_level_times.append((int(lvl), greedy_time, 0.0))
@@ -473,6 +676,31 @@ def place_cells_greedy_sim_anneal(
     print_validation_report(validation_result)
     print()
 
+    # ---- Capture Final Frame and Create Animation ----
+    if animation_enabled and animation_frames_dir is not None:
+        # Capture final frame
+        frame_counter += 1
+        frame_path = animation_frames_dir / f"frame_{frame_counter:04d}.png"
+        capture_placement_frame(
+            pos_cells=pos_cells,
+            sites_df=sites_df,
+            frame_path=frame_path,
+            frame_number=frame_counter,
+            total_cells=total_cells_to_place,
+            current_level=None,
+            title_suffix=f" | FINAL | HPWL: {sa_hpwl:.0f} μm"
+        )
+        
+        # Create animation
+        if output_mp4_path is not None:
+            create_placement_animation(
+                frame_dir=animation_frames_dir,
+                output_path=output_mp4_path,
+                frame_prefix="frame_",
+                duration=0.15,
+            )
+            print(f"[DEBUG] Placement animation saved to: {output_mp4_path}")
+
     # ---- Final Timing Summary ----
     t_total_end = time.perf_counter()
     total_dur = t_total_end - t_total_start
@@ -542,6 +770,7 @@ def run_placement(design_name: str = "arith") -> None:
         pins_df=pins_df,
         ports_df=ports_df,
         netlist_graph=netlist_graph,
+        design_name=design_name,
     )
     placement_end = time.time()
     total_time_with_overhead = placement_end - placement_start
