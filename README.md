@@ -1130,5 +1130,5 @@ This project was developed as part of the Digital Design 2 course, implementing 
 
 ---
 
-*Last Updated: December 2024*  
+*Last Updated: December 2025*  
 *Version: 1.0*
