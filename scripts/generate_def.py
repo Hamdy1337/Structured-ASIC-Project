@@ -1,14 +1,17 @@
+from __future__ import annotations
 
 import argparse
-import yaml
 import os
 import sys
-import time
+from pathlib import Path
+from typing import Dict, Iterable, Set, Tuple
 
 # Add the project root to sys.path
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 
 from src.parsers.fabric_cells_parser import parse_fabric_cells_file
+from src.parsers.fabric_parser import parse_fabric_file_cached
+from src.parsers.pins_parser import PinsMeta, load_and_validate_cached
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Generate fixed DEF file for Structured ASIC')
@@ -20,49 +23,113 @@ def parse_args():
     parser.add_argument('--output', required=True, help='Path to output .def file')
     return parser.parse_args()
 
-def load_yaml(path):
-    print(f"Loading YAML: {path}")
-    start = time.time()
-    with open(path, 'r') as f:
-        data = yaml.safe_load(f)
-    print(f"Loaded {path} in {time.time()-start:.2f}s")
-    return data
 
-def parse_map_file(map_path):
+def _um_to_dbu(value_um: float, dbu_per_micron: int) -> int:
+    return int(round(value_um * dbu_per_micron))
+
+
+def _snap_to_track(value_um: float, start_um: float, pitch_um: float) -> float:
+    if pitch_um == 0:
+        return value_um
+    idx = round((value_um - start_um) / pitch_um)
+    return round(start_um + idx * pitch_um, 4)
+
+
+def parse_map_file(map_path: str) -> Set[str]:
+    """Return set of used physical slot names.
+
+    Map file format: <logical_instance_name> <physical_slot_name>
+    """
     print(f"Parsing Map: {map_path}")
-    mapping = {}
-    with open(map_path, 'r') as f:
+    used_physical: Set[str] = set()
+    with open(map_path, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
             if not line or line.startswith('#'):
                 continue
             parts = line.split()
             if len(parts) >= 2:
-                logical_name = parts[0]
-                physical_name = parts[1]
-                mapping[physical_name] = logical_name
-    return mapping
+                used_physical.add(parts[1])
+    return used_physical
 
-def get_macro_map(fabric_def):
-    # Create a mapping from template_name (e.g. R0_TAP_0) to cell_type (e.g. sky130_fd_sc_hd__tapvpwrvgnd_1)
-    macro_map = {}
-    if 'tile_definition' in fabric_def and 'cells' in fabric_def['tile_definition']:
-        for cell in fabric_def['tile_definition']['cells']:
+
+def get_macro_map_from_fabric(fabric) -> Dict[str, str]:
+    macro_map: Dict[str, str] = {}
+    tile_def = getattr(fabric, 'tile_definition', {}) or {}
+    for cell in tile_def.get('cells', []) or []:
+        try:
             template_name = cell['template_name']
             cell_type = cell['cell_type']
-            macro_map[template_name] = cell_type
+        except Exception:
+            continue
+        macro_map[str(template_name)] = str(cell_type)
     return macro_map
+
+
+def _pin_fixed_location(pin_row, meta: PinsMeta) -> Tuple[int, int]:
+    """Compute fixed (x_dbu, y_dbu) for DEF pins.
+
+    pins.yaml places pins on die boundary. For OpenROAD accessibility we move them slightly inside
+    and keep them snapped to routing track grids.
+    """
+    dbu = meta.units.dbu_per_micron
+    die_w = meta.die.width_um
+    die_h = meta.die.height_um
+
+    layer = str(pin_row['layer'])
+    x = float(pin_row['x_um'])
+    y = float(pin_row['y_um'])
+
+    # Track definitions in pins.yaml
+    met2 = meta.tracks.get('met2')
+    met3 = meta.tracks.get('met3')
+    met2_start, met2_pitch = (met2.start_um, met2.step_um) if met2 else (0.23, 0.46)
+    met3_start, met3_pitch = (met3.start_um, met3.step_um) if met3 else (0.34, 0.68)
+
+    if layer == 'met2':
+        # Snap X to met2 vertical grid
+        x = _snap_to_track(x, met2_start, met2_pitch)
+
+        # Nudge off boundary
+        if y == 0.0:
+            y = met2_start
+        elif y == die_h:
+            y = _snap_to_track(die_h - met2_start, met2_start, met2_pitch)
+
+        # Keep Y aligned too
+        y = _snap_to_track(y, met2_start, met2_pitch)
+
+    elif layer == 'met3':
+        # Snap Y to met3 horizontal grid
+        y = _snap_to_track(y, met3_start, met3_pitch)
+
+        # Ensure X aligns to met2 grid so Via2 intersections exist.
+        if x == 0.0:
+            target_x = 0.5
+            x = _snap_to_track(target_x, met2_start, met2_pitch)
+            if x < target_x:
+                x = round(x + met2_pitch, 4)
+        elif x == die_w:
+            target_x = die_w - 0.5
+            x = _snap_to_track(target_x, met2_start, met2_pitch)
+            if x > target_x:
+                x = round(x - met2_pitch, 4)
+        else:
+            x = _snap_to_track(x, met2_start, met2_pitch)
+
+    return _um_to_dbu(x, dbu), _um_to_dbu(y, dbu)
 
 def generate_def(args):
     print("generate_def started.")
     
-    # 1. Load small inputs
-    fabric_def = load_yaml(args.fabric_def)
-    macro_map = get_macro_map(fabric_def)
-    
-    pins_data = load_yaml(args.pins)
-    
-    placement_map = parse_map_file(args.map)
+    # 1. Load fabric + pins using parsers (with caching)
+    fabric, _ = parse_fabric_file_cached(args.fabric_def)
+    macro_map = get_macro_map_from_fabric(fabric)
+
+    pins_df, pins_meta = load_and_validate_cached(args.pins)
+
+    used_physical = parse_map_file(args.map)
+    dbu_per_micron = pins_meta.units.dbu_per_micron
 
     # 2. Load fabric cells using OPTIMIZED parser
     print(f"Loading fabric cells from {args.fabric_cells}...")
@@ -90,125 +157,65 @@ def generate_def(args):
             if not macro_name:
                 continue
             
-            # Only include placed components
-            if physical_name not in placement_map:
+            # Only include used/placed components (must exist in the Verilog netlist)
+            if physical_name not in used_physical:
                 continue
+
+            # IMPORTANT: DEF component instance names must match the instance names
+            # in the Verilog that OpenROAD reads. Our flow renames Verilog instances
+            # to the physical slot name, so we use the physical slot name here.
+            def_comp_name = physical_name
             
-            comp_name = placement_map[physical_name]
-            
-            # Escape backslashes for DEF format
-            # DEF uses '\' as escape, so literal backslash must be '\\'
-            def_comp_name = comp_name.replace("\\", "\\\\")
-            
-            x_dbu = int(cell.x * 1000)
-            y_dbu = int(cell.y * 1000)
+            # Do NOT snap cell locations; these are already legalized to the fabric grid.
+            x_dbu = _um_to_dbu(float(cell.x), dbu_per_micron)
+            y_dbu = _um_to_dbu(float(cell.y), dbu_per_micron)
             orient = cell.orient
             
             components.append(f"- {def_comp_name} {macro_name} + FIXED ( {x_dbu} {y_dbu} ) {orient} ;")
 
     print(f"Generated {len(components)} components.")
 
-    # 4. Prepare Pins from pins.yaml
+    # 4. Prepare Pins for DEF
     pins_def_lines = []
-    if 'pin_placement' in pins_data and 'pins' in pins_data['pin_placement']:
-        for pin in pins_data['pin_placement']['pins']:
-            pin_name = pin['name']
-            layer = pin['layer']
-            x_int = int(pin['x_um'] * 1000)
-            y_int = int(pin['y_um'] * 1000)
-            direction = pin['direction']
-            
-            # Create a simple pin shape (0.2um box)
-            half_size = 100 
-            
-            pins_def_lines.append(f"- {pin_name} + NET {pin_name}")
-            pins_def_lines.append(f"  + DIRECTION {direction}")
-            pins_def_lines.append(f"  + USE SIGNAL")
-            pins_def_lines.append(f"  + PORT")
-            pins_def_lines.append(f"    + LAYER {layer} ( -{half_size} -{half_size} ) ( {half_size} {half_size} )")
-            pins_def_lines.append(f"    + FIXED ( {x_int} {y_int} ) N")
-            pins_def_lines.append(f"  ;")
+    half_size = 170  # conservative vs pitch to avoid spacing issues
+    for _, pin in pins_df.iterrows():
+        pin_name = str(pin['name'])
+        layer = str(pin['layer'])
+        direction = str(pin['direction'])
+        x_int, y_int = _pin_fixed_location(pin, pins_meta)
 
-    # 5. Write DEF
+        pins_def_lines.append(f"- {pin_name} + NET {pin_name}")
+        pins_def_lines.append(f"  + DIRECTION {direction}")
+        pins_def_lines.append(f"  + USE SIGNAL")
+        pins_def_lines.append(f"  + PORT")
+        pins_def_lines.append(f"    + LAYER {layer} ( -{half_size} -{half_size} ) ( {half_size} {half_size} )")
+        pins_def_lines.append(f"    + FIXED ( {x_int} {y_int} ) N")
+        pins_def_lines.append("  ;")
+
+    # 5. Write DEF (single pass)
     print(f"Writing DEF to {args.output}...")
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
-    
-    with open(args.output, 'w') as f:
+
+    with open(args.output, 'w', encoding='utf-8') as f:
         f.write("VERSION 5.8 ;\n")
         f.write("DIVIDERCHAR \"/\" ;\n")
         f.write("BUSBITCHARS \"[]\" ;\n")
         f.write(f"DESIGN {args.design_name} ;\n")
-        f.write("UNITS DISTANCE MICRONS 1000 ;\n")
-        
-        # DIEAREA from pins.yaml
-        if 'pin_placement' in pins_data and 'die' in pins_data['pin_placement']:
-            die = pins_data['pin_placement']['die']
-            width_dbu = int(die['width_um'] * 1000)
-            height_dbu = int(die['height_um'] * 1000)
-            f.write(f"DIEAREA ( 0 0 ) ( {width_dbu} {height_dbu} ) ;\n")
-        else:
-            # Fallback (based on fabric.yaml if needed, but risky if fabric is small)
-            # Default to huge if unknown
-            print("Warning: DIEAREA not found in pins.yaml, using default large area.")
-            f.write("DIEAREA ( 0 0 ) ( 1003600 989200 ) ;\n") 
-        
-        f.write(f"COMPONENTS {len(components)} ;\n")
-        for comp in components:
-            f.write(f"{comp}\n")
-        f.write("END COMPONENTS\n")
-        
-        f.write(f"PINS {int(len(pins_def_lines)/7)} ;\n") # Approx count check? No, count loop
-        # Count actual pins (each pin is 7 lines in my format above)
-        # Better: store pins in list of strings
-    
-    # Refactoring pin write loop to be cleaner
-    with open(args.output, 'a') as f:
-        # PINS header was not written above?
-        # Re-write PINS section properly
-        pass 
-        
-    # Re-writing the write section to be correct
-    with open(args.output, 'w') as f:
-        f.write("VERSION 5.8 ;\n")
-        f.write("DIVIDERCHAR \"/\" ;\n")
-        f.write("BUSBITCHARS \"[]\" ;\n")
-        f.write(f"DESIGN {args.design_name} ;\n")
-        f.write("UNITS DISTANCE MICRONS 1000 ;\n")
-        
-        if 'pin_placement' in pins_data and 'die' in pins_data['pin_placement']:
-            die = pins_data['pin_placement']['die']
-            width_dbu = int(die['width_um'] * 1000)
-            height_dbu = int(die['height_um'] * 1000)
-            f.write(f"DIEAREA ( 0 0 ) ( {width_dbu} {height_dbu} ) ;\n")
-        else:
-             f.write("DIEAREA ( 0 0 ) ( 1003600 989200 ) ;\n")
+        f.write(f"UNITS DISTANCE MICRONS {dbu_per_micron} ;\n")
+
+        width_dbu = _um_to_dbu(pins_meta.die.width_um, dbu_per_micron)
+        height_dbu = _um_to_dbu(pins_meta.die.height_um, dbu_per_micron)
+        f.write(f"DIEAREA ( 0 0 ) ( {width_dbu} {height_dbu} ) ;\n")
              
         f.write(f"COMPONENTS {len(components)} ;\n")
         for comp in components:
             f.write(f"{comp}\n")
         f.write("END COMPONENTS\n")
-        
-        # Count pins
-        pin_count = 0
-        if 'pin_placement' in pins_data and 'pins' in pins_data['pin_placement']:
-            pin_count = len(pins_data['pin_placement']['pins'])
-            
+
+        pin_count = len(pins_df)
         f.write(f"PINS {pin_count} ;\n")
-        if pin_count > 0:
-            for pin in pins_data['pin_placement']['pins']:
-                pin_name = pin['name']
-                layer = pin['layer']
-                x_int = int(pin['x_um'] * 1000)
-                y_int = int(pin['y_um'] * 1000)
-                direction = pin['direction']
-                half_size = 100
-                f.write(f"- {pin_name} + NET {pin_name}\n")
-                f.write(f"  + DIRECTION {direction}\n")
-                f.write(f"  + USE SIGNAL\n")
-                f.write(f"  + PORT\n")
-                f.write(f"    + LAYER {layer} ( -{half_size} -{half_size} ) ( {half_size} {half_size} )\n")
-                f.write(f"    + FIXED ( {x_int} {y_int} ) N\n")
-                f.write(f"  ;\n")
+        for line in pins_def_lines:
+            f.write(f"{line}\n")
         f.write("END PINS\n")
         f.write("END DESIGN\n")
         

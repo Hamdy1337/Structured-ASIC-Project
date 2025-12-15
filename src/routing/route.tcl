@@ -2,13 +2,33 @@
 # Usage: openroad -exit route.tcl
 
 # Check for required environment variables
-set required_vars {DESIGN_NAME LEF_FILES LIB_FILES DEF_FILE OUTPUT_DIR}
+# Notes:
+# - DEF has no NETS, so VERILOG_FILE is required for connectivity.
+# - Provide either MERGED_LEF (single file) or LEF_FILES (space-separated list).
+# - TECH_LEF is optional; when provided it is loaded first (under a temp name).
+set required_vars {DESIGN_NAME LIB_FILES DEF_FILE VERILOG_FILE OUTPUT_DIR}
 foreach var $required_vars {
     if {![info exists ::env($var)]} {
         puts "Error: Environment variable $var is not set."
         exit 1
     }
     }
+
+set has_merged_lef 0
+if {[info exists ::env(MERGED_LEF)] && [file exists $::env(MERGED_LEF)]} {
+    set has_merged_lef 1
+}
+set has_lef_files 0
+if {[info exists ::env(LEF_FILES)]} {
+    set lef_list [split $::env(LEF_FILES) " "]
+    if {[llength $lef_list] > 0} {
+        set has_lef_files 1
+    }
+}
+if {!$has_merged_lef && !$has_lef_files} {
+    puts "Error: Provide MERGED_LEF (existing file) or LEF_FILES (one or more files)."
+    exit 1
+}
 
 
 # 1. Read Inputs
@@ -32,12 +52,18 @@ if {[info exists ::env(TECH_LEF)]} {
     }
 }
 
-foreach lef [split $::env(LEF_FILES) " "] {
-    if {[file exists $lef]} {
-        puts "Reading LEF: $lef"
-        read_lef $lef
-    } else {
-        puts "Warning: LEF file $lef not found"
+if {$has_merged_lef} {
+    puts "Reading Merged LEF: $::env(MERGED_LEF)"
+    read_lef $::env(MERGED_LEF)
+} else {
+    foreach lef [split $::env(LEF_FILES) " "] {
+        if {[file exists $lef]} {
+            puts "Reading LEF: $lef"
+            read_lef $lef
+        } else {
+            puts "Error: LEF file $lef not found"
+            exit 1
+        }
     }
 }
 
@@ -51,9 +77,7 @@ foreach lib [split $::env(LIB_FILES) " "] {
 }
 
 # Read Verilog - REQUIRED for connectivity since DEF lacks NETS
-if {[info exists ::env(VERILOG_FILE)]} {
-    read_verilog $::env(VERILOG_FILE)
-}
+read_verilog $::env(VERILOG_FILE)
 
 # Link Design
 set design_name $::env(DESIGN_NAME)
@@ -87,7 +111,11 @@ if {[catch {global_route -congestion_iterations 100 -verbose} error_msg]} {
 
 # 3. Detailed Routing
 puts "\[Generic-Route\] Starting Detailed Route..."
-detailed_route -output_drc $::env(OUTPUT_DIR)/${design_name}_drc.rpt \
+set drc_rpt $::env(OUTPUT_DIR)/${design_name}_drc.rpt
+detailed_route \
+               -bottom_routing_layer met1 \
+               -top_routing_layer met5 \
+               -output_drc $drc_rpt \
                -output_maze $::env(OUTPUT_DIR)/${design_name}_maze.log \
                -output_guide $::env(OUTPUT_DIR)/${design_name}.guide
 
@@ -109,5 +137,21 @@ report_congestion -histogram > $::env(OUTPUT_DIR)/${design_name}_congestion.rpt
 puts "\[Generic-Route\] Saving outputs..."
 write_def $::env(OUTPUT_DIR)/${design_name}_routed.def
 write_db $::env(OUTPUT_DIR)/${design_name}_routed.odb
+
+# DRC gate: fail the flow if any violations are present
+if {[file exists $drc_rpt]} {
+    set fp [open $drc_rpt r]
+    set drc_txt [read $fp]
+    close $fp
+    set vio_count [regexp -all -line {^violation type:} $drc_txt]
+    puts "\[Generic-Route\] DRC violations: $vio_count (report: $drc_rpt)"
+    if {$vio_count > 0} {
+        puts stderr "\[Generic-Route\] ERROR: DRC violations detected ($vio_count)."
+        exit 2
+    }
+} else {
+    puts stderr "\[Generic-Route\] ERROR: DRC report not found: $drc_rpt"
+    exit 2
+}
 
 puts "\[Generic-Route\] Completed."

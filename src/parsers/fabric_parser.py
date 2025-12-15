@@ -8,6 +8,7 @@ Public API:
 """
 
 from dataclasses import dataclass, asdict, field
+from functools import lru_cache
 from typing import Dict, Any, List, Tuple, Optional
 
 import yaml
@@ -113,6 +114,20 @@ def parse_fabric_file(file_path: str) -> Tuple[Fabric, pd.DataFrame]:
     df = _tile_cells_to_dataframe(tile_definition, cell_definitions)
 
     return fabric, df
+
+
+@lru_cache(maxsize=8)
+def _parse_fabric_file_cached(file_path: str) -> Tuple[Fabric, pd.DataFrame]:
+    return parse_fabric_file(file_path)
+
+
+def parse_fabric_file_cached(file_path: str) -> Tuple[Fabric, pd.DataFrame]:
+    """Cached variant of parse_fabric_file.
+
+    Returns a copy of the DataFrame so callers can safely mutate it.
+    """
+    fabric, df = _parse_fabric_file_cached(file_path)
+    return fabric, df.copy(deep=True)
 
 # Test Usage (Successful)
 if __name__ == "__main__":
