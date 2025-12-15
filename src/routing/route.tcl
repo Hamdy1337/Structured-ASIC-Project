@@ -81,11 +81,23 @@ read_verilog $::env(VERILOG_FILE)
 
 # Link Design
 set design_name $::env(DESIGN_NAME)
-link_design $design_name
-
 # Read Def (Apply placement to the linked design)
-# Use -floorplan_initialize to apply to existing block from link_design
-read_def -floorplan_initialize $::env(DEF_FILE)
+# 1. Initialize Floorplan (Die Area, etc.) using separate FP file to avoid pin duplication
+# Read Def (Apply placement to the linked design)
+# 1. Initialize Floorplan (Die Area) via generated TCL script to avoid ODB errors
+set fp_tcl [string map {".def" "_fp.tcl"} $::env(DEF_FILE)]
+if {[file exists $fp_tcl]} {
+    puts "Sourcing Floorplan from $fp_tcl..."
+    source $fp_tcl
+} else {
+    puts "Error: Floorplan TCL $fp_tcl not found!"
+    exit 1
+}
+
+# 2. Add Components (Incremental)
+read_def -incremental $::env(DEF_FILE)
+
+puts "\[Debug\] Instance Count after DEF load: [llength [get_cells *]]"
 
 # Explicitly generate tracks since they are missing from TLEF/DEF
 make_tracks li1 -x_offset 0.23 -x_pitch 0.46 -y_offset 0.17 -y_pitch 0.34
@@ -112,9 +124,8 @@ if {[catch {global_route -congestion_iterations 100 -verbose} error_msg]} {
 # 3. Detailed Routing
 puts "\[Generic-Route\] Starting Detailed Route..."
 set drc_rpt $::env(OUTPUT_DIR)/${design_name}_drc.rpt
+set_routing_layers -signal met1-met5 -clock met1-met5
 detailed_route \
-               -bottom_routing_layer met1 \
-               -top_routing_layer met5 \
                -output_drc $drc_rpt \
                -output_maze $::env(OUTPUT_DIR)/${design_name}_maze.log \
                -output_guide $::env(OUTPUT_DIR)/${design_name}.guide
@@ -129,9 +140,11 @@ puts "\[Generic-Route\] Skipping parasitic extraction due to missing RCX rules."
 #     # extract_parasitics
 # }
 
-# 5. Report Congestion
+# 5. Report Congestion (optional - command may not exist in all OpenROAD versions)
 puts "\[Generic-Route\] Reporting Congestion..."
-report_congestion -histogram > $::env(OUTPUT_DIR)/${design_name}_congestion.rpt
+if {[catch {report_congestion -histogram > $::env(OUTPUT_DIR)/${design_name}_congestion.rpt} err]} {
+    puts "\[Generic-Route\] Warning: report_congestion not available ($err)"
+}
 
 # Save Outputs
 puts "\[Generic-Route\] Saving outputs..."

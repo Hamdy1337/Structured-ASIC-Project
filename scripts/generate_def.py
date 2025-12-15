@@ -35,13 +35,14 @@ def _snap_to_track(value_um: float, start_um: float, pitch_um: float) -> float:
     return round(start_um + idx * pitch_um, 4)
 
 
-def parse_map_file(map_path: str) -> Set[str]:
-    """Return set of used physical slot names.
 
+def parse_map_file(map_path: str) -> Dict[str, str]:
+    """Return dictionary of physical_slot_name -> logical_instance_name.
+    
     Map file format: <logical_instance_name> <physical_slot_name>
     """
     print(f"Parsing Map: {map_path}")
-    used_physical: Set[str] = set()
+    phys_to_log: Dict[str, str] = {}
     with open(map_path, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
@@ -49,8 +50,10 @@ def parse_map_file(map_path: str) -> Set[str]:
                 continue
             parts = line.split()
             if len(parts) >= 2:
-                used_physical.add(parts[1])
-    return used_physical
+                logical_name = parts[0]
+                physical_name = parts[1]
+                phys_to_log[physical_name] = logical_name
+    return phys_to_log
 
 
 def get_macro_map_from_fabric(fabric) -> Dict[str, str]:
@@ -128,7 +131,9 @@ def generate_def(args):
 
     pins_df, pins_meta = load_and_validate_cached(args.pins)
 
-    used_physical = parse_map_file(args.map)
+    # Dictionary: physical_name -> logical_name
+    phys_to_log = parse_map_file(args.map)
+    
     dbu_per_micron = pins_meta.units.dbu_per_micron
 
     # 2. Load fabric cells using OPTIMIZED parser
@@ -158,12 +163,14 @@ def generate_def(args):
                 continue
             
             # Only include used/placed components (must exist in the Verilog netlist)
-            if physical_name not in used_physical:
+            # Check against map keys (physical names)
+            if physical_name not in phys_to_log:
                 continue
 
+
             # IMPORTANT: DEF component instance names must match the instance names
-            # in the Verilog that OpenROAD reads. Our flow renames Verilog instances
-            # to the physical slot name, so we use the physical slot name here.
+            # in the Verilog that OpenROAD reads. The rename.py script will rename
+            # Verilog instances to match these physical slot names.
             def_comp_name = physical_name
             
             # Do NOT snap cell locations; these are already legalized to the fabric grid.
@@ -177,7 +184,25 @@ def generate_def(args):
 
     # 4. Prepare Pins for DEF
     pins_def_lines = []
-    half_size = 170  # conservative vs pitch to avoid spacing issues
+    
+    # Calculate a safe half-size for pins based on pitch to avoid spacing violations
+    # Use the minimum pitch found in tracks or defaults
+    met2 = pins_meta.tracks.get('met2')
+    met2_pitch_dbu = _um_to_dbu(met2.step_um, dbu_per_micron) if met2 else _um_to_dbu(0.46, dbu_per_micron)
+    
+    # Safe logical pin size is typically 1/3 to 1/2 of the pitch to allow routing on adjacent tracks
+    # Using 1/4 of pitch for half_size gives total width = 1/2 pitch.
+    # e.g. 460 DBU pitch -> 161 DBU half_size -> 322 DBU width (0.322um). Fits on track.
+    # Must round to manufacturing grid (5 DBU) to avoid off-grid errors (DRT-0416)
+    raw_half_size = int(met2_pitch_dbu * 0.35)
+    safe_half_size = int(round(raw_half_size / 5.0) * 5)
+    
+    # Ensure it's not too small to form a valid shape (min width ~0.14um ~140 DBU)
+    # 2 * half_size >= 140 -> half_size >= 70
+    safe_half_size = max(safe_half_size, 70)
+    
+    print(f"Using calculated pin half_size: {safe_half_size} DBU (based on pitch {met2_pitch_dbu} DBU)")
+
     for _, pin in pins_df.iterrows():
         pin_name = str(pin['name'])
         layer = str(pin['layer'])
@@ -188,7 +213,7 @@ def generate_def(args):
         pins_def_lines.append(f"  + DIRECTION {direction}")
         pins_def_lines.append(f"  + USE SIGNAL")
         pins_def_lines.append(f"  + PORT")
-        pins_def_lines.append(f"    + LAYER {layer} ( -{half_size} -{half_size} ) ( {half_size} {half_size} )")
+        pins_def_lines.append(f"    + LAYER {layer} ( -{safe_half_size} -{safe_half_size} ) ( {safe_half_size} {safe_half_size} )")
         pins_def_lines.append(f"    + FIXED ( {x_int} {y_int} ) N")
         pins_def_lines.append("  ;")
 
@@ -218,6 +243,21 @@ def generate_def(args):
             f.write(f"{line}\n")
         f.write("END PINS\n")
         f.write("END DESIGN\n")
+
+    # Write Floorplan TCL initialization script (Using High Level Command with Link)
+    fp_tcl = args.output.replace('.def', '_fp.tcl')
+    print(f"Writing Floorplan TCL to {fp_tcl}...")
+    
+    # Use Microns for initialize_floorplan
+    width_um = pins_meta.die.width_um
+    height_um = pins_meta.die.height_um
+    
+    with open(fp_tcl, 'w', encoding='utf-8') as f:
+        f.write("# Floorplan Initialization Script\n")
+        # Ensure design is linked for STA/Floorplan check
+        f.write(f"catch {{link_design {args.design_name}}}\n")
+        f.write(f"initialize_floorplan -site unithd -die_area \"0 0 {width_um} {height_um}\" -core_area \"0 0 {width_um} {height_um}\"\n")
+        f.write(f"puts \"\\[Floorplan\\] Die/Core Area set via initialize_floorplan: 0 0 {width_um} {height_um}\"\n")
         
     print(f"Done. Output at {args.output}")
 

@@ -12,8 +12,9 @@ from dataclasses import dataclass, field
 import pandas as pd
 import numpy as np
 
-# Add src to path to allow imports
-sys.path.append(str(Path(__file__).parent.parent))
+# Add project root to sys.path so `import src.*` works when running as a script
+project_root_for_imports = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(project_root_for_imports))
 
 from src.parsers.fabric_cells_parser import parse_fabric_cells_file
 from src.parsers.fabric_db import get_fabric_db
@@ -284,22 +285,76 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
     
     # 4. CTS Implementation
     print("Running CTS...")
-    # Find Sinks (DFFs)
-    # sky130 DFFs usually have 'df' in the name (e.g. dfbbp, dfrtp)
-    dff_mask = mapped_placement['cell_type'].str.contains('df', case=False, na=False)
-    print(f"Rows matching 'df': {dff_mask.sum()}")
+    # Find Sinks - Use ALL DFFs from fabric (both used and unused)
+    print("\n" + "="*80)
+    print("Creating clock tree sinks from ALL fabric DFFs...")
+    print("="*80)
     
-    sinks_df = mapped_placement[dff_mask]
     sinks = []
-    for _, row in sinks_df.iterrows():
-        sinks.append(TreeNode(x=row['x_um'], y=row['y_um'], cell_name=row['cell_name'], is_sink=True))
+    used_dff_logical_names = {}  # Map physical -> logical for used DFFs
     
-    print(f"Found {len(sinks)} clock sinks.")
+    # First, add USED DFFs (they have logical names from netlist)
+    dff_mask = mapped_placement['cell_type'].str.contains('df', case=False, na=False)
+    used_dffs = mapped_placement[dff_mask]
+    
+    print(f"Adding {len(used_dffs)} used DFFs to clock tree...")
+    for _, row in used_dffs.iterrows():
+        sinks.append(TreeNode(
+            x=row['x_um'], 
+            y=row['y_um'], 
+            cell_name=row['cell_name'],  # Existing logical name
+            is_sink=True,
+            physical_name=row['physical_cell_name'] # Keep physical name
+        ))
+        used_dff_logical_names[row['physical_cell_name']] = row['cell_name']
+    
+    # Then, add UNUSED DFFs (create logical names for them)
+    # Find unused cells that are DFFs
+    unused_dffs_indices = []
+    for idx, phys_name in enumerate(unused_cells):
+        ctype = physical_to_type.get(phys_name, 'UNKNOWN')
+        if 'df' in ctype.lower():
+            unused_dffs_indices.append(phys_name)
+    
+    # Get coordinates for unused DFFs
+    # Filter fabric_cells_df to get their coordinates
+    unused_dffs_df = fabric_cells_df[fabric_cells_df['cell_name'].isin(unused_dffs_indices)]
+    
+    print(f"Adding {len(unused_dffs_df)} unused DFFs to clock tree...")
+    unused_dff_logical_names = {}  # Map physical -> logical for unused DFFs
+    
+    for idx, row in unused_dffs_df.iterrows():
+        phys_name = row['cell_name']
+        # Create a logical name for the unused DFF
+        logical_name = f"unused_dff_{idx}"
+        
+        sinks.append(TreeNode(
+            x=row['cell_x'],
+            y=row['cell_y'],
+            cell_name=logical_name,  # New logical name
+            is_sink=True,
+            physical_name=phys_name # Crucial for adding to netlist
+        ))
+        unused_dff_logical_names[phys_name] = logical_name
+    
+    print(f"\nTotal clock sinks: {len(sinks)}")
+    print(f"  - Used DFFs: {len(used_dffs)}")
+    print(f"  - Unused DFFs: {len(unused_dffs_df)}")
+    
+    # CTS visualization data (always initialized so downstream steps don't crash)
+    cts_data = {
+        'sinks': [{'name': s.cell_name, 'x': float(s.x), 'y': float(s.y)} for s in sinks],
+        'buffers': [],
+        'connections': []
+    }
     
     # Build Tree
     # Simple recursive geometric clustering
     # We need to manage unused buffers as a resource pool with location
+    print("\n" + "="*80)
     print("Building buffer pool...")
+    print("="*80)
+    
     # Optimize: Filter fabric_cells_df directly instead of looping
     # unused_buffers is a list of strings
     buffer_pool_df = fabric_cells_df[fabric_cells_df['cell_name'].isin(unused_buffers)][['cell_name', 'cell_x', 'cell_y']].copy()
@@ -307,32 +362,57 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
     
     print(f"Buffer pool size: {len(buffer_pool_df)}")
     
+    # OPTIMIZATION: Convert to set for O(1) lookup
     used_buffers = set()
     
+    # OPTIMIZATION: Pre-compute buffer coordinates as numpy array for vectorized distance calc
+    buffer_coords_array = buffer_pool_df[['x', 'y']].values.astype(np.float32)
+    buffer_names_array = buffer_pool_df['name'].values
+    
+    # OPTIMIZATION: Boolean mask for available buffers (True = available)
+    # This is much faster than checking isin() or sets for every query
+    buffer_availability_mask = np.ones(len(buffer_names_array), dtype=bool)
+    
     def get_nearest_buffer(target_x, target_y):
-        if buffer_pool_df.empty:
+        if len(buffer_pool_df) == 0:
             return None
         
-        # Filter out used
-        # Optimization: maintain a mask or just drop used rows?
-        # Since we only use ~150 buffers out of 22k, filtering is okay.
-        # But 'isin' check can be slow if used_buffers is large.
-        # However, used_buffers is small here.
+        # Check if any available using mask
+        if not buffer_availability_mask.any():
+            return None
         
-        available = buffer_pool_df[~buffer_pool_df['name'].isin(used_buffers)]
-        if available.empty:
+        # Vectorized Manhattan distance calculation on AVAILABLE buffers only
+        # We use boolean indexing to get subset
+        available_indices = np.where(buffer_availability_mask)[0]
+        available_coords = buffer_coords_array[available_indices]
+        
+        distances = np.abs(available_coords[:, 0] - target_x) + np.abs(available_coords[:, 1] - target_y)
+        
+        if len(distances) == 0:
             return None
             
-        # Simple distance
-        # vectorized calculation
-        dist = (available['x'] - target_x).abs() + (available['y'] - target_y).abs()
-        nearest_idx = dist.idxmin()
-        nearest = available.loc[nearest_idx]
-        used_buffers.add(nearest['name'])
-        return nearest
+        nearest_relative_idx = np.argmin(distances)
+        
+        # Map back to original index
+        original_idx = available_indices[nearest_relative_idx]
+        
+        nearest_name = buffer_names_array[original_idx]
+        nearest_x = float(buffer_coords_array[original_idx, 0])
+        nearest_y = float(buffer_coords_array[original_idx, 1])
+        
+        # Mark as used
+        buffer_availability_mask[original_idx] = False
+        used_buffers.add(nearest_name) # Keep for verification if needed
+        
+        return {'name': nearest_name, 'x': nearest_x, 'y': nearest_y}
+
+
     
     new_buffers = {} # logical_name -> physical_name
     new_nets = {} # net_name -> bits
+
+    # Ensure this exists even if we skip tie insertion
+    selected_tie_cells: List[str] = []
     
     # Get module from parsed data (top_module_name already found by parser)
     module = netlist_data["modules"][top_module_name]
@@ -468,8 +548,6 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
         # If len(sinks) > 1, root_node will be a buffer.
         
         # Traverse and Update Netlist
-        
-        # Traverse and Update Netlist
         # Find max net bit to allocate new bits
         max_net_bit = 0
         for net_data in module['netnames'].values():
@@ -477,14 +555,49 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
                 if isinstance(bit, int):
                     max_net_bit = max(max_net_bit, bit)
         
+        # Build a cache of cell_type -> port_directions from existing cells
+        # This will be used for Power-Down ECO
+        print("\nBuilding cell type port directions cache...")
+        cell_type_port_directions = {}
+        for cell_name, cell_data in module['cells'].items():
+            cell_type = cell_data.get('type', 'UNKNOWN')
+            if cell_type not in cell_type_port_directions:
+                port_directions = cell_data.get('port_directions', {})
+                if port_directions:
+                    cell_type_port_directions[cell_type] = port_directions.copy()
+        print(f"Found port_directions for {len(cell_type_port_directions)} cell types")
+
         next_net_bit = max_net_bit + 1
         
         def traverse_update(node, input_net_bit):
             nonlocal next_net_bit
             
             if node.is_sink:
-                # Disconnect DFF from original clock, connect to input_net_bit
-                cell = module['cells'][node.cell_name]
+                # DFF Connection
+                cell_name = node.cell_name
+                
+                # Check if it's an unused DFF (not in netlist yet)
+                if cell_name not in module['cells']:
+                    if not node.physical_name:
+                        print(f"Error: Unused DFF {cell_name} has no physical name!")
+                        return
+                    
+                    # Determine type
+                    ctype = 'sky130_fd_sc_hd__dfbbp_1' # Default
+                    if node.physical_name in physical_to_type:
+                        ctype = physical_to_type[node.physical_name]
+                    elif '__' in node.physical_name:
+                        ctype = node.physical_name.split('__', 1)[1]
+                        
+                    # Add to netlist
+                    module['cells'][cell_name] = {
+                        'type': ctype,
+                        'connections': {},
+                        'attributes': {'physical_name': node.physical_name, 'unused_dff': True}
+                    }
+                
+                cell = module['cells'][cell_name]
+                # Connect CLK. Assumes CLK pin is named 'CLK'.
                 cell['connections']['CLK'] = [input_net_bit]
                 return
             
@@ -496,27 +609,34 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
             net_name = f"cts_net_{output_net_bit}"
             module['netnames'][net_name] = {'bits': [output_net_bit], 'attributes': {}}
             
+            # Determine buffer type and output pin
+            phys_name = node.physical_name
+            if '__' in phys_name:
+                template = phys_name.split('__', 1)[1]
+            else:
+                # Fallback if somehow physical name is bad
+                template = 'sky130_fd_sc_hd__buf_1'
+            
+            # Determine output pin: Inverters use 'Y', Buffers use 'X'
+            out_pin = 'Y' if 'inv' in template.lower() else 'X'
+            
             # Add cell
             module['cells'][node.cell_name] = {
-                'type': 'sky130_fd_sc_hd__buf_1', # Assuming type
+                'type': template,
                 'connections': {
                     'A': [input_net_bit],
-                    'X': [output_net_bit]
+                    out_pin: [output_net_bit] # Dynamic pin name
                 },
-                'attributes': {} # Add physical mapping?
+                'attributes': {'physical_name': phys_name, 'is_cts_buffer': True}
             }
             
             # Recurse
             for child in node.children:
                 traverse_update(child, output_net_bit)
 
+
         if isinstance(root_node, TreeNode):
-            # Initialize CTS Data for Visualization EARLY
-            cts_data = {
-                'sinks': [{'name': s.cell_name, 'x': float(s.x), 'y': float(s.y)} for s in sinks],
-                'buffers': [],
-                'connections': []
-            }
+            # cts_data already initialized above
             
             # NEW: Connect Clock Pin to Root Node
             if pins_path:
@@ -606,6 +726,41 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
             with open(cts_json_path, 'w') as f:
                 json.dump(cts_data, f, indent=2)
             print(f"CTS data written to {cts_json_path}")
+    else:
+        print("CTS skipped (could not identify clock net).")
+        cts_json_path = Path(output_dir) / f"{design_name}_cts.json"
+        with open(cts_json_path, 'w') as f:
+            json.dump(cts_data, f, indent=2)
+        print(f"CTS data written to {cts_json_path}")
+
+    # In CTS visualization mode, avoid the very expensive ECO passes.
+    # Still write a CTS-only .map so naming can be validated downstream.
+    if skip_verilog:
+        print("Writing CTS-only ECO placement map (skip_verilog mode)...")
+
+        eco_map_path = Path(output_dir) / f"{design_name}_eco.map"
+        with open(eco_map_path, 'w') as f:
+            f.write(f"# ECO-updated placement mapping file for {design_name}\n")
+            f.write("# Format: logical_cell_name physical_cell_name\n")
+            f.write("# Generated by htree_builder.py ECO flow (CTS-only mode)\n\n")
+
+            original_count = 0
+            for _, row in map_df.iterrows():
+                f.write(f"{row['cell_name']} {row['physical_cell_name']}\n")
+                original_count += 1
+
+            f.write("\n# CTS buffer mappings\n")
+            cts_count = 0
+            for buf in cts_data.get('buffers', []):
+                if buf.get('physical_name') == 'PIN' or str(buf.get('name', '')).startswith('PIN_'):
+                    continue
+                f.write(f"{buf['name']} {buf['physical_name']}\n")
+                cts_count += 1
+
+        print(f"CTS-only .map written to {eco_map_path}")
+        print(f"  - Original mappings: {original_count}")
+        print(f"  - CTS buffers: {cts_count}")
+        return
         
     # 6. Power-Down ECO: Tie unused logic cells
     print("Implementing Power-Down ECO...")
@@ -619,12 +774,13 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
             port_directions = cell_data.get('port_directions', {})
             if port_directions:
                 cell_type_port_directions[cell_type] = port_directions.copy()
-    
+
     print(f"Found port_directions for {len(cell_type_port_directions)} cell types")
     
     # Step 2: Distributed tie cell approach
     if not unused_ties:
         print("Warning: No unused tie cells (conb_1) found. Skipping Power-Down ECO.")
+        selected_tie_cells = []
     else:
         # Pre-count how many unused logic cells will actually be tied
         # (Many get filtered out: taps, decaps, no inputs, no port info)
@@ -676,80 +832,30 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
             
             cells_that_will_be_tied += 1
         
-        # Calculate how many tie cells we need based on ACTUAL cells that will be tied
-        # Fanout limit: 1000 cells per tie cell (reasonable for power/ground nets)
-        MAX_FANOUT_PER_TIE = 1000
-        num_tie_cells_needed = max(1, math.ceil(cells_that_will_be_tied / MAX_FANOUT_PER_TIE))
-        num_tie_cells_needed = min(num_tie_cells_needed, len(unused_ties))  # Don't exceed available
+        # Use ALL available tie cells to minimize fanout per tie net
+        # With thousands of tie cells in the fabric, there's no reason to limit
+        # This dramatically reduces per-net fanout for better routability
+        num_tie_cells_needed = len(unused_ties)  # Use ALL available tie cells
+        
+        expected_fanout = cells_that_will_be_tied / max(1, num_tie_cells_needed)
         
         print(f"Power-Down ECO: {len(unused_logic)} unused logic cells identified")
         print(f"  - Will tie: {cells_that_will_be_tied} cells")
         print(f"  - Skipped: {skipped_taps_decap} (taps/decap/conb), {skipped_no_inputs} (no inputs), {skipped_no_port_info} (no port info), {skipped_unknown} (unknown type)")
-        print(f"  - Need {num_tie_cells_needed} tie cells (fanout limit: {MAX_FANOUT_PER_TIE} per tie cell)")
-        print(f"  - Available: {len(unused_ties)} unused tie cells")
+        print(f"  - Using ALL {num_tie_cells_needed} available tie cells")
+        print(f"  - Expected fanout per tie cell: ~{int(expected_fanout)} terminals")
         
-        # Select tie cells distributed spatially across the fabric
-        # Get coordinates for all unused tie cells
+        # Use ALL available tie cells - no need for grid-based subsampling
+        # Get coordinates for spatial assignment of unused cells to nearest tie cell
         tie_cell_coords = []
         for tie_phys_name in unused_ties:
             coords = physical_to_coords.get(tie_phys_name)
             if coords:
                 tie_cell_coords.append((tie_phys_name, coords[0], coords[1]))
-        
-        if not tie_cell_coords:
-            print("Warning: Could not get coordinates for tie cells. Using first available.")
-            selected_tie_cells = unused_ties[:num_tie_cells_needed]
-        else:
-            # Sort by coordinates and select evenly distributed ones
-            # Simple approach: divide into grid regions and pick one from each
-            tie_df = pd.DataFrame(tie_cell_coords, columns=['physical_name', 'x', 'y'])
-            
-            # Use k-means-like approach: divide into num_tie_cells_needed regions
-            if num_tie_cells_needed == 1:
-                # Just pick the one closest to center
-                center_x = tie_df['x'].mean()
-                center_y = tie_df['y'].mean()
-                tie_df['dist_to_center'] = ((tie_df['x'] - center_x)**2 + (tie_df['y'] - center_y)**2)**0.5
-                selected_tie_cells = [tie_df.loc[tie_df['dist_to_center'].idxmin(), 'physical_name']]
-            else:
-                # Divide into grid and pick closest to center of each grid cell
-                x_min, x_max = tie_df['x'].min(), tie_df['x'].max()
-                y_min, y_max = tie_df['y'].min(), tie_df['y'].max()
-                
-                # Calculate grid dimensions (roughly square)
-                grid_size = int(math.ceil(math.sqrt(num_tie_cells_needed)))
-                x_step = (x_max - x_min) / grid_size if x_max > x_min else 1
-                y_step = (y_max - y_min) / grid_size if y_max > y_min else 1
-                
-                selected_tie_cells = []
-                for i in range(grid_size):
-                    for j in range(grid_size):
-                        if len(selected_tie_cells) >= num_tie_cells_needed:
-                            break
-                        # Center of this grid cell
-                        grid_center_x = x_min + (i + 0.5) * x_step
-                        grid_center_y = y_min + (j + 0.5) * y_step
-                        
-                        # Find tie cell closest to this grid center
-                        tie_df['dist_to_grid_center'] = (
-                            (tie_df['x'] - grid_center_x)**2 + 
-                            (tie_df['y'] - grid_center_y)**2
-                        )**0.5
-                        
-                        # Exclude already selected cells
-                        available = tie_df[~tie_df['physical_name'].isin(selected_tie_cells)]
-                        if len(available) > 0:
-                            closest = available.loc[available['dist_to_grid_center'].idxmin(), 'physical_name']
-                            selected_tie_cells.append(closest)
-                    if len(selected_tie_cells) >= num_tie_cells_needed:
-                        break
-                
-                # If we didn't get enough, fill with remaining
-                remaining = [t for t in unused_ties if t not in selected_tie_cells]
-                while len(selected_tie_cells) < num_tie_cells_needed and remaining:
-                    selected_tie_cells.append(remaining.pop(0))
-        
-        print(f"Selected {len(selected_tie_cells)} tie cells for distribution")
+
+        # Use ALL tie cells (we already set num_tie_cells_needed = len(unused_ties))
+        selected_tie_cells = unused_ties.copy() if isinstance(unused_ties, list) else list(unused_ties)
+        print(f"Using ALL {len(selected_tie_cells)} tie cells for distribution")
         
         # Find max net bit (in case CTS added nets)
         max_net_bit = 0
@@ -807,7 +913,7 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
                 }
             }
         
-        print(f"Added {len(selected_tie_cells)} tie cells with local nets")
+            print(f"Added {len(selected_tie_cells)} tie cells with local nets")
         
         # Step 5: Helper function to determine if a port should be tied high or low
         def should_tie_high(port_name: str) -> bool:
@@ -849,6 +955,16 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
                 optimal_vectors = json.load(f)
         else:
             print("Warning: leakage_optimal_vectors.json not found. Using default tying logic.")
+
+        if 'unused_dffs_df' in locals() and unused_dffs_df is not None:
+             # Exclude DFFs intended for clock tree from generic unused logic handling
+             dff_phys_set = set(unused_dffs_df['cell_name'].astype(str))
+             original_len = len(unused_logic)
+             if isinstance(unused_logic, set):
+                 unused_logic = unused_logic - dff_phys_set
+             else:
+                 unused_logic = [u for u in unused_logic if u not in dff_phys_set]
+             print(f"Filtered {len(dff_phys_set)} unused DFFs from unused logic list (Size: {original_len} -> {len(unused_logic)})")
 
         for phys_name in unused_logic:
             # Get cell type from physical name
@@ -1025,6 +1141,90 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
 
     print(f"Sanitization Complete. Fixed {count_fixed} buffers (skipped inverters).")
     
+    # -------------------------------------------------------------------------
+    # NEW: Instantiate Remaining Fabric Cells in Netlist
+    # To ensure DEF and Verilog are consistent, all cells in fabric (which go into .map/DEF)
+    # MUST be present in the Verilog netlist.
+    # -------------------------------------------------------------------------
+    print("\nInstantiating remaining fabric cells in netlist (for DEF/Verilog consistency)...")
+    
+    # Build reverse map of current netlist (physical -> logical)
+    # We need to know which physical cells are ALREADY used.
+    # Note: 'attributes.physical_name' is set for everything we added/sanitized.
+    # For original cells, it's in 'attributes' if we put it there? 
+    # Or in 'map_df' (mapped_placement).
+    
+    # Let's collect all physical names currently claimed.
+    claimed_physicals = set()
+    
+    # 1. From placement map
+    for _, row in map_df.iterrows():
+        claimed_physicals.add(row['physical_cell_name'])
+        
+    # 2. From module cells (checking attributes)
+    for cell_name, cell_data in module['cells'].items():
+        phys = cell_data.get('attributes', {}).get('physical_name')
+        if phys:
+            claimed_physicals.add(phys)
+            
+    # 3. From CTS buffers (redundant check but safe)
+    for buf in cts_data['buffers']:
+        if buf.get('physical_name'):
+             claimed_physicals.add(buf['physical_name'])
+             
+    # Iterate ALL fabric cells
+    instantiated_count = 0
+    fabric_inst_count = 0
+    
+    for idx, row in fabric_cells_df.iterrows():
+        phys_name = str(row['cell_name'])
+        
+        if phys_name in claimed_physicals:
+            continue
+            
+        # Needs instantiation
+        logical_name = f"fabric_{phys_name}"
+        
+        # Determine type
+        ctype = 'UNKNOWN'
+        if phys_name in physical_to_type:
+            ctype = physical_to_type[phys_name]
+        elif '__' in phys_name:
+            template = phys_name.split('__', 1)[1]
+            ctype = template # Assume template is the type name
+            
+        if ctype == 'UNKNOWN':
+            # Try to look it up in template_to_type if available or skip
+            # We must instantiate it to match DEF. If type is unknown, Verilog creation might fail if we don't handle ports.
+            # But for fillers/taps, maybe it's fine.
+            if 'template_to_type' in locals():
+                 # template_to_type was defined way up, might not be visible here?
+                 # It was defined in 'Identifying resources' block. 
+                 # Let's re-extract
+                 if '__' in phys_name:
+                      t = phys_name.split('__', 1)[1]
+                      # We don't have the map here easily without reloading or passing it.
+                      pass
+            pass
+            
+        # Add to netlist
+        # We leave connections empty. Taps/Decaps typically have internal connections or abutment.
+        # If they have Inputs, they technically should be tied.
+        # But for now, just existence is key for DEF loading.
+        module['cells'][logical_name] = {
+            'type': ctype,
+            'connections': {},
+            'attributes': {'physical_name': phys_name, 'is_remaining_fabric': True}
+        }
+        
+        claimed_physicals.add(phys_name)
+        instantiated_count += 1
+        
+        if instantiated_count % 50000 == 0:
+             print(f"  Instantiated {instantiated_count} remaining cells...")
+
+    print(f"Added {instantiated_count} remaining fabric cells to netlist.")
+    
     print("Generating Verilog...")
     writer = VerilogWriter(top_module_name, module['ports'], module['cells'], module['netnames'])
     verilog_code = writer.generate()
@@ -1050,9 +1250,17 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
     # Generate ECO-updated .map file
     # This includes original placements + CTS buffers + tie cells + unused cells
     # =========================================================================
-    print("\nGenerating ECO-updated .map file...")
+    # =========================================================================
+    # Generate ECO-updated .map file
+    # This includes original placements + CTS buffers + tie cells + unused cells
+    # =========================================================================
+    print("\nGenerating ECO-updated .map file with ALL fabric cells...")
     
     eco_map_path = Path(output_dir) / f"{design_name}_eco.map"
+    
+    # Track which physical cells have been written to avoid duplicates
+    written_physicals = set()
+    
     with open(eco_map_path, 'w') as f:
         f.write(f"# ECO-updated placement mapping file for {design_name}\n")
         f.write("# Format: logical_cell_name physical_cell_name\n")
@@ -1061,43 +1269,139 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
         # 1. Original mappings from placement
         original_count = 0
         for _, row in map_df.iterrows():
-            f.write(f"{row['cell_name']} {row['physical_cell_name']}\n")
+            phys = row['physical_cell_name']
+            f.write(f"{row['cell_name']} {phys}\n")
+            written_physicals.add(phys)
             original_count += 1
-        
-        f.write(f"\n# CTS buffer mappings\n")
+            
         # 2. CTS buffer mappings
+        f.write(f"\n# CTS buffer mappings\n")
         cts_count = 0
         for buf in cts_data['buffers']:
-            f.write(f"{buf['name']} {buf['physical_name']}\n")
+            # Do not include the synthetic PIN node in the placement map.
+            if buf.get('physical_name') == 'PIN' or str(buf.get('name', '')).startswith('PIN_'):
+                continue
+            phys = buf['physical_name']
+            f.write(f"{buf['name']} {phys}\n")
+            written_physicals.add(phys)
             cts_count += 1
-        
-        f.write(f"\n# Tie cell mappings\n")
+            
         # 3. Tie cell mappings
+        f.write(f"\n# Tie cell mappings\n")
         tie_count = 0
         for idx, tie_phys_name in enumerate(selected_tie_cells):
+            phys = tie_phys_name
             tie_logical_name = f"tie_cell_{idx}"
-            f.write(f"{tie_logical_name} {tie_phys_name}\n")
+            f.write(f"{tie_logical_name} {phys}\n")
+            written_physicals.add(phys)
             tie_count += 1
-        
-        f.write(f"\n# Unused logic cell mappings\n")
-        # 4. Unused logic cell mappings
-        unused_count = 0
+            
+        # 4. Unused DFF mappings (added for complete clock coverage)
+        f.write(f"\n# Unused DFF mappings (added for complete clock coverage)\n")
+        dff_count = 0
         for cell_name, cell_data in module['cells'].items():
-            if cell_name.startswith('unused_'):
-                # Extract physical name from attributes or from the cell name itself
-                phys_name = cell_data.get('attributes', {}).get('physical_name')
-                if not phys_name:
-                    # Fallback: extract from cell name (unused_{physical_name})
-                    phys_name = cell_name[7:]  # Remove 'unused_' prefix
-                f.write(f"{cell_name} {phys_name}\n")
-                unused_count += 1
-    
+            if cell_data.get('attributes', {}).get('unused_dff', False):
+                phys = cell_data.get('attributes', {}).get('physical_name')
+                if phys:
+                    phys = str(phys).strip()
+                    f.write(f"{cell_name} {phys}\n")
+                    written_physicals.add(phys)
+                    dff_count += 1
+        
+        # 5. Unused logic cell mappings (tied for power-down)
+        f.write(f"\n# Unused logic cell mappings (tied for power-down)\n")
+        unused_logic_count = 0
+        for cell_name, cell_data in module['cells'].items():
+            # Check for 'unused_' prefix and ensure it's not one of the DFFs we just wrote
+            if cell_name.startswith('unused_') and not cell_data.get('attributes', {}).get('unused_dff', False):
+                phys = cell_data.get('attributes', {}).get('physical_name')
+                
+                # Fallback extraction
+                if not phys:
+                    phys = cell_name[7:]
+                
+                if phys:
+                    phys = str(phys).strip()
+                    f.write(f"{cell_name} {phys}\n")
+                    written_physicals.add(phys)
+                    unused_logic_count += 1
+                
+        # 6. Remaining Fabric Cells (The duplicate counting fix!)
+        f.write(f"\n# Remaining Unused Fabric Cells\n")
+        remaining_count = 0
+        
+        print(f"Processing remaining fabric cells (Total: {len(fabric_cells_df)})...")
+        # We can optimize this but let's just loop for correctness
+        for idx, row in fabric_cells_df.iterrows():
+            phys = str(row['cell_name']).strip()
+            
+            if phys not in written_physicals:
+                # Name it fabric_<physical_name>
+                f.write(f"fabric_{phys} {phys}\n")
+                remaining_count += 1
+                
+                # Optional: print progress for large fabrics
+                if remaining_count % 50000 == 0:
+                     print(f"  Written {remaining_count} remaining fabric cells...")
+
+    total = original_count + cts_count + tie_count + dff_count + unused_logic_count + remaining_count
     print(f"ECO .map file written to {eco_map_path}")
     print(f"  - Original mappings: {original_count}")
     print(f"  - CTS buffers: {cts_count}")
     print(f"  - Tie cells: {tie_count}")
-    print(f"  - Unused cells: {unused_count}")
-    print(f"  - Total: {original_count + cts_count + tie_count + unused_count}")
+    print(f"  - Unused DFFs: {dff_count}")
+    print(f"  - Unused logic: {unused_logic_count}")
+    print(f"  - Remaining fabric: {remaining_count}")
+    print(f"  - TOTAL MAP ENTRIES: {total}")
+    print(f"  - Expected fabric cells: {len(fabric_cells_df)}")
+    
+    
+    if total != len(fabric_cells_df):
+        print(f"  [WARNING] Mismatch! Missing {len(fabric_cells_df) - total} cells")
+    else:
+        print(f"  [SUCCESS] Map file contains ALL fabric cells!")
+
+    # =========================================================================
+    # 7. Generate CTS Visualization
+    # =========================================================================
+    try:
+        from src.Visualization.cts_plotter import plot_cts_tree_interactive
+        
+        print("\nGenerating CTS Visualization...")
+        # We need a CTS JSON file for the plotter. 
+        # The current script writes `cts_data` (dictionary) to file earlier?
+        # Let's check where cts_data is written or if we need to write it.
+        # It seems we haven't written cts_data to JSON yet in this function! 
+        # We must write it first.
+        
+        cts_json_path = Path(output_dir) / f"{design_name}_cts.json"
+        with open(cts_json_path, 'w') as f:
+            json.dump(cts_data, f, indent=2)
+        print(f"CTS Data written to {cts_json_path}")
+        
+        vis_output_path = Path(output_dir) / "cts_visualization.html"
+        
+        # Placement CSV is needed. It's usually in build/design/design_placement.csv
+        placement_csv = Path(output_dir) / f"{design_name}_placement.csv"
+        
+        if placement_csv.exists():
+            plot_cts_tree_interactive(
+                placement_csv=str(placement_csv),
+                fabric_cells_yaml=fabric_cells_path, # Passed but unused
+                cts_json=str(cts_json_path),
+                output_path=str(vis_output_path),
+                design_name=design_name
+            )
+        else:
+            print(f"Warning: Placement CSV not found at {placement_csv}, skipping visualization.")
+            
+    except ImportError:
+        print("Warning: Could not import src.Visualization.cts_plotter. Skipping visualization.")
+    except Exception as e:
+        print(f"Error generating visualization: {e}")
+
+
+
 
 if __name__ == "__main__":
     import argparse

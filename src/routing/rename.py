@@ -1,6 +1,19 @@
+import argparse
 import os
 import sys
 import re
+
+# Add root directory to sys.path to allow importing src modules
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
+try:
+    from src.parsers.fabric_parser import parse_fabric_file_cached
+except ImportError:
+    # Fallback or error if not found (should be there)
+    print("Warning: Could not import src.parsers.fabric_parser. Module renaming may fail.")
+    parse_fabric_file_cached = None
 
 # Keywords to preserve (not an exhaustive list, but covers structural Verilog)
 KEYWORDS = {
@@ -12,20 +25,43 @@ KEYWORDS = {
     "table", "endtable", "specify", "endspecify", "initial"
 }
 
+def get_module_map(fabric_path):
+    """Load macro map from fabric.yaml: template_name -> cell_type (sky130...)"""
+    if not parse_fabric_file_cached:
+        print("Warning: parse_fabric_file_cached not available. Module renaming skipped.")
+        return {}
+    
+    print(f"Loading fabric from {fabric_path} for module renaming...")
+    fabric, _ = parse_fabric_file_cached(fabric_path)
+    if not fabric:
+        print("Warning: Failed to load fabric. Module renaming skipped.")
+        return {}
+    
+    # Use SAME logic as generate_def.py's get_macro_map_from_fabric
+    macro_map = {}
+    tile_def = getattr(fabric, 'tile_definition', {}) or {}
+    for cell in tile_def.get('cells', []) or []:
+        try:
+            template_name = cell['template_name']
+            cell_type = cell['cell_type']
+            macro_map[str(template_name)] = str(cell_type)
+        except Exception:
+            continue
+            
+    print(f"Loaded {len(macro_map)} module mappings.")
+    if len(macro_map) > 0:
+        # Print a few examples for verification
+        examples = list(macro_map.items())[:3]
+        print(f"  Examples: {examples}")
+    return macro_map
+
 def sanitize_token(match):
     token = match.group(0)
-    # If it's a keyword, return as is
     if token in KEYWORDS:
         return token
-    
-    # Replace invalid characters with underscore
-    # $ . : \
-    new_token = token.replace("$", "_").replace(".", "_").replace(":", "_").replace("\\", "_")
-    
-    # Collapse multiple underscores if desired, but simple replacement is safer for uniqueness
-    return new_token
+    return token.replace("$", "_").replace(".", "_").replace(":", "_").replace("\\", "_")
 
-def rename_instances(design_name):
+def rename_instances(design_name, fabric_path=None):
     # Paths
     build_dir = os.path.join("build", design_name)
     verilog_path = os.path.join(build_dir, f"{design_name}_final.v")
@@ -35,50 +71,34 @@ def rename_instances(design_name):
     print(f"Processing design: {design_name}")
     print(f"Reading map: {map_path}")
     print(f"Reading verilog: {verilog_path}")
-    print(f"Output: {output_path}")
-
-    if not os.path.exists(map_path):
-        print(f"Error: Map file not found: {map_path}")
-        sys.exit(1)
-    if not os.path.exists(verilog_path):
-        print(f"Error: Verilog file not found: {verilog_path}")
-        sys.exit(1)
-
-    # 1. Load mapping and sanitize keys
-    mapping = {}
-    with open(map_path, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            parts = line.split()
-            if len(parts) != 2:
-                continue
-            logical, physical = parts
-            
-            # Sanitize the LOGICAL key using the same logic we will apply to Verilog
-            # We must use the regex logic to simulate how it would be tokenized/sanitized
-            # But the key is a single token.
-            # We just apply the replacement directly.
-            clean_logical = logical.replace("$", "_").replace(".", "_").replace(":", "_").replace("\\", "_")
-            mapping[clean_logical] = physical
-
-    print(f"Loaded {len(mapping)} mappings (sanitized keys).")
-
-    # Regex to find identifiers
-    # Matches words starting with letter, _, $, or \
-    # Followed by any number of word chars, ., :, $, \
-    # We use a negative lookahead to avoid capturing ranges? No, ranges start with [
-    # This regex is for individual tokens.
-    identifier_pattern = re.compile(r'(?<![\w\.])([a-zA-Z_\\$][\w\.:\\$]*)')
-    # (?<![\w\.]) is a lookbehind to ensure we match start of word.
     
-    # Regex to capture instance declarations for renaming
-    # This assumes the line has been sanitized already!
-    # Pattern: spaces cell_type spaces instance_name spaces (
+    # Load Module Map (Template -> Physical)
+    module_map = {}
+    if fabric_path:
+        module_map = get_module_map(fabric_path)
+
+    # Load Instance Map (Logical Inst -> TXY_Inst)
+    inst_map = {}
+    if os.path.exists(map_path):
+        with open(map_path, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"): continue
+                parts = line.split()
+                if len(parts) == 2:
+                    logical, physical = parts
+                    clean_logical = logical.replace("$", "_").replace(".", "_").replace(":", "_").replace("\\", "_")
+                    inst_map[clean_logical] = physical
+        print(f"Loaded {len(inst_map)} instance mappings.")
+    else:
+        print(f"Warning: Map file {map_path} not found. Instance renaming skipped.")
+
+    identifier_pattern = re.compile(r'(?<![\w\.])([a-zA-Z_\\$][\w\.:\\$]*)')
+    # Capture: (Indent+ModuleType+Space)(InstanceName)(Space+Paren)
     instance_pattern = re.compile(r"^(\s*[\w]+\s+)([\w]+)(\s*\()", re.MULTILINE)
 
-    replaced_count = 0
+    replaced_inst_count = 0
+    replaced_mod_count = 0
     
     with open(verilog_path, 'r') as fin, open(output_path, 'w') as fout:
         for line in fin:
@@ -86,43 +106,59 @@ def rename_instances(design_name):
                 fout.write(line)
                 continue
 
-            # 2. Sanitize the entire line first
-            # This converts "wire $abc;" to "wire _abc;"
-            # And "sky130.. $abc (..)" to "sky130.. _abc (..)"
+            # 1. Sanitize entire line (token replacement)
             sanitized_line = identifier_pattern.sub(sanitize_token, line)
             
-            # 3. Check for instance renaming on the sanitized line
-            # Also rename top module if it is sasic_top
+            # 2. Rename Top Module text
             if "module sasic_top" in sanitized_line:
                  sanitized_line = sanitized_line.replace("module sasic_top", f"module {design_name}")
 
+            # 3. Rename Instance AND Module Type
             match = instance_pattern.match(sanitized_line)
             if match:
-                prefix = match.group(1)
-                lookup_name = match.group(2)
-                suffix = match.group(3)
+                prefix_group = match.group(1) # "  R0_BUF_0 "
+                inst_name = match.group(2)    # "inst_1"
+                suffix = match.group(3)       # " ("
                 
-                if lookup_name in mapping:
-                    physical_name = mapping[lookup_name]
-                    # Reconstruct line with physical name
-                    # Note: prefix and suffix come from sanitized_line, so they are clean.
-                    # rest of line (pins) is also from sanitized_line.
-                    new_line = f"{prefix}{physical_name}{suffix}{sanitized_line[match.end():]}"
-                    fout.write(new_line)
-                    replaced_count += 1
+                # A. Rename Module Type
+                # Extract clean module name from prefix (strip spaces)
+                old_mod_type = prefix_group.strip()
+                new_mod_type = module_map.get(old_mod_type, old_mod_type)
+                
+                if new_mod_type != old_mod_type:
+                    # Reconstruct prefix: preserve indentation?
+                    # prefix_group starts with spaces.
+                    # We regex replace last word in prefix_group?
+                    # Or just construct new prefix.
+                    # Assuming prefix is "  Module "
+                    prefix_indent = prefix_group[: -len(old_mod_type) - (1 if prefix_group.endswith(' ') else 0) ] 
+                    # Easier: just split and rejoin? No, preserve indent.
+                    # Use regex sub on prefix_group
+                    new_prefix = prefix_group.replace(old_mod_type, new_mod_type)
+                    replaced_mod_count += 1
                 else:
-                    # Instance found but not in map (maybe standard cell or IO?)
-                    fout.write(sanitized_line)
+                    new_prefix = prefix_group
+
+                # B. Rename Instance Name
+                if inst_name in inst_map:
+                    new_inst_name = inst_map[inst_name]
+                    replaced_inst_count += 1
+                else:
+                    new_inst_name = inst_name
+                
+                # Write new line
+                new_line = f"{new_prefix}{new_inst_name}{suffix}{sanitized_line[match.end():]}"
+                fout.write(new_line)
             else:
-                # Not an instance declaration, just write sanitized line
                 fout.write(sanitized_line)
 
-    print(f"Renamed {replaced_count} instances.")
-    print("Done.")
+    print(f"Renamed {replaced_inst_count} instances and {replaced_mod_count} modules.")
+    print(f"Output: {output_path}")
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python rename.py <design_name>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("design_name", help="Name of the design (e.g. arith)")
+    parser.add_argument("--fabric", help="Path to fabric.yaml for module renaming", default=None)
     
-    rename_instances(sys.argv[1])
+    args = parser.parse_args()
+    rename_instances(args.design_name, args.fabric)
