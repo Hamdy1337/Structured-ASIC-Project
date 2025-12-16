@@ -587,12 +587,14 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
                         print(f"Error: Unused DFF {cell_name} has no physical name!")
                         return
                     
-                    # Determine type
-                    ctype = 'sky130_fd_sc_hd__dfbbp_1' # Default
+                    # Determine type - use template_to_type for proper Liberty cell type
+                    ctype = 'sky130_fd_sc_hd__dfbbp_1' # Default for actual DFFs
                     if node.physical_name in physical_to_type:
                         ctype = physical_to_type[node.physical_name]
                     elif '__' in node.physical_name:
-                        ctype = node.physical_name.split('__', 1)[1]
+                        # Extract template and lookup in template_to_type map
+                        template = node.physical_name.split('__', 1)[1]
+                        ctype = template_to_type.get(template, 'sky130_fd_sc_hd__dfbbp_1')
                         
                     # Add to netlist - control pins (RESET_B, SET_B, D) will be connected 
                     # in Power-Down ECO phase using NEAREST tie cell for better routing
@@ -1111,6 +1113,14 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
             # Get the tie nets for this tie cell
             tie_nets = tie_nets_map.get(nearest_tie_idx)
             if not tie_nets:
+                continue
+            
+            # IMPORTANT: Only connect DFF control pins for actual DFF cells
+            # Some cells may be incorrectly marked as unused_dff if they're CTS sinks
+            # but aren't actually DFFs. Only dfbbp cells have RESET_B/SET_B/D pins.
+            cell_type = cell_data.get('type', '')
+            if 'dfbbp' not in cell_type.lower() and 'dff' not in cell_type.lower():
+                # Not a DFF - skip connecting control pins
                 continue
             
             # Connect control pins:
