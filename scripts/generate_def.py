@@ -255,7 +255,9 @@ def generate_def(args):
     with open(fp_tcl, 'w', encoding='utf-8') as f:
         f.write("# Floorplan Initialization Script\n")
         # Ensure design is linked for STA/Floorplan check
-        f.write(f"catch {{link_design {args.design_name}}}\n")
+        # Note: Verilog module names cannot start with a digit, so prepend 'm_' if needed
+        verilog_safe_name = args.design_name if not args.design_name[0].isdigit() else f"m_{args.design_name}"
+        f.write(f"catch {{link_design {verilog_safe_name}}}\n")
         f.write(f"initialize_floorplan -site unithd -die_area \"0 0 {width_um} {height_um}\" -core_area \"0 0 {width_um} {height_um}\"\n")
         f.write(f"puts \"\\[Floorplan\\] Die/Core Area set via initialize_floorplan: 0 0 {width_um} {height_um}\"\n")
         

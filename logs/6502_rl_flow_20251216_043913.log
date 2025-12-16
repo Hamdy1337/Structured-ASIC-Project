@@ -1,0 +1,2278 @@
+============================================================
+=== Starting RL-based Flow for 6502 ===
+=== Hybrid: Greedy+SA + PPO Refinement ===
+============================================================
+Time: 2025-12-16 04:39:13.842019
+
+[Step 1] Loading design data...
+Parsing C:\Users\Dell-\Desktop\AUC\AUC semester 7\Digital Design 2\DD2 Proj\Structred-ASIC-Project\inputs\Platform\fabric_cells.yaml using stream parser...
+Finished parsing 3240 tiles in 1.00s
+  - Loaded 158760 fabric cells
+  - Loaded 122 pins
+  - Loaded netlist with 8438 connections
+  - Found 2899 cells, 122 ports
+
+[Step 2] Running RL-based Placement (Greedy+SA + PPO Refinement)...
+  - Phase 1: Greedy+SA initial placement
+  - Phase 2: PPO Full Placer training and application
+  - Phase 3: PPO Swap Refiner training and application
+  - Animation: Capturing frames at each stage
+
+[RLPlacer] Animation enabled. Frames: C:\Users\Dell-\Desktop\AUC\AUC semester 7\Digital Design 2\DD2 Proj\Structred-ASIC-Project\build\6502\rl_placement_animation_frames
+[DEBUG] === PHASE 1: PORT ASSIGNMENT (SEEDING) ===
+[DEBUG] [Seeding] Initializing pin assignment...
+[DEBUG] [Seeding] Initialization completed in 0.001s
+[DEBUG] [Seeding] Processing 122 pins and 122 ports
+[DEBUG] [Seeding] Building candidate pin pools...
+[DEBUG] [Seeding] Built candidate pools for 2 directions in 0.004s
+[DEBUG] [Seeding] Processing special ports (clock/reset)...
+[DEBUG] [Seeding] Assigned 2 special ports in 0.004s
+[DEBUG] [Seeding] Processing 120 residual ports...
+[DEBUG] [Seeding] Processing 3 port groups...
+[PROGRESS] [Seeding] Groups: 1/3 (33.3%) | Assigned: 0
+[PROGRESS] [Seeding] Groups: 2/3 (66.7%) | Assigned: 40
+[DEBUG] [Seeding] Found 40 pins for base 'oeb' in direction 'input'
+[PROGRESS] [Seeding] Groups: 3/3 (100.0%) | Assigned: 80
+[DEBUG] [Seeding] Assigned 120 regular ports in 0.009s
+[DEBUG] [Seeding] Built assignments DataFrame with 122 assignments in 0.000s
+[DEBUG] [Seeding] Total assignments: 122 (special: 2, regular: 120)
+[DEBUG] Port assignment (seeding) completed in 0.021s
+[DEBUG] Assigned 122 port-to-pin mappings
+
+[DEBUG] === PHASE 2: BUILDING SITES AND SPATIAL INDEX ===
+[DEBUG] Built 158760 sites from fabric
+[DEBUG] Spatial index built: grid=39x39, 158760 sites
+[DEBUG] Building sites and spatial index completed in 0.078s
+
+[DEBUG] === PHASE 3: BUILDING FIXED POINTS ===
+[DEBUG] Built 122 fixed point nets
+[DEBUG] Building fixed points completed in 0.002s
+
+[DEBUG] === PHASE 4: BUILDING DEPENDENCY LEVELS (LEVELIZATION) ===
+[DEBUG] Levelization completed: 5 levels found
+[DEBUG] Building dependency levels completed in 1.910s
+
+[DEBUG] === PHASE 5: BUILDING CELL MAPPINGS ===
+[DEBUG] Built mappings for 2899 cells
+[DEBUG] Building cell mappings completed in 2.045s
+
+[DEBUG] === PHASE 6: BUILDING CELL TYPE MAPPING ===
+[DEBUG] Built cell type mapping for 2899 cells
+[DEBUG] Building cell type mapping completed in 0.364s
+
+[DEBUG] === PHASE 7: ORDERING CELLS BY LEVEL ===
+[DEBUG] Ordered 2899 cells across 5 levels
+[DEBUG] Ordering cells completed in 0.004s
+
+[DEBUG] Built 122 I/O pin positions for fallback
+[DEBUG] === PHASE 8: LEVEL-BY-LEVEL PLACEMENT (GROWING) ===
+[DEBUG] Placement animation enabled. Frames will be saved to: C:\Users\Dell-\Desktop\AUC\AUC semester 7\Digital Design 2\DD2 Proj\Structred-ASIC-Project\build\placement_animation_frames
+[DEBUG] Animation will show: Greedy placement progression → Final greedy → SA optimization → Final SA result
+[DEBUG] --- Processing Level 0 (1/5) ---
+[DEBUG] Level 0: 273 cells to place
+[DEBUG] Level 0: Starting greedy placement...
+[PROGRESS] L0: 27/273 (9.9%) | Placed: 27 | Latest: $auto$insbuf.cc:97:e @ (5.5, 13.2)
+[PROGRESS] L0: 54/273 (19.8%) | Placed: 54 | Latest: $auto$insbuf.cc:97:e @ (5.5, 19.6)
+[PROGRESS] L0: 81/273 (29.7%) | Placed: 81 | Latest: $auto$insbuf.cc:97:e @ (17.4, 10.4)
+[PROGRESS] L0: 108/273 (39.6%) | Placed: 108 | Latest: $auto$insbuf.cc:97:e @ (11.9, 19.6)
+[PROGRESS] L0: 135/273 (49.5%) | Placed: 135 | Latest: $auto$insbuf.cc:97:e @ (670.2, 25.0)
+[PROGRESS] L0: 162/273 (59.3%) | Placed: 162 | Latest: $auto$insbuf.cc:97:e @ (18.8, 19.6)
+[PROGRESS] L0: 189/273 (69.2%) | Placed: 189 | Latest: $auto$insbuf.cc:97:e @ (663.3, 31.5)
+[PROGRESS] L0: 216/273 (79.1%) | Placed: 216 | Latest: $auto$insbuf.cc:97:e @ (676.6, 31.5)
+[PROGRESS] L0: 243/273 (89.0%) | Placed: 243 | Latest: $auto$insbuf.cc:97:e @ (33.6, 7.7)
+[PROGRESS] L0: 270/273 (98.9%) | Placed: 270 | Latest: $auto$insbuf.cc:97:e @ (10.1, 36.9)
+[PROGRESS] L0: 273/273 (100.0%) | Placed: 273 | Latest: $auto$insbuf.cc:97:e @ (37.7, 10.4)
+[DEBUG] Level 0: Greedy placement completed - placed 273/273 cells in 0.895s
+[DEBUG] Level 0: Total level processing time: 1.093s (greedy only)
+[PROGRESS] L0: COMPLETE | Total placed so far: 273 cells
+
+[DEBUG] --- Processing Level 1 (2/5) ---
+[DEBUG] Level 1: 7 cells to place
+[DEBUG] Level 1: Starting greedy placement...
+[PROGRESS] L1: 1/7 (14.3%) | Placed: 1 | Latest: $abc$9276$auto$blifp @ (610.7, 494.8)
+[PROGRESS] L1: 2/7 (28.6%) | Placed: 2 | Latest: $abc$9276$auto$blifp @ (665.6, 494.8)
+[PROGRESS] L1: 3/7 (42.9%) | Placed: 3 | Latest: $abc$9276$auto$blifp @ (722.8, 494.8)
+[PROGRESS] L1: 4/7 (57.1%) | Placed: 4 | Latest: $abc$9276$auto$blifp @ (777.2, 494.8)
+[PROGRESS] L1: 5/7 (71.4%) | Placed: 5 | Latest: $abc$9276$auto$blifp @ (780.0, 551.5)
+[PROGRESS] L1: 6/7 (85.7%) | Placed: 6 | Latest: $abc$9276$auto$blifp @ (780.0, 607.2)
+[PROGRESS] L1: 7/7 (100.0%) | Placed: 7 | Latest: $flatten\CPU.$auto$f @ (446.0, 5.0)
+[DEBUG] Level 1: Greedy placement completed - placed 7/7 cells in 0.002s
+[DEBUG] Level 1: Total level processing time: 0.198s (greedy only)
+[PROGRESS] L1: COMPLETE | Total placed so far: 280 cells
+
+[DEBUG] --- Processing Level 2 (3/5) ---
+[DEBUG] Level 2: 1 cells to place
+[DEBUG] Level 2: Starting greedy placement...
+[PROGRESS] L2: 1/1 (100.0%) | Placed: 1 | Latest: $abc$9276$auto$blifp @ (446.4, 497.5)
+[DEBUG] Level 2: Greedy placement completed - placed 1/1 cells in 0.000s
+[DEBUG] Level 2: Total level processing time: 0.193s (greedy only)
+[PROGRESS] L2: COMPLETE | Total placed so far: 281 cells
+
+[DEBUG] --- Processing Level 3 (4/5) ---
+[DEBUG] Level 3: 1 cells to place
+[DEBUG] Level 3: Starting greedy placement...
+[PROGRESS] L3: 1/1 (100.0%) | Placed: 1 | Latest: $abc$9276$auto$blifp @ (557.6, 254.5)
+[DEBUG] Level 3: Greedy placement completed - placed 1/1 cells in 0.000s
+[DEBUG] Level 3: Total level processing time: 0.202s (greedy only)
+[PROGRESS] L3: COMPLETE | Total placed so far: 282 cells
+
+[DEBUG] --- Processing Level 4 (5/5) ---
+[DEBUG] Level 4: 2617 cells to place
+[DEBUG] Level 4: Starting greedy placement...
+[PROGRESS] L4: 50/2617 (1.9%) | Placed: 50 | Latest: $abc$9276$auto$blifp @ (448.3, 5.0)
+[PROGRESS] L4: 100/2617 (3.8%) | Placed: 100 | Latest: $abc$9276$auto$blifp @ (780.0, 5.0)
+[PROGRESS] L4: 150/2617 (5.7%) | Placed: 150 | Latest: $abc$9276$auto$blifp @ (920.7, 36.9)
+[PROGRESS] L4: 200/2617 (7.6%) | Placed: 200 | Latest: $abc$9276$auto$blifp @ (1000.9, 658.4)
+[PROGRESS] L4: 250/2617 (9.6%) | Placed: 250 | Latest: $abc$9276$auto$blifp @ (877.3, 809.1)
+[PROGRESS] L4: 300/2617 (11.5%) | Placed: 300 | Latest: $abc$9276$auto$blifp @ (217.2, 993.8)
+[PROGRESS] L4: 350/2617 (13.4%) | Placed: 350 | Latest: $abc$9276$auto$blifp @ (663.3, 991.0)
+[PROGRESS] L4: 400/2617 (15.3%) | Placed: 400 | Latest: $abc$9276$auto$blifp @ (695.5, 770.8)
+[PROGRESS] L4: 450/2617 (17.2%) | Placed: 450 | Latest: $abc$9276$auto$blifp @ (5.5, 440.8)
+[PROGRESS] L4: 500/2617 (19.1%) | Placed: 500 | Latest: $abc$9276$auto$blifp @ (7.3, 711.4)
+[PROGRESS] L4: 550/2617 (21.0%) | Placed: 550 | Latest: $abc$9276$auto$blifp @ (5.5, 984.6)
+[PROGRESS] L4: 600/2617 (22.9%) | Placed: 600 | Latest: $abc$9276$auto$blifp @ (76.0, 10.4)
+[PROGRESS] L4: 650/2617 (24.8%) | Placed: 650 | Latest: $abc$9276$auto$blifp @ (122.2, 578.0)
+[PROGRESS] L4: 700/2617 (26.7%) | Placed: 700 | Latest: $abc$9276$auto$blifp @ (116.6, 575.2)
+[PROGRESS] L4: 750/2617 (28.7%) | Placed: 750 | Latest: $abc$9276$auto$blifp @ (219.0, 5.0)
+[PROGRESS] L4: 800/2617 (30.6%) | Placed: 800 | Latest: $abc$9276$auto$blifp @ (336.2, 770.8)
+[PROGRESS] L4: 850/2617 (32.5%) | Placed: 850 | Latest: $abc$9276$auto$blifp @ (886.5, 10.4)
+[PROGRESS] L4: 900/2617 (34.4%) | Placed: 900 | Latest: $abc$9276$auto$blifp @ (991.2, 111.9)
+[PROGRESS] L4: 950/2617 (36.3%) | Placed: 950 | Latest: $abc$9276$auto$blifp @ (391.1, 673.0)
+[PROGRESS] L4: 1000/2617 (38.2%) | Placed: 1000 | Latest: $abc$9276$auto$blifp @ (419.7, 331.2)
+[PROGRESS] L4: 1050/2617 (40.1%) | Placed: 1050 | Latest: $abc$9276$auto$blifp @ (989.8, 438.1)
+[PROGRESS] L4: 1100/2617 (42.0%) | Placed: 1100 | Latest: $abc$9276$auto$blifp @ (377.3, 943.5)
+[PROGRESS] L4: 1150/2617 (43.9%) | Placed: 1150 | Latest: $abc$9276$auto$blifp @ (116.6, 551.5)
+[PROGRESS] L4: 1200/2617 (45.9%) | Placed: 1200 | Latest: $abc$9276$auto$blifp @ (733.8, 509.4)
+[PROGRESS] L4: 1250/2617 (47.8%) | Placed: 1250 | Latest: $abc$9276$auto$blifp @ (18.8, 218.8)
+[PROGRESS] L4: 1300/2617 (49.7%) | Placed: 1300 | Latest: $abc$9276$auto$blifp @ (443.2, 991.0)
+[PROGRESS] L4: 1350/2617 (51.6%) | Placed: 1350 | Latest: $abc$9276$auto$blifp @ (410.5, 515.8)
+[PROGRESS] L4: 1400/2617 (53.5%) | Placed: 1400 | Latest: $abc$9276$auto$blifp @ (252.7, 592.6)
+[PROGRESS] L4: 1450/2617 (55.4%) | Placed: 1450 | Latest: $abc$9276$auto$blifp @ (295.1, 378.7)
+[PROGRESS] L4: 1500/2617 (57.3%) | Placed: 1500 | Latest: $abc$9276$auto$blifp @ (262.4, 381.4)
+[PROGRESS] L4: 1550/2617 (59.2%) | Placed: 1550 | Latest: $abc$9276$auto$blifp @ (266.5, 355.0)
+[PROGRESS] L4: 1600/2617 (61.1%) | Placed: 1600 | Latest: $abc$9276$auto$blifp @ (579.8, 678.4)
+[PROGRESS] L4: 1650/2617 (63.0%) | Placed: 1650 | Latest: $abc$9276$auto$blifp @ (989.4, 991.0)
+[PROGRESS] L4: 1700/2617 (65.0%) | Placed: 1700 | Latest: $abc$9276$auto$blifp @ (505.5, 521.3)
+[PROGRESS] L4: 1750/2617 (66.9%) | Placed: 1750 | Latest: $abc$9276$auto$blifp @ (124.5, 5.0)
+[PROGRESS] L4: 1800/2617 (68.8%) | Placed: 1800 | Latest: $abc$9276$auto$blifp @ (181.7, 13.2)
+[PROGRESS] L4: 1850/2617 (70.7%) | Placed: 1850 | Latest: $abc$9276$auto$blifp @ (219.0, 183.2)
+[PROGRESS] L4: 1900/2617 (72.6%) | Placed: 1900 | Latest: $abc$9276$auto$blifp @ (405.9, 385.2)
+[PROGRESS] L4: 1950/2617 (74.5%) | Placed: 1950 | Latest: $abc$9276$auto$blifp @ (166.9, 504.0)
+[PROGRESS] L4: 2000/2617 (76.4%) | Placed: 2000 | Latest: $abc$9276$auto$blifp @ (248.1, 221.6)
+[PROGRESS] L4: 2050/2617 (78.3%) | Placed: 2050 | Latest: $abc$9276$auto$blifp @ (300.7, 333.9)
+[PROGRESS] L4: 2100/2617 (80.2%) | Placed: 2100 | Latest: $abc$9276$auto$blifp @ (348.7, 143.8)
+[PROGRESS] L4: 2150/2617 (82.2%) | Placed: 2150 | Latest: $abc$9276$auto$blifp @ (228.7, 592.6)
+[PROGRESS] L4: 2200/2617 (84.1%) | Placed: 2200 | Latest: $abc$9276$auto$blifp @ (304.8, 476.5)
+[PROGRESS] L4: 2250/2617 (86.0%) | Placed: 2250 | Latest: $abc$9276$auto$blifp @ (338.5, 497.5)
+[PROGRESS] L4: 2300/2617 (87.9%) | Placed: 2300 | Latest: $abc$9276$auto$blifp @ (367.1, 556.9)
+[PROGRESS] L4: 2350/2617 (89.8%) | Placed: 2350 | Latest: $abc$9276$auto$blifp @ (148.5, 5.0)
+[PROGRESS] L4: 2400/2617 (91.7%) | Placed: 2400 | Latest: $abc$9276$auto$blifp @ (197.8, 81.7)
+[PROGRESS] L4: 2450/2617 (93.6%) | Placed: 2450 | Latest: $auto$insbuf.cc:97:e @ (5.0, 996.5)
+[PROGRESS] L4: 2500/2617 (95.5%) | Placed: 2500 | Latest: $flatten\CPU.$auto$f @ (274.4, 7.7)
+[PROGRESS] L4: 2550/2617 (97.4%) | Placed: 2550 | Latest: $flatten\CPU.$auto$f @ (495.3, 10.4)
+[PROGRESS] L4: 2600/2617 (99.4%) | Placed: 2600 | Latest: $flatten\CPU.$auto$f @ (505.0, 22.3)
+[PROGRESS] L4: 2617/2617 (100.0%) | Placed: 2617 | Latest: $flatten\CPU.\ALU.$a @ (436.8, 5.0)
+[DEBUG] Level 4: Greedy placement completed - placed 2617/2617 cells in 10.726s
+[DEBUG] Level 4: Total level processing time: 10.953s (greedy only)
+[PROGRESS] L4: COMPLETE | Total placed so far: 2899 cells
+
+[DEBUG] Greedy Placement HPWL: 957027.260
+[DEBUG] === PHASE 8.5: GLOBAL SIMULATED ANNEALING ===
+[DEBUG] Initial Global HPWL before SA: 957027.260
+[DEBUG] Pre-computing net_to_cells map for SA...
+[DEBUG] Global SA: Processing 2899 cells in 23 batches
+      [SA] Start Batch: Cells=150 T0=107.710 HPWL=53855.1
+        [SA] Iter 200: T=102.444 HPWL=56247.5 Acc=38.5%
+        [SA] Iter 400: T=97.436 HPWL=57204.8 Acc=39.2%
+        [SA] Iter 600: T=92.672 HPWL=58583.3 Acc=41.3%
+        [SA] Iter 800: T=88.141 HPWL=58164.7 Acc=43.5%
+        [SA] Iter 1000: T=83.832 HPWL=57909.6 Acc=45.4%
+        [SA] Iter 1200: T=79.734 HPWL=57835.8 Acc=46.0%
+        [SA] Iter 1400: T=75.835 HPWL=58487.9 Acc=46.7%
+        [SA] Iter 1600: T=72.128 HPWL=58564.1 Acc=45.9%
+        [SA] Iter 1800: T=68.602 HPWL=59336.2 Acc=46.1%
+        [SA] Iter 2000: T=65.248 HPWL=58572.9 Acc=45.8%
+        [SA] Iter 2200: T=62.058 HPWL=58810.6 Acc=45.5%
+        [SA] Iter 2400: T=59.024 HPWL=58798.0 Acc=45.7%
+        [SA] Iter 2600: T=56.138 HPWL=58236.3 Acc=46.5%
+        [SA] Iter 2800: T=53.393 HPWL=57699.3 Acc=46.4%
+        [SA] Iter 3000: T=50.783 HPWL=57480.2 Acc=45.8%
+        [SA] Iter 3200: T=48.300 HPWL=57429.0 Acc=45.3%
+        [SA] Iter 3400: T=45.939 HPWL=56875.0 Acc=44.9%
+        [SA] Iter 3600: T=43.693 HPWL=56516.4 Acc=44.2%
+        [SA] Iter 3800: T=41.557 HPWL=56513.2 Acc=43.7%
+        [SA] Iter 4000: T=39.525 HPWL=55968.0 Acc=43.2%
+        [SA] Iter 4200: T=37.593 HPWL=55778.6 Acc=42.6%
+        [SA] Iter 4400: T=35.755 HPWL=55709.0 Acc=42.2%
+        [SA] Iter 4600: T=34.007 HPWL=55450.9 Acc=41.8%
+        [SA] Iter 4800: T=32.344 HPWL=55157.1 Acc=41.5%
+        [SA] Iter 5000: T=30.763 HPWL=54993.8 Acc=41.0%
+        [SA] Iter 5200: T=29.259 HPWL=54666.0 Acc=40.5%
+        [SA] Iter 5400: T=27.828 HPWL=54730.1 Acc=39.9%
+        [SA] Iter 5600: T=26.468 HPWL=54439.9 Acc=39.4%
+        [SA] Iter 5800: T=25.174 HPWL=54126.2 Acc=38.7%
+        [SA] Iter 6000: T=23.943 HPWL=54228.0 Acc=38.0%
+        [SA] Iter 6200: T=22.773 HPWL=54194.6 Acc=37.4%
+        [SA] Iter 6400: T=21.659 HPWL=54013.2 Acc=36.9%
+        [SA] Iter 6600: T=20.600 HPWL=53833.2 Acc=36.4%
+        [SA] Iter 6800: T=19.593 HPWL=53859.8 Acc=35.8%
+        [SA] Iter 7000: T=18.635 HPWL=53776.7 Acc=35.2%
+        [SA] Iter 7200: T=17.724 HPWL=53713.6 Acc=34.7%
+        [SA] Iter 7400: T=16.858 HPWL=53906.9 Acc=34.3%
+        [SA] Iter 7600: T=16.033 HPWL=53874.9 Acc=33.8%
+        [SA] Iter 7800: T=15.250 HPWL=53524.0 Acc=33.2%
+        [SA] Iter 8000: T=14.504 HPWL=53544.0 Acc=32.7%
+        [SA] Iter 8200: T=13.795 HPWL=53520.7 Acc=32.2%
+        [SA] Iter 8400: T=13.121 HPWL=53454.3 Acc=31.8%
+        [SA] Iter 8600: T=12.479 HPWL=53305.2 Acc=31.2%
+        [SA] Iter 8800: T=11.869 HPWL=53280.9 Acc=30.8%
+        [SA] Iter 9000: T=11.289 HPWL=53323.7 Acc=30.3%
+        [SA] Iter 9200: T=10.737 HPWL=53227.1 Acc=29.8%
+        [SA] Iter 9400: T=10.212 HPWL=53200.2 Acc=29.4%
+        [SA] Iter 9600: T=9.713 HPWL=53102.8 Acc=28.9%
+        [SA] Iter 9800: T=9.238 HPWL=53059.2 Acc=28.5%
+        [SA] Iter 10000: T=8.786 HPWL=53051.5 Acc=28.1%
+        [SA] Iter 10200: T=8.357 HPWL=53053.0 Acc=27.6%
+        [SA] Iter 10400: T=7.948 HPWL=53131.6 Acc=27.3%
+        [SA] Iter 10600: T=7.559 HPWL=53044.8 Acc=26.9%
+        [SA] Iter 10800: T=7.190 HPWL=52989.0 Acc=26.5%
+        [SA] Iter 11000: T=6.838 HPWL=52977.4 Acc=26.2%
+        [SA] Iter 11200: T=6.504 HPWL=52966.8 Acc=25.8%
+        [SA] Iter 11400: T=6.186 HPWL=52991.3 Acc=25.4%
+        [SA] Iter 11600: T=5.884 HPWL=52876.3 Acc=25.0%
+        [SA] Iter 11800: T=5.596 HPWL=52841.0 Acc=24.7%
+        [SA] Iter 12000: T=5.322 HPWL=52830.9 Acc=24.3%
+        [SA] Iter 12200: T=5.062 HPWL=52834.2 Acc=24.0%
+        [SA] Iter 12400: T=4.815 HPWL=52813.3 Acc=23.7%
+        [SA] Iter 12600: T=4.579 HPWL=52798.5 Acc=23.3%
+        [SA] Iter 12800: T=4.355 HPWL=52794.9 Acc=23.0%
+        [SA] Iter 13000: T=4.142 HPWL=52798.5 Acc=22.7%
+        [SA] Iter 13200: T=3.940 HPWL=52807.3 Acc=22.4%
+        [SA] Iter 13400: T=3.747 HPWL=52802.9 Acc=22.2%
+        [SA] Iter 13600: T=3.564 HPWL=52802.2 Acc=21.9%
+        [SA] Iter 13800: T=3.390 HPWL=52830.2 Acc=21.6%
+        [SA] Iter 14000: T=3.224 HPWL=52830.9 Acc=21.4%
+        [SA] Iter 14200: T=3.067 HPWL=52788.9 Acc=21.1%
+        [SA] Iter 14400: T=2.917 HPWL=52776.6 Acc=20.8%
+        [SA] Iter 14600: T=2.774 HPWL=52778.8 Acc=20.6%
+        [SA] Iter 14800: T=2.638 HPWL=52781.1 Acc=20.3%
+        [SA] Iter 15000: T=2.509 HPWL=52787.5 Acc=20.1%
+      [SA] End Batch: 53855.1 -> 52787.5 (-1067.5)
+      [SA] Start Batch: Cells=150 T0=313.892 HPWL=156945.8
+        [SA] Iter 200: T=298.546 HPWL=161640.3 Acc=78.5%
+        [SA] Iter 400: T=283.950 HPWL=163613.9 Acc=81.0%
+        [SA] Iter 600: T=270.067 HPWL=163485.5 Acc=82.2%
+        [SA] Iter 800: T=256.864 HPWL=162979.4 Acc=81.9%
+        [SA] Iter 1000: T=244.306 HPWL=164212.1 Acc=82.0%
+        [SA] Iter 1200: T=232.362 HPWL=165266.4 Acc=80.8%
+        [SA] Iter 1400: T=221.002 HPWL=165462.7 Acc=81.1%
+        [SA] Iter 1600: T=210.197 HPWL=163735.6 Acc=80.8%
+        [SA] Iter 1800: T=199.920 HPWL=163951.4 Acc=80.6%
+        [SA] Iter 2000: T=190.146 HPWL=164860.8 Acc=80.5%
+        [SA] Iter 2200: T=180.850 HPWL=164371.9 Acc=80.5%
+        [SA] Iter 2400: T=172.008 HPWL=164320.5 Acc=80.1%
+        [SA] Iter 2600: T=163.599 HPWL=162572.0 Acc=79.6%
+        [SA] Iter 2800: T=155.601 HPWL=162613.8 Acc=78.9%
+        [SA] Iter 3000: T=147.993 HPWL=162937.5 Acc=78.7%
+        [SA] Iter 3200: T=140.758 HPWL=163382.3 Acc=78.3%
+        [SA] Iter 3400: T=133.876 HPWL=162404.3 Acc=77.9%
+        [SA] Iter 3600: T=127.331 HPWL=162469.9 Acc=77.6%
+        [SA] Iter 3800: T=121.106 HPWL=161623.2 Acc=77.4%
+        [SA] Iter 4000: T=115.185 HPWL=160454.7 Acc=77.1%
+        [SA] Iter 4200: T=109.554 HPWL=160342.7 Acc=76.5%
+        [SA] Iter 4400: T=104.198 HPWL=158836.3 Acc=75.8%
+        [SA] Iter 4600: T=99.103 HPWL=159268.8 Acc=75.2%
+        [SA] Iter 4800: T=94.258 HPWL=159213.3 Acc=74.7%
+        [SA] Iter 5000: T=89.650 HPWL=159672.7 Acc=74.1%
+        [SA] Iter 5200: T=85.267 HPWL=159891.9 Acc=73.7%
+        [SA] Iter 5400: T=81.098 HPWL=159586.4 Acc=73.4%
+        [SA] Iter 5600: T=77.133 HPWL=159189.0 Acc=72.6%
+        [SA] Iter 5800: T=73.362 HPWL=159034.2 Acc=72.0%
+        [SA] Iter 6000: T=69.776 HPWL=156840.3 Acc=71.7%
+        [SA] Iter 6200: T=66.364 HPWL=156536.0 Acc=71.2%
+        [SA] Iter 6400: T=63.120 HPWL=157005.1 Acc=70.8%
+        [SA] Iter 6600: T=60.034 HPWL=155807.6 Acc=70.3%
+        [SA] Iter 6800: T=57.099 HPWL=155563.7 Acc=69.8%
+        [SA] Iter 7000: T=54.307 HPWL=155569.8 Acc=69.2%
+        [SA] Iter 7200: T=51.652 HPWL=155031.7 Acc=68.5%
+        [SA] Iter 7400: T=49.127 HPWL=154611.9 Acc=67.8%
+        [SA] Iter 7600: T=46.725 HPWL=153829.3 Acc=67.3%
+        [SA] Iter 7800: T=44.441 HPWL=153439.7 Acc=66.6%
+        [SA] Iter 8000: T=42.268 HPWL=153394.0 Acc=66.0%
+        [SA] Iter 8200: T=40.202 HPWL=153333.4 Acc=65.2%
+        [SA] Iter 8400: T=38.236 HPWL=152686.1 Acc=64.5%
+        [SA] Iter 8600: T=36.367 HPWL=152435.1 Acc=63.9%
+        [SA] Iter 8800: T=34.589 HPWL=151806.8 Acc=63.3%
+        [SA] Iter 9000: T=32.898 HPWL=151255.7 Acc=62.8%
+        [SA] Iter 9200: T=31.289 HPWL=150904.1 Acc=62.2%
+        [SA] Iter 9400: T=29.760 HPWL=150568.9 Acc=61.6%
+        [SA] Iter 9600: T=28.305 HPWL=150352.4 Acc=61.0%
+        [SA] Iter 9800: T=26.921 HPWL=149270.2 Acc=60.4%
+        [SA] Iter 10000: T=25.605 HPWL=149487.7 Acc=60.0%
+        [SA] Iter 10200: T=24.353 HPWL=149323.1 Acc=59.4%
+        [SA] Iter 10400: T=23.162 HPWL=149095.9 Acc=58.9%
+        [SA] Iter 10600: T=22.030 HPWL=148800.1 Acc=58.4%
+        [SA] Iter 10800: T=20.953 HPWL=148579.6 Acc=57.8%
+        [SA] Iter 11000: T=19.928 HPWL=148306.1 Acc=57.2%
+        [SA] Iter 11200: T=18.954 HPWL=148189.4 Acc=56.7%
+        [SA] Iter 11400: T=18.028 HPWL=147999.3 Acc=56.2%
+        [SA] Iter 11600: T=17.146 HPWL=147892.9 Acc=55.7%
+        [SA] Iter 11800: T=16.308 HPWL=147905.2 Acc=55.1%
+        [SA] Iter 12000: T=15.511 HPWL=147700.1 Acc=54.7%
+        [SA] Iter 12200: T=14.752 HPWL=147692.6 Acc=54.1%
+        [SA] Iter 12400: T=14.031 HPWL=147638.5 Acc=53.6%
+        [SA] Iter 12600: T=13.345 HPWL=147676.7 Acc=53.0%
+        [SA] Iter 12800: T=12.693 HPWL=147693.3 Acc=52.5%
+        [SA] Iter 13000: T=12.072 HPWL=147559.0 Acc=52.0%
+        [SA] Iter 13200: T=11.482 HPWL=147563.3 Acc=51.5%
+        [SA] Iter 13400: T=10.921 HPWL=147480.0 Acc=51.0%
+        [SA] Iter 13600: T=10.387 HPWL=147418.7 Acc=50.5%
+        [SA] Iter 13800: T=9.879 HPWL=147366.0 Acc=50.0%
+        [SA] Iter 14000: T=9.396 HPWL=147329.4 Acc=49.5%
+        [SA] Iter 14200: T=8.936 HPWL=147275.4 Acc=49.0%
+        [SA] Iter 14400: T=8.500 HPWL=147240.3 Acc=48.6%
+        [SA] Iter 14600: T=8.084 HPWL=147194.4 Acc=48.1%
+        [SA] Iter 14800: T=7.689 HPWL=147195.3 Acc=47.7%
+        [SA] Iter 15000: T=7.313 HPWL=146686.7 Acc=47.3%
+      [SA] End Batch: 156945.8 -> 146686.7 (-10259.1)
+      [SA] Start Batch: Cells=60 T0=132.791 HPWL=66395.6
+        [SA] Iter 200: T=126.299 HPWL=68638.6 Acc=73.0%
+        [SA] Iter 400: T=120.124 HPWL=68800.5 Acc=70.5%
+        [SA] Iter 600: T=114.251 HPWL=67887.4 Acc=70.8%
+        [SA] Iter 800: T=108.666 HPWL=67283.6 Acc=71.8%
+        [SA] Iter 1000: T=103.353 HPWL=67656.3 Acc=70.0%
+        [SA] Iter 1200: T=98.300 HPWL=66992.7 Acc=70.0%
+        [SA] Iter 1400: T=93.494 HPWL=67194.0 Acc=70.0%
+        [SA] Iter 1600: T=88.923 HPWL=66922.8 Acc=69.3%
+        [SA] Iter 1800: T=84.576 HPWL=66954.2 Acc=68.2%
+        [SA] Iter 2000: T=80.441 HPWL=66874.6 Acc=67.5%
+        [SA] Iter 2200: T=76.508 HPWL=66760.4 Acc=66.0%
+        [SA] Iter 2400: T=72.768 HPWL=67803.3 Acc=65.7%
+        [SA] Iter 2600: T=69.210 HPWL=67384.9 Acc=65.6%
+        [SA] Iter 2800: T=65.826 HPWL=67209.9 Acc=65.8%
+        [SA] Iter 3000: T=62.608 HPWL=67323.8 Acc=65.3%
+        [SA] Iter 3200: T=59.547 HPWL=66577.6 Acc=64.9%
+        [SA] Iter 3400: T=56.636 HPWL=67283.5 Acc=64.1%
+        [SA] Iter 3600: T=53.867 HPWL=67051.8 Acc=63.4%
+        [SA] Iter 3800: T=51.234 HPWL=67263.3 Acc=62.2%
+        [SA] Iter 4000: T=48.729 HPWL=67350.9 Acc=61.5%
+        [SA] Iter 4200: T=46.346 HPWL=66746.9 Acc=60.7%
+        [SA] Iter 4400: T=44.081 HPWL=66314.5 Acc=59.8%
+        [SA] Iter 4600: T=41.925 HPWL=66161.0 Acc=58.9%
+        [SA] Iter 4800: T=39.876 HPWL=66456.7 Acc=58.1%
+        [SA] Iter 5000: T=37.926 HPWL=65995.4 Acc=57.4%
+        [SA] Iter 5200: T=36.072 HPWL=65900.1 Acc=56.5%
+        [SA] Iter 5400: T=34.308 HPWL=65630.3 Acc=55.7%
+        [SA] Iter 5600: T=32.631 HPWL=65580.0 Acc=55.0%
+        [SA] Iter 5800: T=31.036 HPWL=65938.1 Acc=54.5%
+        [SA] Iter 6000: T=29.518 HPWL=65655.8 Acc=54.1%
+        [SA] Iter 6200: T=28.075 HPWL=65168.4 Acc=53.4%
+        [SA] Iter 6400: T=26.703 HPWL=65101.7 Acc=52.5%
+        [SA] Iter 6600: T=25.397 HPWL=64913.7 Acc=51.8%
+        [SA] Iter 6800: T=24.156 HPWL=64691.4 Acc=50.9%
+        [SA] Iter 7000: T=22.975 HPWL=64428.7 Acc=50.1%
+        [SA] Iter 7200: T=21.851 HPWL=64484.6 Acc=49.3%
+        [SA] Iter 7400: T=20.783 HPWL=64450.7 Acc=48.8%
+        [SA] Iter 7600: T=19.767 HPWL=64147.0 Acc=48.1%
+        [SA] Iter 7800: T=18.801 HPWL=63954.9 Acc=47.6%
+        [SA] Iter 8000: T=17.881 HPWL=63812.3 Acc=47.0%
+        [SA] Iter 8200: T=17.007 HPWL=63707.8 Acc=46.3%
+        [SA] Iter 8400: T=16.176 HPWL=63767.4 Acc=45.7%
+        [SA] Iter 8600: T=15.385 HPWL=63625.9 Acc=45.1%
+        [SA] Iter 8800: T=14.633 HPWL=63712.8 Acc=44.6%
+        [SA] Iter 9000: T=13.917 HPWL=63683.0 Acc=44.0%
+        [SA] Iter 9200: T=13.237 HPWL=63653.1 Acc=43.4%
+        [SA] Iter 9400: T=12.590 HPWL=63662.7 Acc=42.8%
+        [SA] Iter 9600: T=11.974 HPWL=63678.1 Acc=42.2%
+        [SA] Iter 9800: T=11.389 HPWL=63640.0 Acc=41.5%
+        [SA] Iter 10000: T=10.832 HPWL=63599.2 Acc=40.8%
+        [SA] Iter 10200: T=10.302 HPWL=63707.0 Acc=40.3%
+        [SA] Iter 10400: T=9.799 HPWL=63637.2 Acc=39.8%
+        [SA] Iter 10600: T=9.320 HPWL=63752.6 Acc=39.3%
+        [SA] Iter 10800: T=8.864 HPWL=63680.0 Acc=38.8%
+        [SA] Iter 11000: T=8.431 HPWL=63673.4 Acc=38.3%
+        [SA] Iter 11200: T=8.019 HPWL=63643.8 Acc=37.8%
+        [SA] Iter 11400: T=7.627 HPWL=63569.2 Acc=37.4%
+        [SA] Iter 11600: T=7.254 HPWL=63547.7 Acc=36.9%
+        [SA] Iter 11800: T=6.899 HPWL=63528.5 Acc=36.4%
+        [SA] Iter 12000: T=6.562 HPWL=63549.0 Acc=36.0%
+        [SA] Iter 12200: T=6.241 HPWL=63500.7 Acc=35.5%
+        [SA] Iter 12400: T=5.936 HPWL=63472.7 Acc=35.1%
+        [SA] Iter 12600: T=5.646 HPWL=63464.4 Acc=34.6%
+        [SA] Iter 12800: T=5.370 HPWL=63421.2 Acc=34.1%
+        [SA] Iter 13000: T=5.107 HPWL=63304.3 Acc=33.7%
+        [SA] Iter 13200: T=4.857 HPWL=63312.5 Acc=33.3%
+        [SA] Iter 13400: T=4.620 HPWL=63312.1 Acc=32.9%
+        [SA] Iter 13600: T=4.394 HPWL=63320.0 Acc=32.5%
+        [SA] Iter 13800: T=4.179 HPWL=63322.2 Acc=32.2%
+        [SA] Iter 14000: T=3.975 HPWL=63308.8 Acc=31.8%
+        [SA] Iter 14200: T=3.781 HPWL=63300.2 Acc=31.5%
+        [SA] Iter 14400: T=3.596 HPWL=63302.0 Acc=31.1%
+        [SA] Iter 14600: T=3.420 HPWL=63306.7 Acc=30.7%
+        [SA] Iter 14800: T=3.253 HPWL=63304.3 Acc=30.4%
+        [SA] Iter 15000: T=3.094 HPWL=63303.2 Acc=30.1%
+      [SA] End Batch: 66395.6 -> 63303.2 (-3092.4)
+      [SA] Start Batch: Cells=150 T0=242.119 HPWL=121059.7
+        [SA] Iter 200: T=230.282 HPWL=126488.4 Acc=74.0%
+        [SA] Iter 400: T=219.024 HPWL=128291.9 Acc=72.8%
+        [SA] Iter 600: T=208.316 HPWL=129915.3 Acc=75.2%
+        [SA] Iter 800: T=198.131 HPWL=131045.1 Acc=76.0%
+        [SA] Iter 1000: T=188.445 HPWL=130067.6 Acc=75.5%
+        [SA] Iter 1200: T=179.232 HPWL=130570.8 Acc=75.9%
+        [SA] Iter 1400: T=170.469 HPWL=130832.1 Acc=75.1%
+        [SA] Iter 1600: T=162.135 HPWL=131540.1 Acc=75.0%
+        [SA] Iter 1800: T=154.208 HPWL=132314.1 Acc=74.8%
+        [SA] Iter 2000: T=146.669 HPWL=131812.9 Acc=74.2%
+        [SA] Iter 2200: T=139.498 HPWL=132265.3 Acc=73.9%
+        [SA] Iter 2400: T=132.678 HPWL=131406.0 Acc=73.9%
+        [SA] Iter 2600: T=126.191 HPWL=130493.0 Acc=73.8%
+        [SA] Iter 2800: T=120.022 HPWL=129631.4 Acc=73.4%
+        [SA] Iter 3000: T=114.154 HPWL=129033.6 Acc=73.0%
+        [SA] Iter 3200: T=108.573 HPWL=130020.3 Acc=72.4%
+        [SA] Iter 3400: T=103.265 HPWL=130227.9 Acc=72.3%
+        [SA] Iter 3600: T=98.216 HPWL=130611.7 Acc=71.9%
+        [SA] Iter 3800: T=93.415 HPWL=130063.3 Acc=71.3%
+        [SA] Iter 4000: T=88.848 HPWL=128765.9 Acc=71.2%
+        [SA] Iter 4200: T=84.504 HPWL=128517.9 Acc=70.9%
+        [SA] Iter 4400: T=80.372 HPWL=128398.5 Acc=70.6%
+        [SA] Iter 4600: T=76.443 HPWL=128432.6 Acc=70.3%
+        [SA] Iter 4800: T=72.706 HPWL=128101.7 Acc=69.7%
+        [SA] Iter 5000: T=69.151 HPWL=128404.7 Acc=69.1%
+        [SA] Iter 5200: T=65.770 HPWL=128225.0 Acc=68.7%
+        [SA] Iter 5400: T=62.555 HPWL=127369.7 Acc=68.4%
+        [SA] Iter 5600: T=59.497 HPWL=126236.4 Acc=68.0%
+        [SA] Iter 5800: T=56.588 HPWL=125904.1 Acc=67.2%
+        [SA] Iter 6000: T=53.821 HPWL=125669.4 Acc=66.4%
+        [SA] Iter 6200: T=51.190 HPWL=125524.9 Acc=65.9%
+        [SA] Iter 6400: T=48.687 HPWL=126031.3 Acc=65.3%
+        [SA] Iter 6600: T=46.307 HPWL=125423.6 Acc=64.9%
+        [SA] Iter 6800: T=44.043 HPWL=125363.9 Acc=64.5%
+        [SA] Iter 7000: T=41.890 HPWL=124943.3 Acc=64.2%
+        [SA] Iter 7200: T=39.842 HPWL=125230.3 Acc=64.0%
+        [SA] Iter 7400: T=37.894 HPWL=125152.6 Acc=63.4%
+        [SA] Iter 7600: T=36.041 HPWL=124729.6 Acc=62.8%
+        [SA] Iter 7800: T=34.279 HPWL=124671.8 Acc=62.4%
+        [SA] Iter 8000: T=32.603 HPWL=124593.6 Acc=62.0%
+        [SA] Iter 8200: T=31.009 HPWL=124053.6 Acc=61.6%
+        [SA] Iter 8400: T=29.493 HPWL=123851.4 Acc=61.1%
+        [SA] Iter 8600: T=28.051 HPWL=123847.0 Acc=60.8%
+        [SA] Iter 8800: T=26.680 HPWL=123623.8 Acc=60.3%
+        [SA] Iter 9000: T=25.376 HPWL=123385.7 Acc=59.9%
+        [SA] Iter 9200: T=24.135 HPWL=123211.3 Acc=59.4%
+        [SA] Iter 9400: T=22.955 HPWL=123355.8 Acc=59.0%
+        [SA] Iter 9600: T=21.833 HPWL=123137.8 Acc=58.5%
+        [SA] Iter 9800: T=20.765 HPWL=123017.8 Acc=58.1%
+        [SA] Iter 10000: T=19.750 HPWL=122828.9 Acc=57.7%
+        [SA] Iter 10200: T=18.785 HPWL=122769.3 Acc=57.2%
+        [SA] Iter 10400: T=17.866 HPWL=122663.1 Acc=56.8%
+        [SA] Iter 10600: T=16.993 HPWL=122283.6 Acc=56.4%
+        [SA] Iter 10800: T=16.162 HPWL=122211.2 Acc=56.0%
+        [SA] Iter 11000: T=15.372 HPWL=122057.3 Acc=55.7%
+        [SA] Iter 11200: T=14.620 HPWL=121774.2 Acc=55.1%
+        [SA] Iter 11400: T=13.905 HPWL=121754.0 Acc=54.5%
+        [SA] Iter 11600: T=13.226 HPWL=121739.3 Acc=54.0%
+        [SA] Iter 11800: T=12.579 HPWL=121619.7 Acc=53.6%
+        [SA] Iter 12000: T=11.964 HPWL=121526.4 Acc=53.3%
+        [SA] Iter 12200: T=11.379 HPWL=121434.5 Acc=52.8%
+        [SA] Iter 12400: T=10.823 HPWL=121405.2 Acc=52.3%
+        [SA] Iter 12600: T=10.294 HPWL=121353.0 Acc=51.9%
+        [SA] Iter 12800: T=9.790 HPWL=121256.7 Acc=51.4%
+        [SA] Iter 13000: T=9.312 HPWL=121258.8 Acc=50.9%
+        [SA] Iter 13200: T=8.857 HPWL=121176.3 Acc=50.4%
+        [SA] Iter 13400: T=8.424 HPWL=121145.3 Acc=50.1%
+        [SA] Iter 13600: T=8.012 HPWL=120949.7 Acc=49.6%
+        [SA] Iter 13800: T=7.620 HPWL=120913.5 Acc=49.2%
+        [SA] Iter 14000: T=7.247 HPWL=120842.8 Acc=48.7%
+        [SA] Iter 14200: T=6.893 HPWL=120730.1 Acc=48.3%
+        [SA] Iter 14400: T=6.556 HPWL=120691.6 Acc=47.9%
+        [SA] Iter 14600: T=6.236 HPWL=120700.5 Acc=47.5%
+        [SA] Iter 14800: T=5.931 HPWL=120701.8 Acc=47.0%
+        [SA] Iter 15000: T=5.641 HPWL=120722.6 Acc=46.7%
+      [SA] End Batch: 121059.7 -> 120722.6 (-337.1)
+      [SA] Start Batch: Cells=150 T0=325.458 HPWL=162729.0
+        [SA] Iter 200: T=309.546 HPWL=166798.6 Acc=83.0%
+        [SA] Iter 400: T=294.413 HPWL=169522.1 Acc=87.5%
+        [SA] Iter 600: T=280.019 HPWL=169259.0 Acc=87.7%
+        [SA] Iter 800: T=266.329 HPWL=170421.8 Acc=87.1%
+        [SA] Iter 1000: T=253.308 HPWL=171219.5 Acc=86.2%
+        [SA] Iter 1200: T=240.924 HPWL=171973.4 Acc=86.5%
+        [SA] Iter 1400: T=229.145 HPWL=172835.6 Acc=86.2%
+        [SA] Iter 1600: T=217.942 HPWL=171772.1 Acc=86.4%
+        [SA] Iter 1800: T=207.287 HPWL=171034.1 Acc=86.2%
+        [SA] Iter 2000: T=197.153 HPWL=171296.3 Acc=86.1%
+        [SA] Iter 2200: T=187.514 HPWL=171300.4 Acc=86.1%
+        [SA] Iter 2400: T=178.347 HPWL=170811.4 Acc=85.9%
+        [SA] Iter 2600: T=169.627 HPWL=170174.9 Acc=85.7%
+        [SA] Iter 2800: T=161.334 HPWL=170646.3 Acc=85.8%
+        [SA] Iter 3000: T=153.447 HPWL=170989.4 Acc=85.5%
+        [SA] Iter 3200: T=145.945 HPWL=170098.5 Acc=85.6%
+        [SA] Iter 3400: T=138.809 HPWL=169324.0 Acc=85.3%
+        [SA] Iter 3600: T=132.023 HPWL=169658.1 Acc=84.6%
+        [SA] Iter 3800: T=125.568 HPWL=169758.3 Acc=84.4%
+        [SA] Iter 4000: T=119.429 HPWL=168568.3 Acc=84.1%
+        [SA] Iter 4200: T=113.590 HPWL=168185.6 Acc=83.8%
+        [SA] Iter 4400: T=108.037 HPWL=169057.8 Acc=83.2%
+        [SA] Iter 4600: T=102.755 HPWL=168675.5 Acc=82.8%
+        [SA] Iter 4800: T=97.731 HPWL=168044.2 Acc=82.3%
+        [SA] Iter 5000: T=92.953 HPWL=168345.8 Acc=82.0%
+        [SA] Iter 5200: T=88.409 HPWL=167540.4 Acc=81.8%
+        [SA] Iter 5400: T=84.087 HPWL=168161.1 Acc=81.3%
+        [SA] Iter 5600: T=79.976 HPWL=167757.2 Acc=81.0%
+        [SA] Iter 5800: T=76.066 HPWL=167296.4 Acc=80.7%
+        [SA] Iter 6000: T=72.347 HPWL=166757.0 Acc=80.3%
+        [SA] Iter 6200: T=68.810 HPWL=166791.2 Acc=80.1%
+        [SA] Iter 6400: T=65.446 HPWL=166694.7 Acc=79.6%
+        [SA] Iter 6600: T=62.246 HPWL=166261.1 Acc=79.2%
+        [SA] Iter 6800: T=59.203 HPWL=166279.7 Acc=78.8%
+        [SA] Iter 7000: T=56.308 HPWL=165696.6 Acc=78.4%
+        [SA] Iter 7200: T=53.555 HPWL=165533.3 Acc=77.8%
+        [SA] Iter 7400: T=50.937 HPWL=164855.9 Acc=77.3%
+        [SA] Iter 7600: T=48.447 HPWL=164601.8 Acc=77.0%
+        [SA] Iter 7800: T=46.078 HPWL=164491.0 Acc=76.6%
+        [SA] Iter 8000: T=43.826 HPWL=164425.2 Acc=76.1%
+        [SA] Iter 8200: T=41.683 HPWL=164177.7 Acc=75.7%
+        [SA] Iter 8400: T=39.645 HPWL=163967.0 Acc=75.2%
+        [SA] Iter 8600: T=37.707 HPWL=163754.7 Acc=74.7%
+        [SA] Iter 8800: T=35.863 HPWL=163543.1 Acc=74.2%
+        [SA] Iter 9000: T=34.110 HPWL=163189.1 Acc=73.8%
+        [SA] Iter 9200: T=32.442 HPWL=163199.9 Acc=73.3%
+        [SA] Iter 9400: T=30.856 HPWL=163162.7 Acc=72.9%
+        [SA] Iter 9600: T=29.348 HPWL=163222.2 Acc=72.3%
+        [SA] Iter 9800: T=27.913 HPWL=163116.0 Acc=71.8%
+        [SA] Iter 10000: T=26.548 HPWL=163081.5 Acc=71.3%
+        [SA] Iter 10200: T=25.250 HPWL=162416.0 Acc=70.9%
+        [SA] Iter 10400: T=24.016 HPWL=162405.1 Acc=70.3%
+        [SA] Iter 10600: T=22.842 HPWL=162353.3 Acc=69.7%
+        [SA] Iter 10800: T=21.725 HPWL=162293.7 Acc=69.1%
+        [SA] Iter 11000: T=20.663 HPWL=162411.1 Acc=68.6%
+        [SA] Iter 11200: T=19.653 HPWL=162391.3 Acc=68.2%
+        [SA] Iter 11400: T=18.692 HPWL=162476.1 Acc=67.7%
+        [SA] Iter 11600: T=17.778 HPWL=162427.3 Acc=67.3%
+        [SA] Iter 11800: T=16.909 HPWL=162101.3 Acc=66.8%
+        [SA] Iter 12000: T=16.082 HPWL=162125.7 Acc=66.3%
+        [SA] Iter 12200: T=15.296 HPWL=161742.4 Acc=65.7%
+        [SA] Iter 12400: T=14.548 HPWL=161699.1 Acc=65.2%
+        [SA] Iter 12600: T=13.837 HPWL=161543.3 Acc=64.8%
+        [SA] Iter 12800: T=13.160 HPWL=161079.9 Acc=64.3%
+        [SA] Iter 13000: T=12.517 HPWL=161091.5 Acc=63.8%
+        [SA] Iter 13200: T=11.905 HPWL=161041.2 Acc=63.2%
+        [SA] Iter 13400: T=11.323 HPWL=160893.0 Acc=62.8%
+        [SA] Iter 13600: T=10.769 HPWL=160940.7 Acc=62.4%
+        [SA] Iter 13800: T=10.243 HPWL=160852.1 Acc=62.0%
+        [SA] Iter 14000: T=9.742 HPWL=160887.7 Acc=61.4%
+        [SA] Iter 14200: T=9.266 HPWL=160786.9 Acc=61.0%
+        [SA] Iter 14400: T=8.813 HPWL=160778.6 Acc=60.5%
+        [SA] Iter 14600: T=8.382 HPWL=160715.3 Acc=60.1%
+        [SA] Iter 14800: T=7.972 HPWL=160684.9 Acc=59.6%
+        [SA] Iter 15000: T=7.582 HPWL=160662.8 Acc=59.1%
+      [SA] End Batch: 162729.0 -> 160662.8 (-2066.2)
+      [SA] Start Batch: Cells=150 T0=305.820 HPWL=152909.9
+        [SA] Iter 200: T=290.868 HPWL=154373.5 Acc=93.0%
+        [SA] Iter 400: T=276.648 HPWL=154714.7 Acc=92.8%
+        [SA] Iter 600: T=263.123 HPWL=155500.8 Acc=93.3%
+        [SA] Iter 800: T=250.258 HPWL=155225.3 Acc=93.5%
+        [SA] Iter 1000: T=238.023 HPWL=155065.3 Acc=93.9%
+        [SA] Iter 1200: T=226.386 HPWL=155400.2 Acc=93.9%
+        [SA] Iter 1400: T=215.318 HPWL=155597.8 Acc=93.7%
+        [SA] Iter 1600: T=204.792 HPWL=155532.3 Acc=93.8%
+        [SA] Iter 1800: T=194.779 HPWL=155686.7 Acc=93.6%
+        [SA] Iter 2000: T=185.257 HPWL=155317.4 Acc=93.1%
+        [SA] Iter 2200: T=176.199 HPWL=156358.8 Acc=92.7%
+        [SA] Iter 2400: T=167.585 HPWL=156468.3 Acc=92.6%
+        [SA] Iter 2600: T=159.392 HPWL=156237.2 Acc=92.4%
+        [SA] Iter 2800: T=151.599 HPWL=156132.0 Acc=92.1%
+        [SA] Iter 3000: T=144.188 HPWL=156036.2 Acc=92.1%
+        [SA] Iter 3200: T=137.138 HPWL=155826.7 Acc=91.9%
+        [SA] Iter 3400: T=130.434 HPWL=155739.2 Acc=91.8%
+        [SA] Iter 3600: T=124.057 HPWL=155492.2 Acc=91.6%
+        [SA] Iter 3800: T=117.992 HPWL=155307.0 Acc=91.1%
+        [SA] Iter 4000: T=112.223 HPWL=155368.1 Acc=91.0%
+        [SA] Iter 4200: T=106.736 HPWL=155195.2 Acc=90.7%
+        [SA] Iter 4400: T=101.518 HPWL=154813.7 Acc=90.7%
+        [SA] Iter 4600: T=96.555 HPWL=155062.1 Acc=90.2%
+        [SA] Iter 4800: T=91.834 HPWL=155288.1 Acc=90.1%
+        [SA] Iter 5000: T=87.345 HPWL=155019.4 Acc=90.0%
+        [SA] Iter 5200: T=83.074 HPWL=154555.2 Acc=89.7%
+        [SA] Iter 5400: T=79.013 HPWL=154894.3 Acc=89.5%
+        [SA] Iter 5600: T=75.150 HPWL=154817.5 Acc=89.0%
+        [SA] Iter 5800: T=71.476 HPWL=154422.2 Acc=88.9%
+        [SA] Iter 6000: T=67.981 HPWL=154011.7 Acc=88.7%
+        [SA] Iter 6200: T=64.658 HPWL=154074.3 Acc=88.5%
+        [SA] Iter 6400: T=61.497 HPWL=154066.4 Acc=88.4%
+        [SA] Iter 6600: T=58.490 HPWL=153497.0 Acc=88.2%
+        [SA] Iter 6800: T=55.631 HPWL=153809.1 Acc=87.8%
+        [SA] Iter 7000: T=52.911 HPWL=153675.0 Acc=87.6%
+        [SA] Iter 7200: T=50.324 HPWL=153887.4 Acc=87.4%
+        [SA] Iter 7400: T=47.864 HPWL=153495.9 Acc=87.2%
+        [SA] Iter 7600: T=45.524 HPWL=153231.5 Acc=86.7%
+        [SA] Iter 7800: T=43.298 HPWL=152981.1 Acc=86.4%
+        [SA] Iter 8000: T=41.181 HPWL=152930.9 Acc=86.1%
+        [SA] Iter 8200: T=39.168 HPWL=152958.5 Acc=85.9%
+        [SA] Iter 8400: T=37.253 HPWL=152995.8 Acc=85.7%
+        [SA] Iter 8600: T=35.432 HPWL=152757.0 Acc=85.3%
+        [SA] Iter 8800: T=33.699 HPWL=152647.7 Acc=84.8%
+        [SA] Iter 9000: T=32.052 HPWL=152575.8 Acc=84.4%
+        [SA] Iter 9200: T=30.485 HPWL=152888.7 Acc=84.0%
+        [SA] Iter 9400: T=28.994 HPWL=152865.7 Acc=83.7%
+        [SA] Iter 9600: T=27.577 HPWL=152453.0 Acc=83.4%
+        [SA] Iter 9800: T=26.229 HPWL=152595.4 Acc=83.1%
+        [SA] Iter 10000: T=24.946 HPWL=152655.8 Acc=82.7%
+        [SA] Iter 10200: T=23.727 HPWL=152557.0 Acc=82.3%
+        [SA] Iter 10400: T=22.567 HPWL=152609.1 Acc=81.7%
+        [SA] Iter 10600: T=21.463 HPWL=152485.4 Acc=81.2%
+        [SA] Iter 10800: T=20.414 HPWL=152228.7 Acc=80.8%
+        [SA] Iter 11000: T=19.416 HPWL=152153.3 Acc=80.4%
+        [SA] Iter 11200: T=18.467 HPWL=151806.5 Acc=80.0%
+        [SA] Iter 11400: T=17.564 HPWL=151520.0 Acc=79.6%
+        [SA] Iter 11600: T=16.705 HPWL=151466.0 Acc=79.2%
+        [SA] Iter 11800: T=15.889 HPWL=151292.3 Acc=78.8%
+        [SA] Iter 12000: T=15.112 HPWL=151375.1 Acc=78.2%
+        [SA] Iter 12200: T=14.373 HPWL=151310.5 Acc=77.7%
+        [SA] Iter 12400: T=13.670 HPWL=151382.3 Acc=77.2%
+        [SA] Iter 12600: T=13.002 HPWL=151289.4 Acc=76.7%
+        [SA] Iter 12800: T=12.366 HPWL=151113.6 Acc=76.2%
+        [SA] Iter 13000: T=11.762 HPWL=151099.2 Acc=75.7%
+        [SA] Iter 13200: T=11.187 HPWL=150859.5 Acc=75.3%
+        [SA] Iter 13400: T=10.640 HPWL=150687.2 Acc=74.8%
+        [SA] Iter 13600: T=10.120 HPWL=150654.5 Acc=74.4%
+        [SA] Iter 13800: T=9.625 HPWL=150562.2 Acc=74.0%
+        [SA] Iter 14000: T=9.154 HPWL=150070.7 Acc=73.4%
+        [SA] Iter 14200: T=8.707 HPWL=150082.9 Acc=72.9%
+        [SA] Iter 14400: T=8.281 HPWL=149909.4 Acc=72.4%
+        [SA] Iter 14600: T=7.876 HPWL=149904.4 Acc=71.9%
+        [SA] Iter 14800: T=7.491 HPWL=149442.8 Acc=71.4%
+        [SA] Iter 15000: T=7.125 HPWL=149030.4 Acc=70.9%
+      [SA] End Batch: 152909.9 -> 149030.4 (-3879.5)
+      [SA] Start Batch: Cells=150 T0=311.161 HPWL=155580.3
+        [SA] Iter 200: T=295.948 HPWL=158711.9 Acc=80.5%
+        [SA] Iter 400: T=281.479 HPWL=158064.6 Acc=79.2%
+        [SA] Iter 600: T=267.718 HPWL=158895.8 Acc=79.7%
+        [SA] Iter 800: T=254.629 HPWL=159296.7 Acc=80.8%
+        [SA] Iter 1000: T=242.180 HPWL=159621.2 Acc=80.5%
+        [SA] Iter 1200: T=230.340 HPWL=160388.9 Acc=80.5%
+        [SA] Iter 1400: T=219.079 HPWL=160052.0 Acc=80.7%
+        [SA] Iter 1600: T=208.368 HPWL=159984.7 Acc=80.8%
+        [SA] Iter 1800: T=198.181 HPWL=160096.9 Acc=80.6%
+        [SA] Iter 2000: T=188.492 HPWL=157775.6 Acc=80.2%
+        [SA] Iter 2200: T=179.277 HPWL=157812.0 Acc=79.2%
+        [SA] Iter 2400: T=170.512 HPWL=158123.7 Acc=79.1%
+        [SA] Iter 2600: T=162.175 HPWL=158047.3 Acc=79.0%
+        [SA] Iter 2800: T=154.247 HPWL=157945.4 Acc=78.6%
+        [SA] Iter 3000: T=146.706 HPWL=157741.6 Acc=78.4%
+        [SA] Iter 3200: T=139.533 HPWL=157789.9 Acc=77.9%
+        [SA] Iter 3400: T=132.711 HPWL=157231.2 Acc=77.4%
+        [SA] Iter 3600: T=126.223 HPWL=156701.8 Acc=77.1%
+        [SA] Iter 3800: T=120.052 HPWL=156019.2 Acc=76.7%
+        [SA] Iter 4000: T=114.183 HPWL=157421.2 Acc=76.4%
+        [SA] Iter 4200: T=108.600 HPWL=155403.5 Acc=76.0%
+        [SA] Iter 4400: T=103.291 HPWL=155761.0 Acc=75.4%
+        [SA] Iter 4600: T=98.241 HPWL=155398.9 Acc=75.3%
+        [SA] Iter 4800: T=93.438 HPWL=155533.9 Acc=74.9%
+        [SA] Iter 5000: T=88.870 HPWL=154848.1 Acc=74.5%
+        [SA] Iter 5200: T=84.525 HPWL=154773.3 Acc=73.8%
+        [SA] Iter 5400: T=80.393 HPWL=154753.3 Acc=73.4%
+        [SA] Iter 5600: T=76.462 HPWL=154747.8 Acc=72.8%
+        [SA] Iter 5800: T=72.724 HPWL=154726.8 Acc=72.6%
+        [SA] Iter 6000: T=69.169 HPWL=153781.5 Acc=72.0%
+        [SA] Iter 6200: T=65.787 HPWL=153488.5 Acc=71.2%
+        [SA] Iter 6400: T=62.571 HPWL=153680.0 Acc=70.7%
+        [SA] Iter 6600: T=59.512 HPWL=153759.2 Acc=69.8%
+        [SA] Iter 6800: T=56.602 HPWL=153855.5 Acc=69.3%
+        [SA] Iter 7000: T=53.835 HPWL=153777.7 Acc=68.8%
+        [SA] Iter 7200: T=51.203 HPWL=153305.4 Acc=68.3%
+        [SA] Iter 7400: T=48.700 HPWL=153508.5 Acc=67.7%
+        [SA] Iter 7600: T=46.319 HPWL=153159.0 Acc=67.2%
+        [SA] Iter 7800: T=44.054 HPWL=152617.3 Acc=66.6%
+        [SA] Iter 8000: T=41.900 HPWL=152081.0 Acc=66.1%
+        [SA] Iter 8200: T=39.852 HPWL=152073.4 Acc=65.6%
+        [SA] Iter 8400: T=37.903 HPWL=152074.2 Acc=65.0%
+        [SA] Iter 8600: T=36.050 HPWL=151112.0 Acc=64.5%
+        [SA] Iter 8800: T=34.288 HPWL=151101.9 Acc=64.1%
+        [SA] Iter 9000: T=32.612 HPWL=150574.5 Acc=63.5%
+        [SA] Iter 9200: T=31.017 HPWL=150838.7 Acc=62.9%
+        [SA] Iter 9400: T=29.501 HPWL=150487.2 Acc=62.2%
+        [SA] Iter 9600: T=28.058 HPWL=150369.8 Acc=61.7%
+        [SA] Iter 9800: T=26.687 HPWL=150609.5 Acc=61.1%
+        [SA] Iter 10000: T=25.382 HPWL=150164.9 Acc=60.5%
+        [SA] Iter 10200: T=24.141 HPWL=149961.0 Acc=59.9%
+        [SA] Iter 10400: T=22.961 HPWL=149656.5 Acc=59.3%
+        [SA] Iter 10600: T=21.838 HPWL=149625.8 Acc=58.7%
+        [SA] Iter 10800: T=20.771 HPWL=149460.5 Acc=58.2%
+        [SA] Iter 11000: T=19.755 HPWL=149240.5 Acc=57.9%
+        [SA] Iter 11200: T=18.789 HPWL=149171.3 Acc=57.3%
+        [SA] Iter 11400: T=17.871 HPWL=149133.4 Acc=56.8%
+        [SA] Iter 11600: T=16.997 HPWL=148950.5 Acc=56.3%
+        [SA] Iter 11800: T=16.166 HPWL=148797.8 Acc=55.8%
+        [SA] Iter 12000: T=15.376 HPWL=148631.7 Acc=55.2%
+        [SA] Iter 12200: T=14.624 HPWL=148635.1 Acc=54.7%
+        [SA] Iter 12400: T=13.909 HPWL=148588.3 Acc=54.2%
+        [SA] Iter 12600: T=13.229 HPWL=148601.6 Acc=53.6%
+        [SA] Iter 12800: T=12.582 HPWL=148597.4 Acc=53.0%
+        [SA] Iter 13000: T=11.967 HPWL=148493.3 Acc=52.5%
+        [SA] Iter 13200: T=11.382 HPWL=148537.7 Acc=52.0%
+        [SA] Iter 13400: T=10.826 HPWL=148432.2 Acc=51.5%
+        [SA] Iter 13600: T=10.296 HPWL=148228.2 Acc=51.0%
+        [SA] Iter 13800: T=9.793 HPWL=148190.9 Acc=50.5%
+        [SA] Iter 14000: T=9.314 HPWL=148063.1 Acc=50.0%
+        [SA] Iter 14200: T=8.859 HPWL=148106.8 Acc=49.5%
+        [SA] Iter 14400: T=8.426 HPWL=148036.7 Acc=49.0%
+        [SA] Iter 14600: T=8.014 HPWL=147942.3 Acc=48.6%
+        [SA] Iter 14800: T=7.622 HPWL=147912.4 Acc=48.1%
+        [SA] Iter 15000: T=7.249 HPWL=147903.2 Acc=47.7%
+      [SA] End Batch: 155580.3 -> 147903.2 (-7677.1)
+      [SA] Start Batch: Cells=150 T0=251.389 HPWL=125694.3
+        [SA] Iter 200: T=239.098 HPWL=129559.1 Acc=79.5%
+        [SA] Iter 400: T=227.409 HPWL=130531.5 Acc=85.0%
+        [SA] Iter 600: T=216.291 HPWL=131286.6 Acc=84.5%
+        [SA] Iter 800: T=205.716 HPWL=131946.3 Acc=84.9%
+        [SA] Iter 1000: T=195.659 HPWL=132536.0 Acc=84.9%
+        [SA] Iter 1200: T=186.093 HPWL=132450.1 Acc=84.8%
+        [SA] Iter 1400: T=176.995 HPWL=133136.4 Acc=85.0%
+        [SA] Iter 1600: T=168.342 HPWL=132460.6 Acc=85.0%
+        [SA] Iter 1800: T=160.112 HPWL=132283.8 Acc=84.8%
+        [SA] Iter 2000: T=152.284 HPWL=131686.6 Acc=84.0%
+        [SA] Iter 2200: T=144.839 HPWL=131038.3 Acc=83.5%
+        [SA] Iter 2400: T=137.757 HPWL=131203.3 Acc=83.3%
+        [SA] Iter 2600: T=131.023 HPWL=131394.7 Acc=83.3%
+        [SA] Iter 2800: T=124.617 HPWL=131185.4 Acc=83.0%
+        [SA] Iter 3000: T=118.524 HPWL=131123.7 Acc=82.1%
+        [SA] Iter 3200: T=112.730 HPWL=130909.0 Acc=81.8%
+        [SA] Iter 3400: T=107.218 HPWL=130550.6 Acc=81.6%
+        [SA] Iter 3600: T=101.976 HPWL=129448.6 Acc=81.4%
+        [SA] Iter 3800: T=96.991 HPWL=129846.6 Acc=81.1%
+        [SA] Iter 4000: T=92.249 HPWL=130379.2 Acc=80.9%
+        [SA] Iter 4200: T=87.739 HPWL=129401.3 Acc=80.6%
+        [SA] Iter 4400: T=83.449 HPWL=129753.8 Acc=79.9%
+        [SA] Iter 4600: T=79.370 HPWL=128963.8 Acc=79.5%
+        [SA] Iter 4800: T=75.489 HPWL=128669.2 Acc=78.9%
+        [SA] Iter 5000: T=71.799 HPWL=128236.3 Acc=78.5%
+        [SA] Iter 5200: T=68.288 HPWL=127520.8 Acc=78.1%
+        [SA] Iter 5400: T=64.950 HPWL=127911.3 Acc=77.7%
+        [SA] Iter 5600: T=61.774 HPWL=127792.4 Acc=77.2%
+        [SA] Iter 5800: T=58.754 HPWL=127679.2 Acc=76.6%
+        [SA] Iter 6000: T=55.882 HPWL=127318.0 Acc=76.1%
+        [SA] Iter 6200: T=53.150 HPWL=127400.3 Acc=75.5%
+        [SA] Iter 6400: T=50.551 HPWL=126831.4 Acc=74.9%
+        [SA] Iter 6600: T=48.080 HPWL=126925.9 Acc=74.4%
+        [SA] Iter 6800: T=45.729 HPWL=126550.8 Acc=73.9%
+        [SA] Iter 7000: T=43.493 HPWL=126646.8 Acc=73.4%
+        [SA] Iter 7200: T=41.367 HPWL=126335.7 Acc=73.0%
+        [SA] Iter 7400: T=39.345 HPWL=125719.3 Acc=72.5%
+        [SA] Iter 7600: T=37.421 HPWL=125296.6 Acc=72.0%
+        [SA] Iter 7800: T=35.592 HPWL=124963.2 Acc=71.2%
+        [SA] Iter 8000: T=33.851 HPWL=124873.7 Acc=70.6%
+        [SA] Iter 8200: T=32.196 HPWL=124347.6 Acc=69.9%
+        [SA] Iter 8400: T=30.622 HPWL=124452.9 Acc=69.3%
+        [SA] Iter 8600: T=29.125 HPWL=124324.4 Acc=68.7%
+        [SA] Iter 8800: T=27.701 HPWL=123842.3 Acc=68.1%
+        [SA] Iter 9000: T=26.347 HPWL=123612.1 Acc=67.3%
+        [SA] Iter 9200: T=25.059 HPWL=123220.7 Acc=66.7%
+        [SA] Iter 9400: T=23.834 HPWL=123387.9 Acc=66.1%
+        [SA] Iter 9600: T=22.669 HPWL=123050.4 Acc=65.5%
+        [SA] Iter 9800: T=21.560 HPWL=122930.0 Acc=65.0%
+        [SA] Iter 10000: T=20.506 HPWL=122865.1 Acc=64.4%
+        [SA] Iter 10200: T=19.504 HPWL=122556.7 Acc=63.7%
+        [SA] Iter 10400: T=18.550 HPWL=122564.8 Acc=62.9%
+        [SA] Iter 10600: T=17.643 HPWL=122108.7 Acc=62.3%
+        [SA] Iter 10800: T=16.781 HPWL=122078.5 Acc=61.7%
+        [SA] Iter 11000: T=15.960 HPWL=121737.1 Acc=61.0%
+        [SA] Iter 11200: T=15.180 HPWL=121764.4 Acc=60.3%
+        [SA] Iter 11400: T=14.438 HPWL=121500.2 Acc=59.7%
+        [SA] Iter 11600: T=13.732 HPWL=121256.3 Acc=59.1%
+        [SA] Iter 11800: T=13.061 HPWL=121229.7 Acc=58.5%
+        [SA] Iter 12000: T=12.422 HPWL=121097.1 Acc=57.8%
+        [SA] Iter 12200: T=11.815 HPWL=120969.1 Acc=57.2%
+        [SA] Iter 12400: T=11.237 HPWL=120720.3 Acc=56.6%
+        [SA] Iter 12600: T=10.688 HPWL=120388.1 Acc=56.0%
+        [SA] Iter 12800: T=10.165 HPWL=120408.3 Acc=55.4%
+        [SA] Iter 13000: T=9.668 HPWL=120240.3 Acc=54.9%
+        [SA] Iter 13200: T=9.196 HPWL=120278.3 Acc=54.3%
+        [SA] Iter 13400: T=8.746 HPWL=120009.2 Acc=53.8%
+        [SA] Iter 13600: T=8.318 HPWL=119889.1 Acc=53.2%
+        [SA] Iter 13800: T=7.912 HPWL=119767.1 Acc=52.7%
+        [SA] Iter 14000: T=7.525 HPWL=119652.2 Acc=52.1%
+        [SA] Iter 14200: T=7.157 HPWL=119588.7 Acc=51.6%
+        [SA] Iter 14400: T=6.807 HPWL=119591.3 Acc=51.0%
+        [SA] Iter 14600: T=6.474 HPWL=119513.9 Acc=50.5%
+        [SA] Iter 14800: T=6.158 HPWL=119489.7 Acc=49.9%
+        [SA] Iter 15000: T=5.857 HPWL=119389.2 Acc=49.4%
+      [SA] End Batch: 125694.3 -> 119389.2 (-6305.1)
+      [SA] Start Batch: Cells=150 T0=297.683 HPWL=148841.4
+        [SA] Iter 200: T=283.129 HPWL=151542.8 Acc=86.0%
+        [SA] Iter 400: T=269.287 HPWL=152465.5 Acc=89.2%
+        [SA] Iter 600: T=256.122 HPWL=151522.1 Acc=88.2%
+        [SA] Iter 800: T=243.600 HPWL=152175.6 Acc=87.9%
+        [SA] Iter 1000: T=231.690 HPWL=152360.3 Acc=88.2%
+        [SA] Iter 1200: T=220.363 HPWL=151723.9 Acc=88.3%
+        [SA] Iter 1400: T=209.589 HPWL=151632.8 Acc=88.2%
+        [SA] Iter 1600: T=199.343 HPWL=152903.7 Acc=88.2%
+        [SA] Iter 1800: T=189.597 HPWL=152796.3 Acc=88.1%
+        [SA] Iter 2000: T=180.327 HPWL=152279.6 Acc=88.5%
+        [SA] Iter 2200: T=171.511 HPWL=152112.1 Acc=88.0%
+        [SA] Iter 2400: T=163.126 HPWL=151998.8 Acc=87.8%
+        [SA] Iter 2600: T=155.151 HPWL=151610.8 Acc=87.5%
+        [SA] Iter 2800: T=147.566 HPWL=151651.5 Acc=87.4%
+        [SA] Iter 3000: T=140.351 HPWL=151129.8 Acc=87.0%
+        [SA] Iter 3200: T=133.489 HPWL=151631.9 Acc=86.4%
+        [SA] Iter 3400: T=126.963 HPWL=150870.8 Acc=86.0%
+        [SA] Iter 3600: T=120.756 HPWL=151601.4 Acc=85.8%
+        [SA] Iter 3800: T=114.852 HPWL=152163.8 Acc=85.7%
+        [SA] Iter 4000: T=109.237 HPWL=151425.4 Acc=85.2%
+        [SA] Iter 4200: T=103.896 HPWL=150473.9 Acc=84.5%
+        [SA] Iter 4400: T=98.817 HPWL=150755.2 Acc=84.1%
+        [SA] Iter 4600: T=93.986 HPWL=150537.3 Acc=83.8%
+        [SA] Iter 4800: T=89.391 HPWL=150553.6 Acc=83.5%
+        [SA] Iter 5000: T=85.021 HPWL=150498.4 Acc=83.3%
+        [SA] Iter 5200: T=80.864 HPWL=150551.1 Acc=82.7%
+        [SA] Iter 5400: T=76.910 HPWL=149960.9 Acc=82.4%
+        [SA] Iter 5600: T=73.150 HPWL=149547.4 Acc=82.1%
+        [SA] Iter 5800: T=69.574 HPWL=148759.7 Acc=81.6%
+        [SA] Iter 6000: T=66.173 HPWL=149344.0 Acc=81.2%
+        [SA] Iter 6200: T=62.937 HPWL=149137.6 Acc=80.9%
+        [SA] Iter 6400: T=59.860 HPWL=148854.9 Acc=80.5%
+        [SA] Iter 6600: T=56.934 HPWL=148647.9 Acc=80.2%
+        [SA] Iter 6800: T=54.150 HPWL=148151.7 Acc=79.7%
+        [SA] Iter 7000: T=51.503 HPWL=147838.1 Acc=79.2%
+        [SA] Iter 7200: T=48.985 HPWL=147705.1 Acc=78.9%
+        [SA] Iter 7400: T=46.590 HPWL=147526.4 Acc=78.4%
+        [SA] Iter 7600: T=44.312 HPWL=147628.3 Acc=77.9%
+        [SA] Iter 7800: T=42.146 HPWL=147591.9 Acc=77.3%
+        [SA] Iter 8000: T=40.085 HPWL=147374.4 Acc=76.9%
+        [SA] Iter 8200: T=38.126 HPWL=147382.7 Acc=76.6%
+        [SA] Iter 8400: T=36.262 HPWL=147066.8 Acc=75.9%
+        [SA] Iter 8600: T=34.489 HPWL=147169.2 Acc=75.5%
+        [SA] Iter 8800: T=32.803 HPWL=146898.9 Acc=75.1%
+        [SA] Iter 9000: T=31.199 HPWL=146896.7 Acc=74.6%
+        [SA] Iter 9200: T=29.674 HPWL=145980.3 Acc=74.2%
+        [SA] Iter 9400: T=28.223 HPWL=145300.9 Acc=73.8%
+        [SA] Iter 9600: T=26.843 HPWL=145048.3 Acc=73.4%
+        [SA] Iter 9800: T=25.531 HPWL=144817.1 Acc=73.0%
+        [SA] Iter 10000: T=24.283 HPWL=144620.0 Acc=72.7%
+        [SA] Iter 10200: T=23.095 HPWL=144320.2 Acc=72.1%
+        [SA] Iter 10400: T=21.966 HPWL=144237.9 Acc=71.6%
+        [SA] Iter 10600: T=20.892 HPWL=144460.5 Acc=71.2%
+        [SA] Iter 10800: T=19.871 HPWL=144421.1 Acc=70.6%
+        [SA] Iter 11000: T=18.899 HPWL=144011.1 Acc=70.0%
+        [SA] Iter 11200: T=17.975 HPWL=143629.6 Acc=69.5%
+        [SA] Iter 11400: T=17.097 HPWL=143499.9 Acc=68.9%
+        [SA] Iter 11600: T=16.261 HPWL=143604.5 Acc=68.4%
+        [SA] Iter 11800: T=15.466 HPWL=143632.8 Acc=67.9%
+        [SA] Iter 12000: T=14.710 HPWL=143509.2 Acc=67.5%
+        [SA] Iter 12200: T=13.990 HPWL=143505.0 Acc=67.0%
+        [SA] Iter 12400: T=13.306 HPWL=143441.0 Acc=66.4%
+        [SA] Iter 12600: T=12.656 HPWL=143366.2 Acc=65.9%
+        [SA] Iter 12800: T=12.037 HPWL=142916.7 Acc=65.3%
+        [SA] Iter 13000: T=11.449 HPWL=142690.1 Acc=64.8%
+        [SA] Iter 13200: T=10.889 HPWL=142259.9 Acc=64.3%
+        [SA] Iter 13400: T=10.357 HPWL=142177.1 Acc=63.7%
+        [SA] Iter 13600: T=9.850 HPWL=142130.6 Acc=63.2%
+        [SA] Iter 13800: T=9.369 HPWL=142047.9 Acc=62.7%
+        [SA] Iter 14000: T=8.911 HPWL=141962.5 Acc=62.2%
+        [SA] Iter 14200: T=8.475 HPWL=141995.4 Acc=61.8%
+        [SA] Iter 14400: T=8.061 HPWL=141937.3 Acc=61.2%
+        [SA] Iter 14600: T=7.667 HPWL=141842.5 Acc=60.7%
+        [SA] Iter 14800: T=7.292 HPWL=141272.4 Acc=60.2%
+        [SA] Iter 15000: T=6.935 HPWL=141069.0 Acc=59.8%
+      [SA] End Batch: 148841.4 -> 141069.0 (-7772.4)
+[PROGRESS] Global SA: Batch 10/23 (150 cells, type: sky130_fd_sc_hd__nan)
+      [SA] Start Batch: Cells=150 T0=268.598 HPWL=134298.9
+        [SA] Iter 200: T=255.466 HPWL=137995.5 Acc=86.5%
+        [SA] Iter 400: T=242.976 HPWL=139283.8 Acc=86.2%
+        [SA] Iter 600: T=231.097 HPWL=140317.2 Acc=88.3%
+        [SA] Iter 800: T=219.799 HPWL=139957.7 Acc=87.8%
+        [SA] Iter 1000: T=209.053 HPWL=141453.5 Acc=87.0%
+        [SA] Iter 1200: T=198.832 HPWL=140618.6 Acc=87.2%
+        [SA] Iter 1400: T=189.112 HPWL=141917.6 Acc=87.1%
+        [SA] Iter 1600: T=179.866 HPWL=142573.5 Acc=87.5%
+        [SA] Iter 1800: T=171.072 HPWL=142598.3 Acc=87.4%
+        [SA] Iter 2000: T=162.709 HPWL=142668.4 Acc=87.1%
+        [SA] Iter 2200: T=154.754 HPWL=142040.2 Acc=86.8%
+        [SA] Iter 2400: T=147.188 HPWL=142225.4 Acc=86.5%
+        [SA] Iter 2600: T=139.992 HPWL=142504.9 Acc=86.0%
+        [SA] Iter 2800: T=133.148 HPWL=143400.0 Acc=85.7%
+        [SA] Iter 3000: T=126.638 HPWL=143076.4 Acc=85.8%
+        [SA] Iter 3200: T=120.447 HPWL=142778.4 Acc=85.3%
+        [SA] Iter 3400: T=114.558 HPWL=141694.5 Acc=85.2%
+        [SA] Iter 3600: T=108.957 HPWL=141294.4 Acc=84.9%
+        [SA] Iter 3800: T=103.631 HPWL=141383.5 Acc=84.6%
+        [SA] Iter 4000: T=98.564 HPWL=141501.5 Acc=84.4%
+        [SA] Iter 4200: T=93.745 HPWL=141334.0 Acc=84.2%
+        [SA] Iter 4400: T=89.162 HPWL=140767.4 Acc=83.9%
+        [SA] Iter 4600: T=84.803 HPWL=139980.3 Acc=83.5%
+        [SA] Iter 4800: T=80.657 HPWL=139382.6 Acc=83.1%
+        [SA] Iter 5000: T=76.714 HPWL=139380.8 Acc=82.6%
+        [SA] Iter 5200: T=72.963 HPWL=139642.9 Acc=82.2%
+        [SA] Iter 5400: T=69.396 HPWL=139809.2 Acc=81.8%
+        [SA] Iter 5600: T=66.003 HPWL=139675.6 Acc=81.4%
+        [SA] Iter 5800: T=62.776 HPWL=139688.2 Acc=81.0%
+        [SA] Iter 6000: T=59.707 HPWL=139781.9 Acc=80.8%
+        [SA] Iter 6200: T=56.788 HPWL=138717.8 Acc=80.5%
+        [SA] Iter 6400: T=54.012 HPWL=138693.2 Acc=80.0%
+        [SA] Iter 6600: T=51.371 HPWL=138358.3 Acc=79.8%
+        [SA] Iter 6800: T=48.860 HPWL=137720.1 Acc=79.4%
+        [SA] Iter 7000: T=46.471 HPWL=137632.3 Acc=79.1%
+        [SA] Iter 7200: T=44.199 HPWL=137567.7 Acc=78.5%
+        [SA] Iter 7400: T=42.038 HPWL=136951.2 Acc=78.0%
+        [SA] Iter 7600: T=39.983 HPWL=137038.0 Acc=77.4%
+        [SA] Iter 7800: T=38.028 HPWL=137027.8 Acc=76.9%
+        [SA] Iter 8000: T=36.169 HPWL=136560.2 Acc=76.4%
+        [SA] Iter 8200: T=34.401 HPWL=136647.0 Acc=76.0%
+        [SA] Iter 8400: T=32.719 HPWL=136613.5 Acc=75.4%
+        [SA] Iter 8600: T=31.119 HPWL=136392.7 Acc=74.7%
+        [SA] Iter 8800: T=29.598 HPWL=136703.3 Acc=74.1%
+        [SA] Iter 9000: T=28.151 HPWL=136768.0 Acc=73.8%
+        [SA] Iter 9200: T=26.774 HPWL=136269.2 Acc=73.5%
+        [SA] Iter 9400: T=25.465 HPWL=135864.0 Acc=72.9%
+        [SA] Iter 9600: T=24.220 HPWL=135338.7 Acc=72.6%
+        [SA] Iter 9800: T=23.036 HPWL=134803.3 Acc=71.8%
+        [SA] Iter 10000: T=21.910 HPWL=134872.6 Acc=71.1%
+        [SA] Iter 10200: T=20.839 HPWL=134263.1 Acc=70.5%
+        [SA] Iter 10400: T=19.820 HPWL=134272.9 Acc=70.0%
+        [SA] Iter 10600: T=18.851 HPWL=134110.5 Acc=69.6%
+        [SA] Iter 10800: T=17.929 HPWL=133965.9 Acc=68.9%
+        [SA] Iter 11000: T=17.053 HPWL=133908.7 Acc=68.4%
+        [SA] Iter 11200: T=16.219 HPWL=133912.0 Acc=67.8%
+        [SA] Iter 11400: T=15.426 HPWL=133814.9 Acc=67.3%
+        [SA] Iter 11600: T=14.672 HPWL=133615.8 Acc=66.7%
+        [SA] Iter 11800: T=13.955 HPWL=133530.0 Acc=66.0%
+        [SA] Iter 12000: T=13.272 HPWL=133506.1 Acc=65.5%
+        [SA] Iter 12200: T=12.624 HPWL=133436.5 Acc=64.9%
+        [SA] Iter 12400: T=12.006 HPWL=133359.9 Acc=64.2%
+        [SA] Iter 12600: T=11.419 HPWL=133229.3 Acc=63.7%
+        [SA] Iter 12800: T=10.861 HPWL=133204.7 Acc=63.1%
+        [SA] Iter 13000: T=10.330 HPWL=133172.3 Acc=62.5%
+        [SA] Iter 13200: T=9.825 HPWL=133087.7 Acc=62.0%
+        [SA] Iter 13400: T=9.345 HPWL=132791.1 Acc=61.4%
+        [SA] Iter 13600: T=8.888 HPWL=132670.6 Acc=60.9%
+        [SA] Iter 13800: T=8.453 HPWL=132472.5 Acc=60.4%
+        [SA] Iter 14000: T=8.040 HPWL=132505.4 Acc=59.8%
+        [SA] Iter 14200: T=7.647 HPWL=132563.2 Acc=59.2%
+        [SA] Iter 14400: T=7.273 HPWL=132292.8 Acc=58.7%
+        [SA] Iter 14600: T=6.918 HPWL=132271.0 Acc=58.1%
+        [SA] Iter 14800: T=6.579 HPWL=132104.8 Acc=57.6%
+        [SA] Iter 15000: T=6.258 HPWL=132063.2 Acc=57.0%
+      [SA] End Batch: 134298.9 -> 132063.2 (-2235.7)
+      [SA] Start Batch: Cells=150 T0=307.107 HPWL=153553.6
+        [SA] Iter 200: T=292.093 HPWL=156905.4 Acc=88.5%
+        [SA] Iter 400: T=277.812 HPWL=158072.5 Acc=89.2%
+        [SA] Iter 600: T=264.230 HPWL=157591.3 Acc=89.8%
+        [SA] Iter 800: T=251.312 HPWL=157351.5 Acc=89.5%
+        [SA] Iter 1000: T=239.025 HPWL=157799.6 Acc=89.5%
+        [SA] Iter 1200: T=227.339 HPWL=158143.0 Acc=88.9%
+        [SA] Iter 1400: T=216.225 HPWL=158022.2 Acc=88.8%
+        [SA] Iter 1600: T=205.654 HPWL=158754.5 Acc=89.1%
+        [SA] Iter 1800: T=195.599 HPWL=158430.1 Acc=88.8%
+        [SA] Iter 2000: T=186.036 HPWL=158879.2 Acc=88.8%
+        [SA] Iter 2200: T=176.941 HPWL=157861.7 Acc=88.3%
+        [SA] Iter 2400: T=168.291 HPWL=158231.2 Acc=88.1%
+        [SA] Iter 2600: T=160.063 HPWL=158289.3 Acc=88.0%
+        [SA] Iter 2800: T=152.237 HPWL=157748.1 Acc=87.0%
+        [SA] Iter 3000: T=144.794 HPWL=158207.8 Acc=86.5%
+        [SA] Iter 3200: T=137.716 HPWL=157970.1 Acc=86.2%
+        [SA] Iter 3400: T=130.983 HPWL=158047.1 Acc=85.8%
+        [SA] Iter 3600: T=124.579 HPWL=157901.9 Acc=85.1%
+        [SA] Iter 3800: T=118.488 HPWL=157652.1 Acc=85.1%
+        [SA] Iter 4000: T=112.695 HPWL=158715.0 Acc=84.9%
+        [SA] Iter 4200: T=107.186 HPWL=158127.2 Acc=84.5%
+        [SA] Iter 4400: T=101.945 HPWL=157606.9 Acc=84.0%
+        [SA] Iter 4600: T=96.961 HPWL=158308.7 Acc=83.6%
+        [SA] Iter 4800: T=92.221 HPWL=158534.8 Acc=83.5%
+        [SA] Iter 5000: T=87.712 HPWL=158590.3 Acc=83.3%
+        [SA] Iter 5200: T=83.424 HPWL=158805.3 Acc=83.1%
+        [SA] Iter 5400: T=79.345 HPWL=158153.9 Acc=82.6%
+        [SA] Iter 5600: T=75.466 HPWL=157343.4 Acc=82.6%
+        [SA] Iter 5800: T=71.777 HPWL=156504.4 Acc=81.9%
+        [SA] Iter 6000: T=68.268 HPWL=156839.8 Acc=81.3%
+        [SA] Iter 6200: T=64.930 HPWL=157020.5 Acc=81.0%
+        [SA] Iter 6400: T=61.756 HPWL=156762.8 Acc=80.9%
+        [SA] Iter 6600: T=58.736 HPWL=156028.2 Acc=80.4%
+        [SA] Iter 6800: T=55.865 HPWL=155530.1 Acc=79.6%
+        [SA] Iter 7000: T=53.133 HPWL=155731.4 Acc=79.2%
+        [SA] Iter 7200: T=50.536 HPWL=155195.4 Acc=78.5%
+        [SA] Iter 7400: T=48.065 HPWL=155615.9 Acc=77.8%
+        [SA] Iter 7600: T=45.715 HPWL=155933.4 Acc=77.5%
+        [SA] Iter 7800: T=43.480 HPWL=155371.9 Acc=77.1%
+        [SA] Iter 8000: T=41.354 HPWL=154633.0 Acc=76.6%
+        [SA] Iter 8200: T=39.333 HPWL=154780.0 Acc=76.2%
+        [SA] Iter 8400: T=37.410 HPWL=154700.1 Acc=75.6%
+        [SA] Iter 8600: T=35.581 HPWL=154306.3 Acc=75.1%
+        [SA] Iter 8800: T=33.841 HPWL=153796.0 Acc=74.3%
+        [SA] Iter 9000: T=32.187 HPWL=153300.4 Acc=73.7%
+        [SA] Iter 9200: T=30.613 HPWL=152610.0 Acc=72.9%
+        [SA] Iter 9400: T=29.116 HPWL=152506.3 Acc=72.2%
+        [SA] Iter 9600: T=27.693 HPWL=152408.5 Acc=71.6%
+        [SA] Iter 9800: T=26.339 HPWL=152164.6 Acc=71.0%
+        [SA] Iter 10000: T=25.051 HPWL=151780.9 Acc=70.3%
+        [SA] Iter 10200: T=23.827 HPWL=151747.5 Acc=69.4%
+        [SA] Iter 10400: T=22.662 HPWL=151908.1 Acc=68.7%
+        [SA] Iter 10600: T=21.554 HPWL=151862.3 Acc=68.1%
+        [SA] Iter 10800: T=20.500 HPWL=151615.0 Acc=67.4%
+        [SA] Iter 11000: T=19.498 HPWL=151585.2 Acc=66.6%
+        [SA] Iter 11200: T=18.545 HPWL=151745.6 Acc=66.0%
+        [SA] Iter 11400: T=17.638 HPWL=151564.0 Acc=65.4%
+        [SA] Iter 11600: T=16.776 HPWL=151254.2 Acc=64.8%
+        [SA] Iter 11800: T=15.955 HPWL=151167.3 Acc=64.1%
+        [SA] Iter 12000: T=15.175 HPWL=150797.0 Acc=63.4%
+        [SA] Iter 12200: T=14.433 HPWL=150795.7 Acc=62.7%
+        [SA] Iter 12400: T=13.728 HPWL=150616.6 Acc=62.1%
+        [SA] Iter 12600: T=13.057 HPWL=150432.5 Acc=61.4%
+        [SA] Iter 12800: T=12.418 HPWL=150367.7 Acc=60.8%
+        [SA] Iter 13000: T=11.811 HPWL=150251.5 Acc=60.1%
+        [SA] Iter 13200: T=11.234 HPWL=150109.1 Acc=59.4%
+        [SA] Iter 13400: T=10.684 HPWL=150198.4 Acc=58.8%
+        [SA] Iter 13600: T=10.162 HPWL=150156.8 Acc=58.0%
+        [SA] Iter 13800: T=9.665 HPWL=150033.7 Acc=57.4%
+        [SA] Iter 14000: T=9.193 HPWL=150042.7 Acc=56.8%
+        [SA] Iter 14200: T=8.743 HPWL=150027.8 Acc=56.2%
+        [SA] Iter 14400: T=8.316 HPWL=149869.1 Acc=55.6%
+        [SA] Iter 14600: T=7.909 HPWL=149786.8 Acc=55.0%
+        [SA] Iter 14800: T=7.523 HPWL=149745.3 Acc=54.4%
+        [SA] Iter 15000: T=7.155 HPWL=149647.7 Acc=53.8%
+      [SA] End Batch: 153553.6 -> 149647.7 (-3905.9)
+      [SA] Start Batch: Cells=28 T0=64.467 HPWL=32233.7
+        [SA] Iter 200: T=61.316 HPWL=32384.5 Acc=59.0%
+        [SA] Iter 400: T=58.318 HPWL=32142.4 Acc=59.5%
+        [SA] Iter 600: T=55.467 HPWL=32373.0 Acc=57.0%
+        [SA] Iter 800: T=52.755 HPWL=32477.3 Acc=57.1%
+        [SA] Iter 1000: T=50.176 HPWL=32177.2 Acc=55.6%
+        [SA] Iter 1200: T=47.723 HPWL=32601.9 Acc=55.7%
+        [SA] Iter 1400: T=45.390 HPWL=32431.5 Acc=56.3%
+        [SA] Iter 1600: T=43.170 HPWL=32120.6 Acc=55.8%
+        [SA] Iter 1800: T=41.060 HPWL=32148.7 Acc=55.2%
+        [SA] Iter 2000: T=39.052 HPWL=32397.5 Acc=55.0%
+        [SA] Iter 2200: T=37.143 HPWL=32147.4 Acc=55.0%
+        [SA] Iter 2400: T=35.327 HPWL=32244.4 Acc=54.3%
+        [SA] Iter 2600: T=33.600 HPWL=32042.2 Acc=53.6%
+        [SA] Iter 2800: T=31.957 HPWL=32095.6 Acc=52.7%
+        [SA] Iter 3000: T=30.395 HPWL=32068.6 Acc=52.3%
+        [SA] Iter 3200: T=28.909 HPWL=31990.1 Acc=51.8%
+        [SA] Iter 3400: T=27.496 HPWL=32150.0 Acc=51.3%
+        [SA] Iter 3600: T=26.151 HPWL=31996.6 Acc=50.7%
+        [SA] Iter 3800: T=24.873 HPWL=32021.0 Acc=50.3%
+        [SA] Iter 4000: T=23.657 HPWL=32241.4 Acc=50.1%
+        [SA] Iter 4200: T=22.500 HPWL=31967.7 Acc=50.0%
+        [SA] Iter 4400: T=21.400 HPWL=31959.5 Acc=49.5%
+        [SA] Iter 4600: T=20.354 HPWL=31970.4 Acc=49.3%
+        [SA] Iter 4800: T=19.359 HPWL=31990.7 Acc=48.7%
+        [SA] Iter 5000: T=18.412 HPWL=31988.1 Acc=48.4%
+        [SA] Iter 5200: T=17.512 HPWL=32046.5 Acc=47.9%
+        [SA] Iter 5400: T=16.656 HPWL=31994.0 Acc=47.3%
+        [SA] Iter 5600: T=15.842 HPWL=31992.3 Acc=46.7%
+        [SA] Iter 5800: T=15.067 HPWL=31985.3 Acc=46.1%
+        [SA] Iter 6000: T=14.331 HPWL=31945.6 Acc=45.5%
+        [SA] Iter 6200: T=13.630 HPWL=31970.1 Acc=45.3%
+        [SA] Iter 6400: T=12.964 HPWL=31957.3 Acc=44.9%
+        [SA] Iter 6600: T=12.330 HPWL=31908.0 Acc=44.5%
+        [SA] Iter 6800: T=11.727 HPWL=31933.4 Acc=43.8%
+        [SA] Iter 7000: T=11.154 HPWL=31920.1 Acc=43.4%
+        [SA] Iter 7200: T=10.608 HPWL=31908.9 Acc=42.9%
+        [SA] Iter 7400: T=10.090 HPWL=31912.8 Acc=42.3%
+        [SA] Iter 7600: T=9.596 HPWL=31929.8 Acc=41.8%
+        [SA] Iter 7800: T=9.127 HPWL=31971.6 Acc=41.5%
+        [SA] Iter 8000: T=8.681 HPWL=31927.7 Acc=41.0%
+        [SA] Iter 8200: T=8.257 HPWL=31909.1 Acc=40.6%
+        [SA] Iter 8400: T=7.853 HPWL=31923.0 Acc=40.2%
+        [SA] Iter 8600: T=7.469 HPWL=31936.2 Acc=39.7%
+        [SA] Iter 8800: T=7.104 HPWL=31900.3 Acc=39.2%
+        [SA] Iter 9000: T=6.757 HPWL=31889.3 Acc=38.8%
+        [SA] Iter 9200: T=6.426 HPWL=31904.5 Acc=38.5%
+        [SA] Iter 9400: T=6.112 HPWL=31915.8 Acc=38.1%
+        [SA] Iter 9600: T=5.813 HPWL=31906.8 Acc=37.9%
+        [SA] Iter 9800: T=5.529 HPWL=31897.6 Acc=37.5%
+        [SA] Iter 10000: T=5.259 HPWL=31904.7 Acc=37.1%
+        [SA] Iter 10200: T=5.002 HPWL=31892.6 Acc=36.9%
+        [SA] Iter 10400: T=4.757 HPWL=31892.6 Acc=36.5%
+        [SA] Iter 10600: T=4.525 HPWL=31893.5 Acc=36.2%
+        [SA] Iter 10800: T=4.303 HPWL=31885.6 Acc=35.9%
+        [SA] Iter 11000: T=4.093 HPWL=31885.7 Acc=35.4%
+        [SA] Iter 11200: T=3.893 HPWL=31889.2 Acc=35.1%
+        [SA] Iter 11400: T=3.703 HPWL=31894.1 Acc=34.7%
+        [SA] Iter 11600: T=3.521 HPWL=31891.5 Acc=34.4%
+        [SA] Iter 11800: T=3.349 HPWL=31885.6 Acc=34.0%
+        [SA] Iter 12000: T=3.186 HPWL=31890.7 Acc=33.7%
+        [SA] Iter 12200: T=3.030 HPWL=31884.6 Acc=33.2%
+        [SA] Iter 12400: T=2.882 HPWL=31701.9 Acc=33.0%
+        [SA] Iter 12600: T=2.741 HPWL=31700.5 Acc=32.6%
+        [SA] Iter 12800: T=2.607 HPWL=31635.0 Acc=32.3%
+        [SA] Iter 13000: T=2.479 HPWL=31628.1 Acc=31.9%
+        [SA] Iter 13200: T=2.358 HPWL=31627.2 Acc=31.6%
+        [SA] Iter 13400: T=2.243 HPWL=31632.7 Acc=31.3%
+        [SA] Iter 13600: T=2.133 HPWL=31597.1 Acc=30.9%
+        [SA] Iter 13800: T=2.029 HPWL=31597.1 Acc=30.6%
+        [SA] Iter 14000: T=1.930 HPWL=31597.1 Acc=30.3%
+        [SA] Iter 14200: T=1.835 HPWL=31600.5 Acc=30.0%
+        [SA] Iter 14400: T=1.746 HPWL=31600.5 Acc=29.7%
+        [SA] Iter 14600: T=1.660 HPWL=31603.3 Acc=29.5%
+        [SA] Iter 14800: T=1.579 HPWL=31599.1 Acc=29.2%
+        [SA] Iter 15000: T=1.502 HPWL=31599.1 Acc=29.0%
+      [SA] End Batch: 32233.7 -> 31599.1 (-634.6)
+      [SA] Start Batch: Cells=3 T0=3.368 HPWL=1683.8
+        [SA] Iter 200: T=3.203 HPWL=1684.3 Acc=94.5%
+        [SA] Iter 400: T=3.046 HPWL=1684.3 Acc=94.8%
+        [SA] Iter 600: T=2.897 HPWL=1684.3 Acc=93.5%
+        [SA] Iter 800: T=2.756 HPWL=1684.3 Acc=93.4%
+        [SA] Iter 1000: T=2.621 HPWL=1684.3 Acc=92.7%
+        [SA] Iter 1200: T=2.493 HPWL=1683.8 Acc=92.0%
+        [SA] Iter 1400: T=2.371 HPWL=1683.8 Acc=92.4%
+        [SA] Iter 1600: T=2.255 HPWL=1683.8 Acc=92.0%
+        [SA] Iter 1800: T=2.145 HPWL=1683.8 Acc=91.8%
+        [SA] Iter 2000: T=2.040 HPWL=1684.3 Acc=91.5%
+        [SA] Iter 2200: T=1.940 HPWL=1683.8 Acc=91.3%
+        [SA] Iter 2400: T=1.845 HPWL=1684.3 Acc=91.0%
+        [SA] Iter 2600: T=1.755 HPWL=1683.8 Acc=90.6%
+        [SA] Iter 2800: T=1.669 HPWL=1684.3 Acc=90.2%
+        [SA] Iter 3000: T=1.588 HPWL=1683.8 Acc=89.9%
+        [SA] Iter 3200: T=1.510 HPWL=1684.3 Acc=89.5%
+        [SA] Iter 3400: T=1.436 HPWL=1684.3 Acc=89.4%
+        [SA] Iter 3600: T=1.366 HPWL=1683.8 Acc=89.4%
+        [SA] Iter 3800: T=1.299 HPWL=1683.8 Acc=89.1%
+        [SA] Iter 4000: T=1.236 HPWL=1684.3 Acc=88.9%
+        [SA] Iter 4200: T=1.175 HPWL=1684.3 Acc=88.4%
+        [SA] Iter 4400: T=1.118 HPWL=1683.8 Acc=87.9%
+        [SA] Iter 4600: T=1.063 HPWL=1684.3 Acc=87.6%
+        [SA] Iter 4800: T=1.011 HPWL=1684.3 Acc=87.1%
+        [SA] Iter 5000: T=0.962 HPWL=1684.3 Acc=86.7%
+        [SA] Iter 5200: T=0.915 HPWL=1684.3 Acc=86.3%
+        [SA] Iter 5400: T=0.870 HPWL=1683.8 Acc=86.0%
+        [SA] Iter 5600: T=0.828 HPWL=1683.8 Acc=85.6%
+        [SA] Iter 5800: T=0.787 HPWL=1683.8 Acc=85.2%
+        [SA] Iter 6000: T=0.749 HPWL=1683.8 Acc=84.6%
+        [SA] Iter 6200: T=0.712 HPWL=1683.8 Acc=84.0%
+        [SA] Iter 6400: T=0.677 HPWL=1683.8 Acc=83.4%
+        [SA] Iter 6600: T=0.644 HPWL=1683.8 Acc=83.0%
+        [SA] Iter 6800: T=0.613 HPWL=1683.8 Acc=82.6%
+        [SA] Iter 7000: T=0.583 HPWL=1683.8 Acc=82.1%
+        [SA] Iter 7200: T=0.554 HPWL=1684.3 Acc=81.6%
+        [SA] Iter 7400: T=0.527 HPWL=1683.8 Acc=81.2%
+        [SA] Iter 7600: T=0.501 HPWL=1683.8 Acc=80.6%
+        [SA] Iter 7800: T=0.477 HPWL=1683.8 Acc=79.9%
+        [SA] Iter 8000: T=0.453 HPWL=1684.3 Acc=79.3%
+        [SA] Iter 8200: T=0.431 HPWL=1683.8 Acc=78.6%
+        [SA] Iter 8400: T=0.410 HPWL=1683.8 Acc=78.0%
+        [SA] Iter 8600: T=0.390 HPWL=1683.8 Acc=77.4%
+        [SA] Iter 8800: T=0.371 HPWL=1683.8 Acc=76.7%
+        [SA] Iter 9000: T=0.353 HPWL=1683.8 Acc=76.2%
+        [SA] Iter 9200: T=0.336 HPWL=1683.8 Acc=75.3%
+        [SA] Iter 9400: T=0.319 HPWL=1683.8 Acc=74.7%
+        [SA] Iter 9600: T=0.304 HPWL=1683.8 Acc=74.0%
+        [SA] Iter 9800: T=0.289 HPWL=1683.8 Acc=73.2%
+        [SA] Iter 10000: T=0.275 HPWL=1683.8 Acc=72.4%
+        [SA] Iter 10200: T=0.261 HPWL=1683.8 Acc=71.4%
+        [SA] Iter 10400: T=0.249 HPWL=1683.8 Acc=70.6%
+        [SA] Iter 10600: T=0.236 HPWL=1683.8 Acc=69.7%
+        [SA] Iter 10800: T=0.225 HPWL=1684.3 Acc=68.8%
+        [SA] Iter 11000: T=0.214 HPWL=1683.8 Acc=68.0%
+        [SA] Iter 11200: T=0.203 HPWL=1684.3 Acc=67.1%
+        [SA] Iter 11400: T=0.193 HPWL=1683.8 Acc=66.2%
+        [SA] Iter 11600: T=0.184 HPWL=1683.8 Acc=65.4%
+        [SA] Iter 11800: T=0.175 HPWL=1683.8 Acc=64.5%
+        [SA] Iter 12000: T=0.166 HPWL=1684.3 Acc=63.7%
+        [SA] Iter 12200: T=0.158 HPWL=1683.8 Acc=62.8%
+        [SA] Iter 12400: T=0.151 HPWL=1683.8 Acc=62.0%
+        [SA] Iter 12600: T=0.143 HPWL=1683.8 Acc=61.2%
+        [SA] Iter 12800: T=0.136 HPWL=1684.3 Acc=60.3%
+        [SA] Iter 13000: T=0.130 HPWL=1683.8 Acc=59.5%
+        [SA] Iter 13200: T=0.123 HPWL=1683.8 Acc=58.7%
+        [SA] Iter 13400: T=0.117 HPWL=1683.8 Acc=57.8%
+        [SA] Iter 13600: T=0.111 HPWL=1683.8 Acc=57.1%
+        [SA] Iter 13800: T=0.106 HPWL=1683.8 Acc=56.2%
+        [SA] Iter 14000: T=0.101 HPWL=1683.8 Acc=55.5%
+        [SA] Iter 14200: T=0.096 HPWL=1683.8 Acc=54.7%
+        [SA] Iter 14400: T=0.091 HPWL=1683.8 Acc=54.0%
+        [SA] Iter 14600: T=0.087 HPWL=1683.8 Acc=53.2%
+        [SA] Iter 14800: T=0.082 HPWL=1683.8 Acc=52.6%
+        [SA] Iter 15000: T=0.078 HPWL=1683.8 Acc=51.9%
+      [SA] End Batch: 1683.8 -> 1683.8 (+0.0)
+      [SA] Start Batch: Cells=150 T0=2.329 HPWL=1164.3
+        [SA] Iter 200: T=2.215 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 400: T=2.106 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 600: T=2.003 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 800: T=1.905 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 1000: T=1.812 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 1200: T=1.724 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 1400: T=1.639 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 1600: T=1.559 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 1800: T=1.483 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 2000: T=1.411 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 2200: T=1.342 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 2400: T=1.276 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 2600: T=1.214 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 2800: T=1.154 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 3000: T=1.098 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 3200: T=1.044 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 3400: T=0.993 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 3600: T=0.945 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 3800: T=0.898 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 4000: T=0.854 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 4200: T=0.813 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 4400: T=0.773 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 4600: T=0.735 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 4800: T=0.699 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 5000: T=0.665 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 5200: T=0.633 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 5400: T=0.602 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 5600: T=0.572 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 5800: T=0.544 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 6000: T=0.518 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 6200: T=0.492 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 6400: T=0.468 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 6600: T=0.445 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 6800: T=0.424 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 7000: T=0.403 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 7200: T=0.383 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 7400: T=0.364 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 7600: T=0.347 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 7800: T=0.330 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 8000: T=0.314 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 8200: T=0.298 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 8400: T=0.284 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 8600: T=0.270 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 8800: T=0.257 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 9000: T=0.244 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 9200: T=0.232 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 9400: T=0.221 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 9600: T=0.210 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 9800: T=0.200 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 10000: T=0.190 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 10200: T=0.181 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 10400: T=0.172 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 10600: T=0.163 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 10800: T=0.155 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 11000: T=0.148 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 11200: T=0.141 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 11400: T=0.134 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 11600: T=0.127 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 11800: T=0.121 HPWL=1164.3 Acc=100.0%
+        [SA] Iter 12000: T=0.115 HPWL=1164.3 Acc=99.9%
+        [SA] Iter 12200: T=0.109 HPWL=1164.3 Acc=99.9%
+        [SA] Iter 12400: T=0.104 HPWL=1164.3 Acc=99.9%
+        [SA] Iter 12600: T=0.099 HPWL=1164.3 Acc=99.9%
+        [SA] Iter 12800: T=0.094 HPWL=1164.3 Acc=99.8%
+        [SA] Iter 13000: T=0.090 HPWL=1164.3 Acc=99.8%
+        [SA] Iter 13200: T=0.085 HPWL=1164.3 Acc=99.7%
+        [SA] Iter 13400: T=0.081 HPWL=1164.3 Acc=99.7%
+        [SA] Iter 13600: T=0.077 HPWL=1164.3 Acc=99.6%
+        [SA] Iter 13800: T=0.073 HPWL=1164.3 Acc=99.5%
+        [SA] Iter 14000: T=0.070 HPWL=1164.3 Acc=99.5%
+        [SA] Iter 14200: T=0.066 HPWL=1164.3 Acc=99.4%
+        [SA] Iter 14400: T=0.063 HPWL=1164.3 Acc=99.3%
+        [SA] Iter 14600: T=0.060 HPWL=1164.3 Acc=99.2%
+        [SA] Iter 14800: T=0.057 HPWL=1164.3 Acc=99.1%
+        [SA] Iter 15000: T=0.054 HPWL=1164.3 Acc=99.0%
+      [SA] End Batch: 1164.3 -> 1164.3 (+0.0)
+      [SA] Start Batch: Cells=150 T0=195.168 HPWL=97583.9
+        [SA] Iter 200: T=185.626 HPWL=97492.0 Acc=97.0%
+        [SA] Iter 400: T=176.551 HPWL=97610.1 Acc=96.5%
+        [SA] Iter 600: T=167.919 HPWL=97455.5 Acc=96.8%
+        [SA] Iter 800: T=159.710 HPWL=97662.2 Acc=96.9%
+        [SA] Iter 1000: T=151.902 HPWL=97596.4 Acc=96.7%
+        [SA] Iter 1200: T=144.475 HPWL=97511.8 Acc=96.7%
+        [SA] Iter 1400: T=137.412 HPWL=97531.8 Acc=96.8%
+        [SA] Iter 1600: T=130.694 HPWL=97508.6 Acc=96.8%
+        [SA] Iter 1800: T=124.304 HPWL=97418.0 Acc=96.5%
+        [SA] Iter 2000: T=118.227 HPWL=97594.6 Acc=96.3%
+        [SA] Iter 2200: T=112.447 HPWL=97434.3 Acc=96.4%
+        [SA] Iter 2400: T=106.949 HPWL=97547.8 Acc=96.2%
+        [SA] Iter 2600: T=101.721 HPWL=97482.4 Acc=96.0%
+        [SA] Iter 2800: T=96.747 HPWL=97614.8 Acc=96.0%
+        [SA] Iter 3000: T=92.017 HPWL=97559.6 Acc=95.8%
+        [SA] Iter 3200: T=87.519 HPWL=97689.3 Acc=95.7%
+        [SA] Iter 3400: T=83.240 HPWL=97449.4 Acc=95.5%
+        [SA] Iter 3600: T=79.170 HPWL=97382.5 Acc=95.5%
+        [SA] Iter 3800: T=75.300 HPWL=97374.3 Acc=95.5%
+        [SA] Iter 4000: T=71.618 HPWL=97558.5 Acc=95.3%
+        [SA] Iter 4200: T=68.117 HPWL=97347.3 Acc=95.2%
+        [SA] Iter 4400: T=64.787 HPWL=97480.9 Acc=95.1%
+        [SA] Iter 4600: T=61.619 HPWL=97525.4 Acc=95.1%
+        [SA] Iter 4800: T=58.607 HPWL=97394.8 Acc=95.1%
+        [SA] Iter 5000: T=55.741 HPWL=97338.4 Acc=94.9%
+        [SA] Iter 5200: T=53.016 HPWL=97414.3 Acc=94.7%
+        [SA] Iter 5400: T=50.424 HPWL=97372.4 Acc=94.4%
+        [SA] Iter 5600: T=47.959 HPWL=97299.8 Acc=94.4%
+        [SA] Iter 5800: T=45.614 HPWL=97428.6 Acc=94.2%
+        [SA] Iter 6000: T=43.384 HPWL=97713.2 Acc=94.1%
+        [SA] Iter 6200: T=41.263 HPWL=97463.1 Acc=94.1%
+        [SA] Iter 6400: T=39.246 HPWL=97420.3 Acc=93.8%
+        [SA] Iter 6600: T=37.327 HPWL=97257.7 Acc=93.6%
+        [SA] Iter 6800: T=35.502 HPWL=97411.1 Acc=93.6%
+        [SA] Iter 7000: T=33.767 HPWL=97451.2 Acc=93.5%
+        [SA] Iter 7200: T=32.116 HPWL=97386.8 Acc=93.4%
+        [SA] Iter 7400: T=30.546 HPWL=97379.7 Acc=93.3%
+        [SA] Iter 7600: T=29.052 HPWL=97310.7 Acc=93.1%
+        [SA] Iter 7800: T=27.632 HPWL=97307.9 Acc=92.9%
+        [SA] Iter 8000: T=26.281 HPWL=97220.6 Acc=92.6%
+        [SA] Iter 8200: T=24.996 HPWL=97163.6 Acc=92.4%
+        [SA] Iter 8400: T=23.774 HPWL=97175.9 Acc=92.2%
+        [SA] Iter 8600: T=22.612 HPWL=97315.4 Acc=91.9%
+        [SA] Iter 8800: T=21.506 HPWL=97350.1 Acc=91.7%
+        [SA] Iter 9000: T=20.455 HPWL=97101.8 Acc=91.4%
+        [SA] Iter 9200: T=19.455 HPWL=97137.4 Acc=91.1%
+        [SA] Iter 9400: T=18.504 HPWL=97116.2 Acc=90.9%
+        [SA] Iter 9600: T=17.599 HPWL=97127.3 Acc=90.7%
+        [SA] Iter 9800: T=16.739 HPWL=96373.0 Acc=90.5%
+        [SA] Iter 10000: T=15.920 HPWL=96023.0 Acc=90.2%
+        [SA] Iter 10200: T=15.142 HPWL=95877.6 Acc=90.0%
+        [SA] Iter 10400: T=14.402 HPWL=95858.2 Acc=89.7%
+        [SA] Iter 10600: T=13.697 HPWL=95729.8 Acc=89.3%
+        [SA] Iter 10800: T=13.028 HPWL=95581.5 Acc=89.0%
+        [SA] Iter 11000: T=12.391 HPWL=95355.1 Acc=88.8%
+        [SA] Iter 11200: T=11.785 HPWL=95291.6 Acc=88.4%
+        [SA] Iter 11400: T=11.209 HPWL=93945.4 Acc=88.1%
+        [SA] Iter 11600: T=10.661 HPWL=93342.2 Acc=87.8%
+        [SA] Iter 11800: T=10.140 HPWL=92454.0 Acc=87.6%
+        [SA] Iter 12000: T=9.644 HPWL=91873.7 Acc=87.3%
+        [SA] Iter 12200: T=9.172 HPWL=89716.6 Acc=87.0%
+        [SA] Iter 12400: T=8.724 HPWL=88436.3 Acc=86.7%
+        [SA] Iter 12600: T=8.298 HPWL=86461.1 Acc=86.5%
+        [SA] Iter 12800: T=7.892 HPWL=84342.5 Acc=86.2%
+        [SA] Iter 13000: T=7.506 HPWL=83488.0 Acc=85.9%
+        [SA] Iter 13200: T=7.139 HPWL=82405.3 Acc=85.6%
+        [SA] Iter 13400: T=6.790 HPWL=81194.4 Acc=85.3%
+        [SA] Iter 13600: T=6.458 HPWL=81215.4 Acc=84.9%
+        [SA] Iter 13800: T=6.142 HPWL=80801.2 Acc=84.5%
+        [SA] Iter 14000: T=5.842 HPWL=79368.3 Acc=84.2%
+        [SA] Iter 14200: T=5.556 HPWL=77709.6 Acc=83.9%
+        [SA] Iter 14400: T=5.285 HPWL=77394.5 Acc=83.5%
+        [SA] Iter 14600: T=5.026 HPWL=76677.9 Acc=83.1%
+        [SA] Iter 14800: T=4.781 HPWL=76269.6 Acc=82.7%
+        [SA] Iter 15000: T=4.547 HPWL=73628.9 Acc=82.4%
+      [SA] End Batch: 97583.9 -> 73628.9 (-23955.0)
+      [SA] Start Batch: Cells=22 T0=75.134 HPWL=37566.9
+        [SA] Iter 200: T=71.460 HPWL=37579.8 Acc=93.5%
+        [SA] Iter 400: T=67.967 HPWL=37522.1 Acc=94.2%
+        [SA] Iter 600: T=64.644 HPWL=37555.3 Acc=94.2%
+        [SA] Iter 800: T=61.483 HPWL=37532.6 Acc=93.5%
+        [SA] Iter 1000: T=58.478 HPWL=37609.2 Acc=93.5%
+        [SA] Iter 1200: T=55.619 HPWL=37607.6 Acc=93.5%
+        [SA] Iter 1400: T=52.899 HPWL=37565.1 Acc=93.5%
+        [SA] Iter 1600: T=50.313 HPWL=37528.1 Acc=93.4%
+        [SA] Iter 1800: T=47.853 HPWL=37478.6 Acc=92.9%
+        [SA] Iter 2000: T=45.514 HPWL=37524.4 Acc=92.9%
+        [SA] Iter 2200: T=43.289 HPWL=37504.1 Acc=92.4%
+        [SA] Iter 2400: T=41.172 HPWL=37575.7 Acc=92.6%
+        [SA] Iter 2600: T=39.159 HPWL=37532.6 Acc=92.4%
+        [SA] Iter 2800: T=37.245 HPWL=37510.1 Acc=92.2%
+        [SA] Iter 3000: T=35.424 HPWL=37574.7 Acc=92.2%
+        [SA] Iter 3200: T=33.692 HPWL=37495.2 Acc=92.1%
+        [SA] Iter 3400: T=32.045 HPWL=37511.5 Acc=91.8%
+        [SA] Iter 3600: T=30.478 HPWL=37534.3 Acc=91.4%
+        [SA] Iter 3800: T=28.988 HPWL=37510.5 Acc=90.9%
+        [SA] Iter 4000: T=27.571 HPWL=37590.2 Acc=90.6%
+        [SA] Iter 4200: T=26.223 HPWL=37490.5 Acc=90.4%
+        [SA] Iter 4400: T=24.941 HPWL=37593.3 Acc=89.9%
+        [SA] Iter 4600: T=23.722 HPWL=37510.5 Acc=89.5%
+        [SA] Iter 4800: T=22.562 HPWL=37483.6 Acc=89.4%
+        [SA] Iter 5000: T=21.459 HPWL=37559.1 Acc=89.2%
+        [SA] Iter 5200: T=20.410 HPWL=37511.5 Acc=89.0%
+        [SA] Iter 5400: T=19.412 HPWL=37382.4 Acc=88.6%
+        [SA] Iter 5600: T=18.463 HPWL=37345.8 Acc=88.2%
+        [SA] Iter 5800: T=17.560 HPWL=37329.2 Acc=88.2%
+        [SA] Iter 6000: T=16.702 HPWL=37324.8 Acc=87.9%
+        [SA] Iter 6200: T=15.885 HPWL=37318.3 Acc=87.7%
+        [SA] Iter 6400: T=15.108 HPWL=37363.1 Acc=87.7%
+        [SA] Iter 6600: T=14.370 HPWL=37347.5 Acc=87.5%
+        [SA] Iter 6800: T=13.667 HPWL=37339.4 Acc=87.3%
+        [SA] Iter 7000: T=12.999 HPWL=37316.1 Acc=87.2%
+        [SA] Iter 7200: T=12.364 HPWL=37182.7 Acc=87.0%
+        [SA] Iter 7400: T=11.759 HPWL=37207.8 Acc=86.6%
+        [SA] Iter 7600: T=11.184 HPWL=37220.6 Acc=86.2%
+        [SA] Iter 7800: T=10.637 HPWL=37261.6 Acc=85.9%
+        [SA] Iter 8000: T=10.117 HPWL=37241.6 Acc=85.6%
+        [SA] Iter 8200: T=9.623 HPWL=37212.4 Acc=85.3%
+        [SA] Iter 8400: T=9.152 HPWL=37222.3 Acc=85.1%
+        [SA] Iter 8600: T=8.705 HPWL=37229.7 Acc=84.8%
+        [SA] Iter 8800: T=8.279 HPWL=37209.7 Acc=84.6%
+        [SA] Iter 9000: T=7.874 HPWL=37217.8 Acc=84.3%
+        [SA] Iter 9200: T=7.489 HPWL=37215.1 Acc=84.0%
+        [SA] Iter 9400: T=7.123 HPWL=37207.0 Acc=83.6%
+        [SA] Iter 9600: T=6.775 HPWL=37024.0 Acc=83.4%
+        [SA] Iter 9800: T=6.444 HPWL=37027.8 Acc=83.1%
+        [SA] Iter 10000: T=6.129 HPWL=37022.3 Acc=82.8%
+        [SA] Iter 10200: T=5.829 HPWL=37009.4 Acc=82.4%
+        [SA] Iter 10400: T=5.544 HPWL=37039.6 Acc=82.0%
+        [SA] Iter 10600: T=5.273 HPWL=37025.8 Acc=81.7%
+        [SA] Iter 10800: T=5.015 HPWL=37015.9 Acc=81.3%
+        [SA] Iter 11000: T=4.770 HPWL=37014.9 Acc=80.8%
+        [SA] Iter 11200: T=4.537 HPWL=37022.3 Acc=80.5%
+        [SA] Iter 11400: T=4.315 HPWL=37015.9 Acc=80.2%
+        [SA] Iter 11600: T=4.104 HPWL=37013.2 Acc=79.9%
+        [SA] Iter 11800: T=3.903 HPWL=37006.7 Acc=79.5%
+        [SA] Iter 12000: T=3.713 HPWL=37012.2 Acc=79.1%
+        [SA] Iter 12200: T=3.531 HPWL=37004.0 Acc=78.6%
+        [SA] Iter 12400: T=3.358 HPWL=37012.2 Acc=78.1%
+        [SA] Iter 12600: T=3.194 HPWL=37010.4 Acc=77.6%
+        [SA] Iter 12800: T=3.038 HPWL=37007.7 Acc=77.3%
+        [SA] Iter 13000: T=2.890 HPWL=37007.7 Acc=76.9%
+        [SA] Iter 13200: T=2.748 HPWL=37006.7 Acc=76.4%
+        [SA] Iter 13400: T=2.614 HPWL=37015.9 Acc=76.0%
+        [SA] Iter 13600: T=2.486 HPWL=37009.4 Acc=75.6%
+        [SA] Iter 13800: T=2.365 HPWL=37009.4 Acc=75.3%
+        [SA] Iter 14000: T=2.249 HPWL=36998.6 Acc=74.9%
+        [SA] Iter 14200: T=2.139 HPWL=37001.3 Acc=74.4%
+        [SA] Iter 14400: T=2.034 HPWL=36998.6 Acc=73.9%
+        [SA] Iter 14600: T=1.935 HPWL=36998.6 Acc=73.4%
+        [SA] Iter 14800: T=1.840 HPWL=37004.0 Acc=73.0%
+        [SA] Iter 15000: T=1.750 HPWL=37001.3 Acc=72.6%
+      [SA] End Batch: 37566.9 -> 37001.3 (-565.6)
+      [SA] Start Batch: Cells=150 T0=339.782 HPWL=169890.8
+        [SA] Iter 200: T=323.170 HPWL=173802.5 Acc=83.5%
+        [SA] Iter 400: T=307.370 HPWL=175506.7 Acc=83.2%
+        [SA] Iter 600: T=292.343 HPWL=176714.6 Acc=83.0%
+        [SA] Iter 800: T=278.050 HPWL=177625.0 Acc=81.8%
+        [SA] Iter 1000: T=264.456 HPWL=179471.0 Acc=82.1%
+        [SA] Iter 1200: T=251.527 HPWL=179804.3 Acc=81.4%
+        [SA] Iter 1400: T=239.230 HPWL=180186.0 Acc=81.7%
+        [SA] Iter 1600: T=227.534 HPWL=179217.5 Acc=81.7%
+        [SA] Iter 1800: T=216.410 HPWL=179235.0 Acc=81.1%
+        [SA] Iter 2000: T=205.830 HPWL=180233.0 Acc=80.4%
+        [SA] Iter 2200: T=195.767 HPWL=180264.5 Acc=80.5%
+        [SA] Iter 2400: T=186.196 HPWL=179564.7 Acc=80.3%
+        [SA] Iter 2600: T=177.093 HPWL=179157.1 Acc=79.8%
+        [SA] Iter 2800: T=168.435 HPWL=179585.2 Acc=79.9%
+        [SA] Iter 3000: T=160.200 HPWL=179390.0 Acc=79.7%
+        [SA] Iter 3200: T=152.368 HPWL=179685.5 Acc=79.5%
+        [SA] Iter 3400: T=144.918 HPWL=178672.3 Acc=79.0%
+        [SA] Iter 3600: T=137.833 HPWL=179093.9 Acc=78.9%
+        [SA] Iter 3800: T=131.095 HPWL=179349.9 Acc=78.4%
+        [SA] Iter 4000: T=124.686 HPWL=178133.7 Acc=78.5%
+        [SA] Iter 4200: T=118.590 HPWL=177918.9 Acc=78.2%
+        [SA] Iter 4400: T=112.792 HPWL=176996.3 Acc=77.9%
+        [SA] Iter 4600: T=107.277 HPWL=176488.2 Acc=77.7%
+        [SA] Iter 4800: T=102.033 HPWL=175924.5 Acc=77.4%
+        [SA] Iter 5000: T=97.044 HPWL=175339.7 Acc=77.1%
+        [SA] Iter 5200: T=92.300 HPWL=176125.9 Acc=76.8%
+        [SA] Iter 5400: T=87.787 HPWL=176768.6 Acc=76.7%
+        [SA] Iter 5600: T=83.495 HPWL=175628.8 Acc=76.5%
+        [SA] Iter 5800: T=79.413 HPWL=174711.7 Acc=76.1%
+        [SA] Iter 6000: T=75.531 HPWL=173960.7 Acc=75.6%
+        [SA] Iter 6200: T=71.838 HPWL=173952.8 Acc=75.4%
+        [SA] Iter 6400: T=68.326 HPWL=174172.1 Acc=75.1%
+        [SA] Iter 6600: T=64.986 HPWL=172866.6 Acc=74.7%
+        [SA] Iter 6800: T=61.808 HPWL=172622.5 Acc=74.3%
+        [SA] Iter 7000: T=58.787 HPWL=172766.3 Acc=74.0%
+        [SA] Iter 7200: T=55.913 HPWL=172352.9 Acc=73.5%
+        [SA] Iter 7400: T=53.179 HPWL=172007.3 Acc=73.3%
+        [SA] Iter 7600: T=50.579 HPWL=171888.1 Acc=72.9%
+        [SA] Iter 7800: T=48.106 HPWL=171541.7 Acc=72.6%
+        [SA] Iter 8000: T=45.754 HPWL=171220.7 Acc=72.4%
+        [SA] Iter 8200: T=43.517 HPWL=171086.0 Acc=71.9%
+        [SA] Iter 8400: T=41.390 HPWL=171479.2 Acc=71.5%
+        [SA] Iter 8600: T=39.366 HPWL=170708.0 Acc=71.1%
+        [SA] Iter 8800: T=37.442 HPWL=170227.5 Acc=70.8%
+        [SA] Iter 9000: T=35.611 HPWL=169665.0 Acc=70.4%
+        [SA] Iter 9200: T=33.870 HPWL=169434.2 Acc=70.0%
+        [SA] Iter 9400: T=32.214 HPWL=168768.2 Acc=69.6%
+        [SA] Iter 9600: T=30.639 HPWL=168688.2 Acc=69.3%
+        [SA] Iter 9800: T=29.141 HPWL=168665.7 Acc=68.9%
+        [SA] Iter 10000: T=27.717 HPWL=168786.7 Acc=68.6%
+        [SA] Iter 10200: T=26.362 HPWL=168617.7 Acc=68.3%
+        [SA] Iter 10400: T=25.073 HPWL=168755.9 Acc=67.9%
+        [SA] Iter 10600: T=23.847 HPWL=168633.1 Acc=67.6%
+        [SA] Iter 10800: T=22.681 HPWL=168735.1 Acc=67.2%
+        [SA] Iter 11000: T=21.572 HPWL=168213.8 Acc=66.9%
+        [SA] Iter 11200: T=20.518 HPWL=168168.4 Acc=66.4%
+        [SA] Iter 11400: T=19.514 HPWL=168026.2 Acc=66.0%
+        [SA] Iter 11600: T=18.560 HPWL=167888.0 Acc=65.6%
+        [SA] Iter 11800: T=17.653 HPWL=167619.6 Acc=65.2%
+        [SA] Iter 12000: T=16.790 HPWL=167563.5 Acc=64.7%
+        [SA] Iter 12200: T=15.969 HPWL=167474.3 Acc=64.3%
+        [SA] Iter 12400: T=15.188 HPWL=167493.4 Acc=63.8%
+        [SA] Iter 12600: T=14.446 HPWL=167406.0 Acc=63.3%
+        [SA] Iter 12800: T=13.740 HPWL=167345.2 Acc=63.0%
+        [SA] Iter 13000: T=13.068 HPWL=167086.3 Acc=62.7%
+        [SA] Iter 13200: T=12.429 HPWL=167080.5 Acc=62.2%
+        [SA] Iter 13400: T=11.821 HPWL=166954.0 Acc=61.7%
+        [SA] Iter 13600: T=11.243 HPWL=166739.0 Acc=61.3%
+        [SA] Iter 13800: T=10.694 HPWL=166464.0 Acc=60.8%
+        [SA] Iter 14000: T=10.171 HPWL=166480.9 Acc=60.5%
+        [SA] Iter 14200: T=9.674 HPWL=166400.3 Acc=60.0%
+        [SA] Iter 14400: T=9.201 HPWL=166352.2 Acc=59.5%
+        [SA] Iter 14600: T=8.751 HPWL=166064.5 Acc=59.1%
+        [SA] Iter 14800: T=8.323 HPWL=165830.2 Acc=58.7%
+        [SA] Iter 15000: T=7.916 HPWL=165673.7 Acc=58.3%
+      [SA] End Batch: 169890.8 -> 165673.7 (-4217.1)
+      [SA] Start Batch: Cells=150 T0=238.184 HPWL=119092.2
+        [SA] Iter 200: T=226.540 HPWL=122901.7 Acc=78.0%
+        [SA] Iter 400: T=215.464 HPWL=123462.3 Acc=78.2%
+        [SA] Iter 600: T=204.930 HPWL=125089.5 Acc=78.0%
+        [SA] Iter 800: T=194.911 HPWL=126133.8 Acc=78.5%
+        [SA] Iter 1000: T=185.382 HPWL=126788.5 Acc=78.1%
+        [SA] Iter 1200: T=176.319 HPWL=125754.4 Acc=76.8%
+        [SA] Iter 1400: T=167.698 HPWL=127525.0 Acc=76.8%
+        [SA] Iter 1600: T=159.500 HPWL=126255.9 Acc=76.8%
+        [SA] Iter 1800: T=151.702 HPWL=125027.9 Acc=76.9%
+        [SA] Iter 2000: T=144.285 HPWL=124733.6 Acc=75.7%
+        [SA] Iter 2200: T=137.231 HPWL=124704.6 Acc=75.3%
+        [SA] Iter 2400: T=130.522 HPWL=124972.1 Acc=75.1%
+        [SA] Iter 2600: T=124.141 HPWL=126010.1 Acc=75.0%
+        [SA] Iter 2800: T=118.071 HPWL=124642.5 Acc=74.6%
+        [SA] Iter 3000: T=112.299 HPWL=124432.2 Acc=74.5%
+        [SA] Iter 3200: T=106.809 HPWL=124198.1 Acc=74.2%
+        [SA] Iter 3400: T=101.587 HPWL=123300.9 Acc=73.7%
+        [SA] Iter 3600: T=96.620 HPWL=122566.4 Acc=73.2%
+        [SA] Iter 3800: T=91.896 HPWL=121732.7 Acc=73.0%
+        [SA] Iter 4000: T=87.404 HPWL=121802.8 Acc=72.5%
+        [SA] Iter 4200: T=83.130 HPWL=121812.2 Acc=71.9%
+        [SA] Iter 4400: T=79.066 HPWL=122103.7 Acc=71.8%
+        [SA] Iter 4600: T=75.201 HPWL=121925.4 Acc=71.3%
+        [SA] Iter 4800: T=71.524 HPWL=121662.8 Acc=70.7%
+        [SA] Iter 5000: T=68.027 HPWL=122253.0 Acc=70.0%
+        [SA] Iter 5200: T=64.701 HPWL=122362.1 Acc=69.7%
+        [SA] Iter 5400: T=61.538 HPWL=121443.6 Acc=69.4%
+        [SA] Iter 5600: T=58.530 HPWL=121277.1 Acc=69.1%
+        [SA] Iter 5800: T=55.668 HPWL=119764.8 Acc=68.5%
+        [SA] Iter 6000: T=52.947 HPWL=120036.7 Acc=68.0%
+        [SA] Iter 6200: T=50.358 HPWL=119865.9 Acc=67.5%
+        [SA] Iter 6400: T=47.896 HPWL=119898.8 Acc=67.0%
+        [SA] Iter 6600: T=45.554 HPWL=120125.8 Acc=66.6%
+        [SA] Iter 6800: T=43.327 HPWL=120072.7 Acc=66.1%
+        [SA] Iter 7000: T=41.209 HPWL=119770.9 Acc=65.8%
+        [SA] Iter 7200: T=39.194 HPWL=120143.7 Acc=65.6%
+        [SA] Iter 7400: T=37.278 HPWL=119786.0 Acc=65.2%
+        [SA] Iter 7600: T=35.456 HPWL=119727.1 Acc=64.7%
+        [SA] Iter 7800: T=33.722 HPWL=119613.9 Acc=64.0%
+        [SA] Iter 8000: T=32.073 HPWL=119199.2 Acc=63.6%
+        [SA] Iter 8200: T=30.505 HPWL=118733.1 Acc=63.2%
+        [SA] Iter 8400: T=29.014 HPWL=118769.2 Acc=62.6%
+        [SA] Iter 8600: T=27.595 HPWL=118822.8 Acc=62.1%
+        [SA] Iter 8800: T=26.246 HPWL=118652.0 Acc=61.5%
+        [SA] Iter 9000: T=24.963 HPWL=118415.3 Acc=61.1%
+        [SA] Iter 9200: T=23.743 HPWL=118372.2 Acc=60.6%
+        [SA] Iter 9400: T=22.582 HPWL=118322.0 Acc=60.1%
+        [SA] Iter 9600: T=21.478 HPWL=118156.5 Acc=59.6%
+        [SA] Iter 9800: T=20.428 HPWL=117782.2 Acc=59.1%
+        [SA] Iter 10000: T=19.429 HPWL=117856.5 Acc=58.6%
+        [SA] Iter 10200: T=18.479 HPWL=117768.8 Acc=58.0%
+        [SA] Iter 10400: T=17.576 HPWL=117893.0 Acc=57.5%
+        [SA] Iter 10600: T=16.717 HPWL=117643.1 Acc=57.0%
+        [SA] Iter 10800: T=15.899 HPWL=117267.2 Acc=56.6%
+        [SA] Iter 11000: T=15.122 HPWL=117242.9 Acc=56.1%
+        [SA] Iter 11200: T=14.383 HPWL=117162.4 Acc=55.7%
+        [SA] Iter 11400: T=13.679 HPWL=116546.4 Acc=55.3%
+        [SA] Iter 11600: T=13.011 HPWL=116333.7 Acc=54.7%
+        [SA] Iter 11800: T=12.375 HPWL=115987.5 Acc=54.3%
+        [SA] Iter 12000: T=11.770 HPWL=116000.4 Acc=53.8%
+        [SA] Iter 12200: T=11.194 HPWL=115924.3 Acc=53.3%
+        [SA] Iter 12400: T=10.647 HPWL=115844.1 Acc=52.8%
+        [SA] Iter 12600: T=10.126 HPWL=115702.7 Acc=52.3%
+        [SA] Iter 12800: T=9.631 HPWL=115717.3 Acc=51.8%
+        [SA] Iter 13000: T=9.160 HPWL=115740.0 Acc=51.3%
+        [SA] Iter 13200: T=8.713 HPWL=115725.2 Acc=50.8%
+        [SA] Iter 13400: T=8.287 HPWL=115303.1 Acc=50.2%
+        [SA] Iter 13600: T=7.881 HPWL=115282.2 Acc=49.8%
+        [SA] Iter 13800: T=7.496 HPWL=115299.3 Acc=49.3%
+        [SA] Iter 14000: T=7.130 HPWL=115325.5 Acc=48.9%
+        [SA] Iter 14200: T=6.781 HPWL=115296.6 Acc=48.5%
+        [SA] Iter 14400: T=6.450 HPWL=115265.9 Acc=48.0%
+        [SA] Iter 14600: T=6.134 HPWL=115038.4 Acc=47.5%
+        [SA] Iter 14800: T=5.834 HPWL=115016.9 Acc=47.0%
+        [SA] Iter 15000: T=5.549 HPWL=114952.4 Acc=46.6%
+      [SA] End Batch: 119092.2 -> 114952.4 (-4139.8)
+      [SA] Start Batch: Cells=150 T0=276.452 HPWL=138226.0
+        [SA] Iter 200: T=262.936 HPWL=141127.2 Acc=69.5%
+        [SA] Iter 400: T=250.081 HPWL=142508.7 Acc=72.8%
+        [SA] Iter 600: T=237.855 HPWL=142462.8 Acc=71.7%
+        [SA] Iter 800: T=226.226 HPWL=143512.9 Acc=70.4%
+        [SA] Iter 1000: T=215.166 HPWL=143456.8 Acc=70.4%
+        [SA] Iter 1200: T=204.647 HPWL=145043.8 Acc=70.5%
+        [SA] Iter 1400: T=194.641 HPWL=145683.9 Acc=70.0%
+        [SA] Iter 1600: T=185.125 HPWL=146327.2 Acc=68.7%
+        [SA] Iter 1800: T=176.075 HPWL=145597.3 Acc=68.2%
+        [SA] Iter 2000: T=167.466 HPWL=145944.2 Acc=68.2%
+        [SA] Iter 2200: T=159.279 HPWL=145846.4 Acc=67.5%
+        [SA] Iter 2400: T=151.492 HPWL=146269.8 Acc=67.0%
+        [SA] Iter 2600: T=144.085 HPWL=145870.9 Acc=67.0%
+        [SA] Iter 2800: T=137.041 HPWL=145275.0 Acc=66.6%
+        [SA] Iter 3000: T=130.341 HPWL=145512.3 Acc=66.1%
+        [SA] Iter 3200: T=123.969 HPWL=144544.5 Acc=65.8%
+        [SA] Iter 3400: T=117.908 HPWL=144700.1 Acc=65.6%
+        [SA] Iter 3600: T=112.144 HPWL=145182.4 Acc=65.5%
+        [SA] Iter 3800: T=106.661 HPWL=144155.5 Acc=64.7%
+        [SA] Iter 4000: T=101.446 HPWL=142670.8 Acc=63.9%
+        [SA] Iter 4200: T=96.487 HPWL=141114.5 Acc=63.8%
+        [SA] Iter 4400: T=91.769 HPWL=140516.0 Acc=63.5%
+        [SA] Iter 4600: T=87.283 HPWL=140153.4 Acc=63.1%
+        [SA] Iter 4800: T=83.015 HPWL=140024.5 Acc=62.5%
+        [SA] Iter 5000: T=78.957 HPWL=140381.8 Acc=62.3%
+        [SA] Iter 5200: T=75.097 HPWL=140655.3 Acc=61.9%
+        [SA] Iter 5400: T=71.425 HPWL=139251.6 Acc=61.6%
+        [SA] Iter 5600: T=67.933 HPWL=139479.5 Acc=61.1%
+        [SA] Iter 5800: T=64.612 HPWL=138102.7 Acc=60.7%
+        [SA] Iter 6000: T=61.453 HPWL=137618.7 Acc=60.2%
+        [SA] Iter 6200: T=58.449 HPWL=137391.7 Acc=59.8%
+        [SA] Iter 6400: T=55.591 HPWL=137139.6 Acc=59.3%
+        [SA] Iter 6600: T=52.873 HPWL=137055.9 Acc=58.7%
+        [SA] Iter 6800: T=50.288 HPWL=136973.6 Acc=58.3%
+        [SA] Iter 7000: T=47.830 HPWL=136516.9 Acc=57.7%
+        [SA] Iter 7200: T=45.491 HPWL=136512.9 Acc=57.1%
+        [SA] Iter 7400: T=43.267 HPWL=136193.0 Acc=56.7%
+        [SA] Iter 7600: T=41.152 HPWL=135780.1 Acc=56.1%
+        [SA] Iter 7800: T=39.140 HPWL=135626.0 Acc=55.5%
+        [SA] Iter 8000: T=37.226 HPWL=135692.7 Acc=55.0%
+        [SA] Iter 8200: T=35.406 HPWL=135297.7 Acc=54.4%
+        [SA] Iter 8400: T=33.675 HPWL=134634.9 Acc=53.9%
+        [SA] Iter 8600: T=32.029 HPWL=134633.7 Acc=53.2%
+        [SA] Iter 8800: T=30.463 HPWL=134278.1 Acc=52.7%
+        [SA] Iter 9000: T=28.974 HPWL=134589.3 Acc=52.0%
+        [SA] Iter 9200: T=27.557 HPWL=133820.6 Acc=51.5%
+        [SA] Iter 9400: T=26.210 HPWL=133313.7 Acc=51.0%
+        [SA] Iter 9600: T=24.929 HPWL=133384.6 Acc=50.5%
+        [SA] Iter 9800: T=23.710 HPWL=133108.6 Acc=49.9%
+        [SA] Iter 10000: T=22.551 HPWL=132804.7 Acc=49.5%
+        [SA] Iter 10200: T=21.448 HPWL=132646.8 Acc=49.0%
+        [SA] Iter 10400: T=20.400 HPWL=132552.2 Acc=48.5%
+        [SA] Iter 10600: T=19.402 HPWL=132457.4 Acc=48.0%
+        [SA] Iter 10800: T=18.454 HPWL=132275.4 Acc=47.5%
+        [SA] Iter 11000: T=17.551 HPWL=132226.6 Acc=46.9%
+        [SA] Iter 11200: T=16.693 HPWL=132275.8 Acc=46.6%
+        [SA] Iter 11400: T=15.877 HPWL=132251.4 Acc=46.2%
+        [SA] Iter 11600: T=15.101 HPWL=131926.7 Acc=45.9%
+        [SA] Iter 11800: T=14.363 HPWL=131848.2 Acc=45.4%
+        [SA] Iter 12000: T=13.661 HPWL=131789.2 Acc=44.9%
+        [SA] Iter 12200: T=12.993 HPWL=131700.3 Acc=44.5%
+        [SA] Iter 12400: T=12.357 HPWL=131295.6 Acc=44.0%
+        [SA] Iter 12600: T=11.753 HPWL=131259.2 Acc=43.6%
+        [SA] Iter 12800: T=11.179 HPWL=131185.3 Acc=43.3%
+        [SA] Iter 13000: T=10.632 HPWL=131088.5 Acc=42.8%
+        [SA] Iter 13200: T=10.112 HPWL=130932.4 Acc=42.4%
+        [SA] Iter 13400: T=9.618 HPWL=130718.7 Acc=42.0%
+        [SA] Iter 13600: T=9.148 HPWL=130635.2 Acc=41.7%
+        [SA] Iter 13800: T=8.701 HPWL=130672.9 Acc=41.3%
+        [SA] Iter 14000: T=8.275 HPWL=130589.8 Acc=41.0%
+        [SA] Iter 14200: T=7.871 HPWL=130612.3 Acc=40.6%
+        [SA] Iter 14400: T=7.486 HPWL=130475.8 Acc=40.1%
+        [SA] Iter 14600: T=7.120 HPWL=130459.6 Acc=39.7%
+        [SA] Iter 14800: T=6.772 HPWL=130406.3 Acc=39.4%
+        [SA] Iter 15000: T=6.441 HPWL=130400.6 Acc=39.0%
+      [SA] End Batch: 138226.0 -> 130400.6 (-7825.4)
+[PROGRESS] Global SA: Batch 20/23 (150 cells, type: sky130_fd_sc_hd__or2)
+      [SA] Start Batch: Cells=150 T0=252.603 HPWL=126301.6
+        [SA] Iter 200: T=240.253 HPWL=130092.1 Acc=82.0%
+        [SA] Iter 400: T=228.507 HPWL=131182.8 Acc=84.0%
+        [SA] Iter 600: T=217.336 HPWL=131621.4 Acc=84.7%
+        [SA] Iter 800: T=206.710 HPWL=132023.9 Acc=85.6%
+        [SA] Iter 1000: T=196.604 HPWL=130996.7 Acc=86.4%
+        [SA] Iter 1200: T=186.992 HPWL=131622.4 Acc=86.1%
+        [SA] Iter 1400: T=177.850 HPWL=132079.9 Acc=85.9%
+        [SA] Iter 1600: T=169.155 HPWL=131704.9 Acc=85.4%
+        [SA] Iter 1800: T=160.885 HPWL=131962.3 Acc=85.1%
+        [SA] Iter 2000: T=153.020 HPWL=131173.1 Acc=85.0%
+        [SA] Iter 2200: T=145.538 HPWL=130980.4 Acc=84.3%
+        [SA] Iter 2400: T=138.423 HPWL=130397.3 Acc=84.0%
+        [SA] Iter 2600: T=131.656 HPWL=130699.8 Acc=83.6%
+        [SA] Iter 2800: T=125.219 HPWL=131862.3 Acc=83.4%
+        [SA] Iter 3000: T=119.097 HPWL=131406.4 Acc=82.7%
+        [SA] Iter 3200: T=113.274 HPWL=131059.8 Acc=82.2%
+        [SA] Iter 3400: T=107.736 HPWL=130944.5 Acc=81.4%
+        [SA] Iter 3600: T=102.469 HPWL=130126.3 Acc=80.9%
+        [SA] Iter 3800: T=97.459 HPWL=130135.1 Acc=80.3%
+        [SA] Iter 4000: T=92.695 HPWL=129890.0 Acc=80.0%
+        [SA] Iter 4200: T=88.163 HPWL=129422.3 Acc=79.8%
+        [SA] Iter 4400: T=83.853 HPWL=129614.7 Acc=79.3%
+        [SA] Iter 4600: T=79.753 HPWL=129513.3 Acc=78.7%
+        [SA] Iter 4800: T=75.854 HPWL=128071.7 Acc=78.2%
+        [SA] Iter 5000: T=72.145 HPWL=127227.0 Acc=77.8%
+        [SA] Iter 5200: T=68.618 HPWL=127642.6 Acc=77.2%
+        [SA] Iter 5400: T=65.264 HPWL=127742.4 Acc=76.5%
+        [SA] Iter 5600: T=62.073 HPWL=128459.4 Acc=76.1%
+        [SA] Iter 5800: T=59.038 HPWL=128495.2 Acc=75.6%
+        [SA] Iter 6000: T=56.152 HPWL=128245.1 Acc=75.1%
+        [SA] Iter 6200: T=53.406 HPWL=128039.2 Acc=74.6%
+        [SA] Iter 6400: T=50.795 HPWL=127363.3 Acc=74.0%
+        [SA] Iter 6600: T=48.312 HPWL=127420.4 Acc=73.3%
+        [SA] Iter 6800: T=45.950 HPWL=127018.1 Acc=72.7%
+        [SA] Iter 7000: T=43.704 HPWL=126627.7 Acc=72.1%
+        [SA] Iter 7200: T=41.567 HPWL=126247.9 Acc=71.4%
+        [SA] Iter 7400: T=39.535 HPWL=126229.9 Acc=70.8%
+        [SA] Iter 7600: T=37.602 HPWL=126030.6 Acc=70.0%
+        [SA] Iter 7800: T=35.764 HPWL=125614.9 Acc=69.2%
+        [SA] Iter 8000: T=34.015 HPWL=126047.5 Acc=68.5%
+        [SA] Iter 8200: T=32.352 HPWL=126370.0 Acc=68.0%
+        [SA] Iter 8400: T=30.770 HPWL=126246.3 Acc=67.4%
+        [SA] Iter 8600: T=29.266 HPWL=125622.4 Acc=66.8%
+        [SA] Iter 8800: T=27.835 HPWL=125307.3 Acc=66.3%
+        [SA] Iter 9000: T=26.474 HPWL=125153.9 Acc=65.7%
+        [SA] Iter 9200: T=25.180 HPWL=124824.9 Acc=65.1%
+        [SA] Iter 9400: T=23.949 HPWL=124855.7 Acc=64.6%
+        [SA] Iter 9600: T=22.778 HPWL=124927.1 Acc=64.0%
+        [SA] Iter 9800: T=21.664 HPWL=124817.2 Acc=63.3%
+        [SA] Iter 10000: T=20.605 HPWL=124666.9 Acc=62.7%
+        [SA] Iter 10200: T=19.598 HPWL=124618.3 Acc=62.0%
+        [SA] Iter 10400: T=18.640 HPWL=124579.9 Acc=61.5%
+        [SA] Iter 10600: T=17.728 HPWL=124485.0 Acc=60.8%
+        [SA] Iter 10800: T=16.862 HPWL=124328.3 Acc=60.3%
+        [SA] Iter 11000: T=16.037 HPWL=124167.3 Acc=59.7%
+        [SA] Iter 11200: T=15.253 HPWL=123959.7 Acc=59.1%
+        [SA] Iter 11400: T=14.508 HPWL=123881.4 Acc=58.6%
+        [SA] Iter 11600: T=13.798 HPWL=123695.2 Acc=58.0%
+        [SA] Iter 11800: T=13.124 HPWL=122863.4 Acc=57.5%
+        [SA] Iter 12000: T=12.482 HPWL=122718.3 Acc=56.9%
+        [SA] Iter 12200: T=11.872 HPWL=122665.2 Acc=56.4%
+        [SA] Iter 12400: T=11.291 HPWL=122382.2 Acc=55.8%
+        [SA] Iter 12600: T=10.739 HPWL=122284.0 Acc=55.2%
+        [SA] Iter 12800: T=10.214 HPWL=122345.6 Acc=54.7%
+        [SA] Iter 13000: T=9.715 HPWL=122239.3 Acc=54.2%
+        [SA] Iter 13200: T=9.240 HPWL=122114.6 Acc=53.6%
+        [SA] Iter 13400: T=8.788 HPWL=121848.9 Acc=53.1%
+        [SA] Iter 13600: T=8.359 HPWL=121806.6 Acc=52.5%
+        [SA] Iter 13800: T=7.950 HPWL=121709.2 Acc=51.9%
+        [SA] Iter 14000: T=7.561 HPWL=121808.1 Acc=51.4%
+        [SA] Iter 14200: T=7.192 HPWL=121845.5 Acc=50.9%
+        [SA] Iter 14400: T=6.840 HPWL=121786.4 Acc=50.5%
+        [SA] Iter 14600: T=6.506 HPWL=121653.2 Acc=49.9%
+        [SA] Iter 14800: T=6.188 HPWL=121643.0 Acc=49.5%
+        [SA] Iter 15000: T=5.885 HPWL=121570.9 Acc=49.0%
+      [SA] End Batch: 126301.6 -> 121570.9 (-4730.7)
+      [SA] Start Batch: Cells=150 T0=283.433 HPWL=141716.7
+        [SA] Iter 200: T=269.576 HPWL=144952.2 Acc=85.0%
+        [SA] Iter 400: T=256.397 HPWL=146760.2 Acc=87.5%
+        [SA] Iter 600: T=243.862 HPWL=147588.9 Acc=86.3%
+        [SA] Iter 800: T=231.939 HPWL=148257.5 Acc=86.2%
+        [SA] Iter 1000: T=220.600 HPWL=148093.0 Acc=85.4%
+        [SA] Iter 1200: T=209.815 HPWL=148804.0 Acc=86.0%
+        [SA] Iter 1400: T=199.557 HPWL=150202.3 Acc=86.1%
+        [SA] Iter 1600: T=189.801 HPWL=151040.6 Acc=86.1%
+        [SA] Iter 1800: T=180.521 HPWL=151784.8 Acc=85.5%
+        [SA] Iter 2000: T=171.696 HPWL=151006.7 Acc=85.6%
+        [SA] Iter 2200: T=163.301 HPWL=149475.6 Acc=85.5%
+        [SA] Iter 2400: T=155.318 HPWL=150289.9 Acc=85.2%
+        [SA] Iter 2600: T=147.724 HPWL=150688.5 Acc=84.7%
+        [SA] Iter 2800: T=140.502 HPWL=150196.2 Acc=84.6%
+        [SA] Iter 3000: T=133.633 HPWL=150805.3 Acc=84.5%
+        [SA] Iter 3200: T=127.100 HPWL=149821.0 Acc=84.4%
+        [SA] Iter 3400: T=120.886 HPWL=148947.5 Acc=83.8%
+        [SA] Iter 3600: T=114.976 HPWL=149247.7 Acc=83.7%
+        [SA] Iter 3800: T=109.354 HPWL=149494.0 Acc=83.2%
+        [SA] Iter 4000: T=104.008 HPWL=148770.9 Acc=82.7%
+        [SA] Iter 4200: T=98.923 HPWL=147963.1 Acc=82.2%
+        [SA] Iter 4400: T=94.087 HPWL=147177.6 Acc=81.8%
+        [SA] Iter 4600: T=89.487 HPWL=147218.6 Acc=81.5%
+        [SA] Iter 4800: T=85.112 HPWL=147315.9 Acc=81.1%
+        [SA] Iter 5000: T=80.951 HPWL=145938.3 Acc=80.4%
+        [SA] Iter 5200: T=76.993 HPWL=146663.4 Acc=79.8%
+        [SA] Iter 5400: T=73.229 HPWL=146699.4 Acc=79.4%
+        [SA] Iter 5600: T=69.649 HPWL=147307.5 Acc=78.8%
+        [SA] Iter 5800: T=66.244 HPWL=146830.6 Acc=78.2%
+        [SA] Iter 6000: T=63.005 HPWL=146075.9 Acc=77.8%
+        [SA] Iter 6200: T=59.925 HPWL=145872.9 Acc=77.4%
+        [SA] Iter 6400: T=56.995 HPWL=144632.1 Acc=76.7%
+        [SA] Iter 6600: T=54.209 HPWL=144550.1 Acc=76.1%
+        [SA] Iter 6800: T=51.558 HPWL=144161.5 Acc=75.5%
+        [SA] Iter 7000: T=49.038 HPWL=144131.9 Acc=74.8%
+        [SA] Iter 7200: T=46.640 HPWL=143818.1 Acc=74.3%
+        [SA] Iter 7400: T=44.360 HPWL=143609.5 Acc=73.7%
+        [SA] Iter 7600: T=42.191 HPWL=143616.0 Acc=73.0%
+        [SA] Iter 7800: T=40.128 HPWL=143291.2 Acc=72.4%
+        [SA] Iter 8000: T=38.167 HPWL=143115.9 Acc=71.8%
+        [SA] Iter 8200: T=36.301 HPWL=142930.9 Acc=71.1%
+        [SA] Iter 8400: T=34.526 HPWL=142481.2 Acc=70.6%
+        [SA] Iter 8600: T=32.838 HPWL=142526.5 Acc=70.0%
+        [SA] Iter 8800: T=31.232 HPWL=142090.7 Acc=69.6%
+        [SA] Iter 9000: T=29.706 HPWL=141943.2 Acc=68.9%
+        [SA] Iter 9200: T=28.253 HPWL=141835.8 Acc=68.3%
+        [SA] Iter 9400: T=26.872 HPWL=141330.3 Acc=67.7%
+        [SA] Iter 9600: T=25.558 HPWL=140975.3 Acc=66.9%
+        [SA] Iter 9800: T=24.309 HPWL=140739.8 Acc=66.3%
+        [SA] Iter 10000: T=23.120 HPWL=140775.7 Acc=65.5%
+        [SA] Iter 10200: T=21.990 HPWL=140500.5 Acc=64.9%
+        [SA] Iter 10400: T=20.915 HPWL=140571.9 Acc=64.3%
+        [SA] Iter 10600: T=19.892 HPWL=140511.5 Acc=63.7%
+        [SA] Iter 10800: T=18.920 HPWL=140462.2 Acc=63.2%
+        [SA] Iter 11000: T=17.995 HPWL=140517.6 Acc=62.5%
+        [SA] Iter 11200: T=17.115 HPWL=140355.2 Acc=62.1%
+        [SA] Iter 11400: T=16.278 HPWL=140270.0 Acc=61.4%
+        [SA] Iter 11600: T=15.482 HPWL=139841.7 Acc=60.8%
+        [SA] Iter 11800: T=14.725 HPWL=139716.0 Acc=60.2%
+        [SA] Iter 12000: T=14.006 HPWL=139745.3 Acc=59.7%
+        [SA] Iter 12200: T=13.321 HPWL=139408.7 Acc=59.2%
+        [SA] Iter 12400: T=12.670 HPWL=139267.0 Acc=58.6%
+        [SA] Iter 12600: T=12.050 HPWL=139188.8 Acc=58.0%
+        [SA] Iter 12800: T=11.461 HPWL=138581.7 Acc=57.4%
+        [SA] Iter 13000: T=10.901 HPWL=138547.8 Acc=56.8%
+        [SA] Iter 13200: T=10.368 HPWL=138551.7 Acc=56.3%
+        [SA] Iter 13400: T=9.861 HPWL=138420.9 Acc=55.7%
+        [SA] Iter 13600: T=9.379 HPWL=138382.2 Acc=55.1%
+        [SA] Iter 13800: T=8.920 HPWL=138412.3 Acc=54.5%
+        [SA] Iter 14000: T=8.484 HPWL=138204.6 Acc=53.9%
+        [SA] Iter 14200: T=8.069 HPWL=138170.5 Acc=53.3%
+        [SA] Iter 14400: T=7.675 HPWL=138080.8 Acc=52.8%
+        [SA] Iter 14600: T=7.300 HPWL=138064.2 Acc=52.3%
+        [SA] Iter 14800: T=6.943 HPWL=138014.1 Acc=51.8%
+        [SA] Iter 15000: T=6.603 HPWL=137953.0 Acc=51.2%
+      [SA] End Batch: 141716.7 -> 137953.0 (-3763.7)
+      [SA] Start Batch: Cells=93 T0=196.623 HPWL=98311.4
+        [SA] Iter 200: T=187.010 HPWL=100166.9 Acc=80.0%
+        [SA] Iter 400: T=177.867 HPWL=100659.1 Acc=80.5%
+        [SA] Iter 600: T=169.171 HPWL=101349.4 Acc=83.0%
+        [SA] Iter 800: T=160.900 HPWL=100892.9 Acc=81.9%
+        [SA] Iter 1000: T=153.034 HPWL=101448.4 Acc=81.7%
+        [SA] Iter 1200: T=145.552 HPWL=101565.0 Acc=81.2%
+        [SA] Iter 1400: T=138.436 HPWL=101366.1 Acc=80.7%
+        [SA] Iter 1600: T=131.668 HPWL=100353.7 Acc=80.8%
+        [SA] Iter 1800: T=125.231 HPWL=100392.8 Acc=80.4%
+        [SA] Iter 2000: T=119.108 HPWL=99223.9 Acc=80.2%
+        [SA] Iter 2200: T=113.285 HPWL=99206.3 Acc=80.2%
+        [SA] Iter 2400: T=107.747 HPWL=99146.2 Acc=80.2%
+        [SA] Iter 2600: T=102.479 HPWL=98848.7 Acc=79.7%
+        [SA] Iter 2800: T=97.469 HPWL=98857.3 Acc=79.2%
+        [SA] Iter 3000: T=92.703 HPWL=99185.0 Acc=78.8%
+        [SA] Iter 3200: T=88.171 HPWL=99347.5 Acc=78.3%
+        [SA] Iter 3400: T=83.861 HPWL=99377.5 Acc=77.9%
+        [SA] Iter 3600: T=79.761 HPWL=98977.4 Acc=77.5%
+        [SA] Iter 3800: T=75.861 HPWL=98548.6 Acc=77.1%
+        [SA] Iter 4000: T=72.152 HPWL=98356.9 Acc=76.6%
+        [SA] Iter 4200: T=68.625 HPWL=97572.4 Acc=76.2%
+        [SA] Iter 4400: T=65.270 HPWL=97582.4 Acc=75.8%
+        [SA] Iter 4600: T=62.079 HPWL=97457.8 Acc=75.2%
+        [SA] Iter 4800: T=59.044 HPWL=97644.4 Acc=74.6%
+        [SA] Iter 5000: T=56.157 HPWL=97212.4 Acc=73.9%
+        [SA] Iter 5200: T=53.412 HPWL=97203.0 Acc=73.2%
+        [SA] Iter 5400: T=50.800 HPWL=97011.8 Acc=72.6%
+        [SA] Iter 5600: T=48.317 HPWL=97087.5 Acc=71.5%
+        [SA] Iter 5800: T=45.954 HPWL=97172.8 Acc=70.9%
+        [SA] Iter 6000: T=43.708 HPWL=96908.7 Acc=70.3%
+        [SA] Iter 6200: T=41.571 HPWL=96704.3 Acc=69.7%
+        [SA] Iter 6400: T=39.538 HPWL=96635.0 Acc=69.3%
+        [SA] Iter 6600: T=37.605 HPWL=96478.1 Acc=68.5%
+        [SA] Iter 6800: T=35.767 HPWL=96719.9 Acc=67.7%
+        [SA] Iter 7000: T=34.018 HPWL=96494.8 Acc=67.0%
+        [SA] Iter 7200: T=32.355 HPWL=96436.7 Acc=66.4%
+        [SA] Iter 7400: T=30.773 HPWL=96234.7 Acc=65.8%
+        [SA] Iter 7600: T=29.269 HPWL=96144.8 Acc=64.9%
+        [SA] Iter 7800: T=27.838 HPWL=96135.0 Acc=64.0%
+        [SA] Iter 8000: T=26.477 HPWL=95836.7 Acc=63.1%
+        [SA] Iter 8200: T=25.182 HPWL=95822.3 Acc=62.3%
+        [SA] Iter 8400: T=23.951 HPWL=95512.9 Acc=61.5%
+        [SA] Iter 8600: T=22.780 HPWL=95315.1 Acc=60.8%
+        [SA] Iter 8800: T=21.667 HPWL=95383.5 Acc=60.0%
+        [SA] Iter 9000: T=20.607 HPWL=95329.8 Acc=59.3%
+        [SA] Iter 9200: T=19.600 HPWL=95470.0 Acc=58.4%
+        [SA] Iter 9400: T=18.642 HPWL=95602.8 Acc=57.6%
+        [SA] Iter 9600: T=17.730 HPWL=95479.5 Acc=57.0%
+        [SA] Iter 9800: T=16.863 HPWL=95274.4 Acc=56.4%
+        [SA] Iter 10000: T=16.039 HPWL=95254.3 Acc=55.6%
+        [SA] Iter 10200: T=15.255 HPWL=95150.1 Acc=54.9%
+        [SA] Iter 10400: T=14.509 HPWL=95131.5 Acc=54.1%
+        [SA] Iter 10600: T=13.800 HPWL=95064.2 Acc=53.5%
+        [SA] Iter 10800: T=13.125 HPWL=95063.7 Acc=52.8%
+        [SA] Iter 11000: T=12.483 HPWL=94902.7 Acc=52.1%
+        [SA] Iter 11200: T=11.873 HPWL=94810.0 Acc=51.3%
+        [SA] Iter 11400: T=11.292 HPWL=94711.5 Acc=50.6%
+        [SA] Iter 11600: T=10.740 HPWL=94642.2 Acc=49.9%
+        [SA] Iter 11800: T=10.215 HPWL=94577.9 Acc=49.2%
+        [SA] Iter 12000: T=9.716 HPWL=94540.3 Acc=48.5%
+        [SA] Iter 12200: T=9.241 HPWL=94399.0 Acc=47.9%
+        [SA] Iter 12400: T=8.789 HPWL=94448.6 Acc=47.2%
+        [SA] Iter 12600: T=8.359 HPWL=94434.1 Acc=46.6%
+        [SA] Iter 12800: T=7.951 HPWL=94403.1 Acc=46.0%
+        [SA] Iter 13000: T=7.562 HPWL=94377.3 Acc=45.4%
+        [SA] Iter 13200: T=7.192 HPWL=94398.3 Acc=44.8%
+        [SA] Iter 13400: T=6.841 HPWL=94377.2 Acc=44.2%
+        [SA] Iter 13600: T=6.506 HPWL=94310.9 Acc=43.6%
+        [SA] Iter 13800: T=6.188 HPWL=94301.7 Acc=43.1%
+        [SA] Iter 14000: T=5.886 HPWL=94283.6 Acc=42.5%
+        [SA] Iter 14200: T=5.598 HPWL=94282.8 Acc=42.0%
+        [SA] Iter 14400: T=5.324 HPWL=94282.9 Acc=41.5%
+        [SA] Iter 14600: T=5.064 HPWL=94267.8 Acc=40.9%
+        [SA] Iter 14800: T=4.816 HPWL=94259.6 Acc=40.5%
+        [SA] Iter 15000: T=4.581 HPWL=94245.6 Acc=40.0%
+      [SA] End Batch: 98311.4 -> 94245.6 (-4065.8)
+[PROGRESS] Global SA: Batch 23/23 (143 cells, type: sky130_fd_sc_hd__dfb)
+      [SA] Start Batch: Cells=143 T0=535.801 HPWL=267900.6
+        [SA] Iter 200: T=509.606 HPWL=271676.4 Acc=93.0%
+        [SA] Iter 400: T=484.691 HPWL=272213.1 Acc=93.5%
+        [SA] Iter 600: T=460.995 HPWL=274431.2 Acc=94.5%
+        [SA] Iter 800: T=438.457 HPWL=274916.4 Acc=94.5%
+        [SA] Iter 1000: T=417.021 HPWL=275136.4 Acc=94.1%
+        [SA] Iter 1200: T=396.633 HPWL=276823.2 Acc=93.9%
+        [SA] Iter 1400: T=377.241 HPWL=277685.5 Acc=94.0%
+        [SA] Iter 1600: T=358.798 HPWL=278650.8 Acc=93.8%
+        [SA] Iter 1800: T=341.257 HPWL=278805.8 Acc=93.3%
+        [SA] Iter 2000: T=324.573 HPWL=280103.0 Acc=93.3%
+        [SA] Iter 2200: T=308.704 HPWL=280333.3 Acc=93.5%
+        [SA] Iter 2400: T=293.612 HPWL=280926.7 Acc=93.3%
+        [SA] Iter 2600: T=279.257 HPWL=281454.0 Acc=93.0%
+        [SA] Iter 2800: T=265.604 HPWL=281168.5 Acc=92.9%
+        [SA] Iter 3000: T=252.619 HPWL=282523.1 Acc=93.1%
+        [SA] Iter 3200: T=240.268 HPWL=282073.0 Acc=93.1%
+        [SA] Iter 3400: T=228.522 HPWL=281678.4 Acc=93.1%
+        [SA] Iter 3600: T=217.349 HPWL=281281.0 Acc=92.9%
+        [SA] Iter 3800: T=206.723 HPWL=281539.6 Acc=92.8%
+        [SA] Iter 4000: T=196.616 HPWL=280499.1 Acc=92.7%
+        [SA] Iter 4200: T=187.004 HPWL=281120.1 Acc=92.5%
+        [SA] Iter 4400: T=177.861 HPWL=280411.4 Acc=92.3%
+        [SA] Iter 4600: T=169.166 HPWL=279980.8 Acc=92.1%
+        [SA] Iter 4800: T=160.895 HPWL=279918.8 Acc=92.0%
+        [SA] Iter 5000: T=153.029 HPWL=279906.5 Acc=91.8%
+        [SA] Iter 5200: T=145.547 HPWL=279660.9 Acc=91.7%
+        [SA] Iter 5400: T=138.432 HPWL=279335.2 Acc=91.5%
+        [SA] Iter 5600: T=131.664 HPWL=278636.7 Acc=91.3%
+        [SA] Iter 5800: T=125.227 HPWL=279293.7 Acc=91.2%
+        [SA] Iter 6000: T=119.104 HPWL=278389.2 Acc=90.9%
+        [SA] Iter 6200: T=113.281 HPWL=277179.0 Acc=90.8%
+        [SA] Iter 6400: T=107.743 HPWL=276258.5 Acc=90.5%
+        [SA] Iter 6600: T=102.476 HPWL=275849.0 Acc=90.3%
+        [SA] Iter 6800: T=97.466 HPWL=275272.1 Acc=90.0%
+        [SA] Iter 7000: T=92.700 HPWL=274991.5 Acc=89.9%
+        [SA] Iter 7200: T=88.168 HPWL=275151.8 Acc=89.6%
+        [SA] Iter 7400: T=83.858 HPWL=274824.3 Acc=89.3%
+        [SA] Iter 7600: T=79.758 HPWL=275045.8 Acc=89.1%
+        [SA] Iter 7800: T=75.859 HPWL=274355.7 Acc=88.9%
+        [SA] Iter 8000: T=72.150 HPWL=274299.5 Acc=88.8%
+        [SA] Iter 8200: T=68.623 HPWL=274310.6 Acc=88.5%
+        [SA] Iter 8400: T=65.268 HPWL=274243.4 Acc=88.3%
+        [SA] Iter 8600: T=62.077 HPWL=273878.1 Acc=88.1%
+        [SA] Iter 8800: T=59.042 HPWL=273615.2 Acc=88.0%
+        [SA] Iter 9000: T=56.155 HPWL=272933.6 Acc=87.7%
+        [SA] Iter 9200: T=53.410 HPWL=273014.9 Acc=87.6%
+        [SA] Iter 9400: T=50.799 HPWL=272440.7 Acc=87.3%
+        [SA] Iter 9600: T=48.315 HPWL=271933.2 Acc=86.9%
+        [SA] Iter 9800: T=45.953 HPWL=271758.8 Acc=86.6%
+        [SA] Iter 10000: T=43.706 HPWL=271609.6 Acc=86.4%
+        [SA] Iter 10200: T=41.570 HPWL=271222.3 Acc=86.1%
+        [SA] Iter 10400: T=39.537 HPWL=270940.1 Acc=85.8%
+        [SA] Iter 10600: T=37.604 HPWL=270642.3 Acc=85.5%
+        [SA] Iter 10800: T=35.766 HPWL=270346.9 Acc=85.2%
+        [SA] Iter 11000: T=34.017 HPWL=270113.0 Acc=84.9%
+        [SA] Iter 11200: T=32.354 HPWL=269943.1 Acc=84.7%
+        [SA] Iter 11400: T=30.772 HPWL=269798.8 Acc=84.4%
+        [SA] Iter 11600: T=29.268 HPWL=269495.8 Acc=84.0%
+        [SA] Iter 11800: T=27.837 HPWL=269610.3 Acc=83.6%
+        [SA] Iter 12000: T=26.476 HPWL=269562.1 Acc=83.1%
+        [SA] Iter 12200: T=25.182 HPWL=269439.0 Acc=82.8%
+        [SA] Iter 12400: T=23.950 HPWL=269210.1 Acc=82.4%
+        [SA] Iter 12600: T=22.780 HPWL=268906.3 Acc=81.9%
+        [SA] Iter 12800: T=21.666 HPWL=268771.2 Acc=81.5%
+        [SA] Iter 13000: T=20.607 HPWL=268362.7 Acc=81.0%
+        [SA] Iter 13200: T=19.599 HPWL=268493.3 Acc=80.5%
+        [SA] Iter 13400: T=18.641 HPWL=268317.8 Acc=80.0%
+        [SA] Iter 13600: T=17.730 HPWL=268149.1 Acc=79.6%
+        [SA] Iter 13800: T=16.863 HPWL=267875.9 Acc=79.1%
+        [SA] Iter 14000: T=16.038 HPWL=267464.6 Acc=78.7%
+        [SA] Iter 14200: T=15.254 HPWL=267439.3 Acc=78.2%
+        [SA] Iter 14400: T=14.508 HPWL=267277.0 Acc=77.7%
+        [SA] Iter 14600: T=13.799 HPWL=267242.0 Acc=77.3%
+        [SA] Iter 14800: T=13.125 HPWL=267311.9 Acc=76.8%
+        [SA] Iter 15000: T=12.483 HPWL=267249.2 Acc=76.3%
+      [SA] End Batch: 267900.6 -> 267249.2 (-651.4)
+[DEBUG] Global SA completed in 48.051s
+[DEBUG] SA Refined HPWL: 853880.040
+[DEBUG] HPWL Improvement: 103147.220 (10.78%)
+
+[DEBUG] Creating MP4 animation from 76 frames...
+IMAGEIO FFMPEG_WRITER WARNING: input image is not divisible by macro_block_size=16, resizing from (830, 883) to (832, 896) to ensure video compatibility with most codecs and players. To prevent resizing, make your input image divisible by the macro_block_size or set the macro_block_size to 1 (risking incompatibility).
+[WARNING] Failed to create MP4 with imageio: All images in a movie should have same size
+[DEBUG] Falling back to GIF format...
+[DEBUG] Saved placement animation (GIF) to: C:\Users\Dell-\Desktop\AUC\AUC semester 7\Digital Design 2\DD2 Proj\Structred-ASIC-Project\build\placement_animation.gif
+[DEBUG] Placement animation saved to: C:\Users\Dell-\Desktop\AUC\AUC semester 7\Digital Design 2\DD2 Proj\Structred-ASIC-Project\build\placement_animation.mp4
+[DEBUG] Final frame shows placement AFTER Simulated Annealing optimization (HPWL: 853880 μm)
+[DEBUG] === PHASE 9: BUILDING PLACEMENT DATAFRAME ===
+[PROGRESS] Building DataFrame: 289/2899 (10.0%)
+[PROGRESS] Building DataFrame: 578/2899 (19.9%)
+[PROGRESS] Building DataFrame: 867/2899 (29.9%)
+[PROGRESS] Building DataFrame: 1156/2899 (39.9%)
+[PROGRESS] Building DataFrame: 1445/2899 (49.8%)
+[PROGRESS] Building DataFrame: 1734/2899 (59.8%)
+[PROGRESS] Building DataFrame: 2023/2899 (69.8%)
+[PROGRESS] Building DataFrame: 2312/2899 (79.8%)
+[PROGRESS] Building DataFrame: 2601/2899 (89.7%)
+[PROGRESS] Building DataFrame: 2890/2899 (99.7%)
+[PROGRESS] Building DataFrame: 2899/2899 (100.0%)
+[DEBUG] Built placement DataFrame with 2899 cells
+[DEBUG] Building placement DataFrame completed in 0.019s
+
+[DEBUG] === PHASE 10: VALIDATING PLACEMENT ===
+
+[VALIDATION] === PHASE 1: BASIC CORRECTNESS CHECKS ===
+✓ All 2899 cells placed
+✓ No duplicate site assignments
+✓ All site IDs are valid
+⚠ Cell type checking skipped (missing columns)
+
+[VALIDATION] === PHASE 2: PORT-TO-PIN ASSIGNMENT CHECKS ===
+✓ All 122 ports assigned
+✓ Port-pin direction matching verified
+✓ No duplicate pin assignments
+
+[VALIDATION] === PHASE 3: COORDINATE VALIDATION ===
+[DEBUG] Found 158760 valid coordinate pairs in fabric YAML
+✓ All 2899 placement coordinates exist in fabric YAML
+✓ All 2899 site_id mappings are correct
+
+[VALIDATION] === PHASE 4: QUALITY METRICS ===
+✓ Total HPWL: 853880.04 microns
+✓ Site utilization: 1.8% (2899/158760 sites)
+✓ Placement bounds: X=[5.0, 1003.2] (998.2μm), Y=[5.0, 1014.8] (1009.8μm)
+[DEBUG] Validation completed in 5.293s
+
+================================================================================
+PLACEMENT VALIDATION REPORT
+================================================================================
+✅ VALIDATION PASSED
+
+⚠️  WARNINGS (1):
+  1. Cell type checking not performed
+
+📊 STATISTICS:
+  total_cells: 2899
+  placed_cells: 2899
+  missing_cells: 0
+  duplicate_sites: 0
+  invalid_sites: 0
+  assigned_ports: 122
+  total_ports: 122
+  direction_mismatches: 0
+  duplicate_pins: 0
+  coord_mismatches: 0
+  site_id_mismatches: 0
+  valid_fabric_coords: 158760
+  total_hpwl: 853880.04 microns
+  site_utilization_percent: 1.8%
+  x_span: 998.16
+  y_span: 1009.8
+  placement_bounds: {'x_min': np.float64(5.0), 'x_max': np.float64(1003.16), 'y_min': np.float64(5.0), 'y_max': np.float64(1014.8)}
+================================================================================
+
+✅ PLACEMENT VALIDATION PASSED - All basic checks successful
+
+[DEBUG] ========================================
+[DEBUG] FINAL TIMING SUMMARY
+[DEBUG] ========================================
+[DEBUG] Phase 1 - Port Assignment (Seeding):     0.021s (0.0%)
+[DEBUG] Phase 2 - Build Sites & Spatial Index:    0.078s (0.1%)
+[DEBUG] Phase 3 - Build Fixed Points:             0.002s (0.0%)
+[DEBUG] Phase 4 - Build Dependency Levels:      1.910s (2.6%)
+[DEBUG] Phase 5 - Build Cell Mappings:           2.045s (2.8%)
+[DEBUG] Phase 6 - Build Cell Type Mapping:       0.364s (0.5%)
+[DEBUG] Phase 7 - Order Cells by Level:         0.004s (0.0%)
+[DEBUG] Phase 8 - Level-by-Level Placement:      59.675s (81.6%)
+[DEBUG]   - Greedy Placement:                   11.624s (15.9%)
+[DEBUG]   - Simulated Annealing:                 48.051s (65.7%)
+[DEBUG] Phase 9 - Build Placement DataFrame:     0.019s (0.0%)
+[DEBUG] Phase 10 - Validate Placement:           5.293s (7.2%)
+[DEBUG] TOTAL TIME:                              73.171s
+[DEBUG] ========================================
+
+[PlacerTiming] total=73.171s build_sites=0.078s levelize=1.910s greedy=11.624s sa=48.051s
+PLACER_SUMMARY total=73.171s greedy=11.624s sa=48.051s
+[PlacerTiming] level=0 greedy=0.895s sa=0.000s
+[PlacerTiming] level=1 greedy=0.002s sa=0.000s
+[PlacerTiming] level=2 greedy=0.000s sa=0.000s
+[PlacerTiming] level=3 greedy=0.000s sa=0.000s
+[PlacerTiming] level=4 greedy=10.726s sa=0.000s
+[DEBUG] Final Greedy HPWL: 957027.260
+[DEBUG] Final SA HPWL: 853880.040
+[DEBUG] Overall HPWL Improvement: 103147.220 (10.78%)
+[RLPlacer] Captured frame 1: Greedy+SA baseline
+[FullPPO] ep 10/166 loss=189.9773 policy=0.0967 value=189.9468 ent=6.6229
+[FullPPO] ep 20/166 loss=180.9082 policy=0.0067 value=180.9702 ent=6.8675
+[FullPPO] ep 30/166 loss=151.7064 policy=0.0223 value=151.7528 ent=6.8732
+[FullPPO] ep 40/166 loss=138.2806 policy=0.0021 value=138.3472 ent=6.8757
+[FullPPO] ep 50/166 loss=136.6055 policy=0.0390 value=136.6354 ent=6.8929
+[FullPPO] ep 60/166 loss=114.6591 policy=0.0173 value=114.7107 ent=6.8892
+[FullPPO] ep 70/166 loss=107.8128 policy=0.0783 value=107.8026 ent=6.8160
+[FullPPO] ep 80/166 loss=108.1751 policy=-0.0134 value=108.2576 ent=6.9040
+[FullPPO] ep 90/166 loss=95.0486 policy=0.0223 value=95.0954 ent=6.9111
+[FullPPO] ep 100/166 loss=115.4489 policy=0.0011 value=115.5170 ent=6.9158
+[FullPPO] ep 110/166 loss=138.0710 policy=0.0564 value=138.0834 ent=6.8737
+[FullPPO] ep 120/166 loss=122.7437 policy=0.0814 value=122.7310 ent=6.8694
+[FullPPO] ep 130/166 loss=131.8942 policy=0.0143 value=131.9490 ent=6.9160
+[FullPPO] ep 140/166 loss=130.1634 policy=0.0080 value=130.2245 ent=6.9135
+[FullPPO] ep 150/166 loss=130.3318 policy=0.0039 value=130.3969 ent=6.8947
+[FullPPO] ep 160/166 loss=126.9470 policy=0.0314 value=126.9847 ent=6.9125
+[FullPlacer] Window 128: Degraded HPWL (891332.700 >= 853880.040). Reverting.
+[RLTiming] full_placer_window size=128 eps=166 time=3285.099s
+[FullPPO] ep 10/166 loss=224.2839 policy=-0.0036 value=224.3566 ent=6.9084
+[FullPPO] ep 20/166 loss=220.8108 policy=0.0023 value=220.8776 ent=6.9084
+[FullPPO] ep 30/166 loss=221.1503 policy=0.0101 value=221.2094 ent=6.9191
+[FullPPO] ep 40/166 loss=234.3328 policy=-0.0054 value=234.4075 ent=6.9194
+[FullPPO] ep 50/166 loss=244.2972 policy=0.0070 value=244.3593 ent=6.9152
+[FullPPO] ep 60/166 loss=232.0539 policy=0.0020 value=232.1212 ent=6.9230
+[FullPPO] ep 70/166 loss=249.4874 policy=0.0270 value=249.5295 ent=6.9137
+[FullPPO] ep 80/166 loss=252.5420 policy=0.0074 value=252.6036 ent=6.9066
+[FullPPO] ep 90/166 loss=253.8639 policy=0.0321 value=253.9008 ent=6.9026
+[FullPPO] ep 100/166 loss=227.1478 policy=0.0073 value=227.2097 ent=6.9176
+[FullPPO] ep 110/166 loss=212.0458 policy=0.0097 value=212.1050 ent=6.8930
+[FullPPO] ep 120/166 loss=215.3095 policy=-0.0051 value=215.3838 ent=6.9224
+[FullPPO] ep 130/166 loss=231.2159 policy=0.0279 value=231.2571 ent=6.9065
+[FullPPO] ep 140/166 loss=225.5422 policy=0.0163 value=225.5950 ent=6.9107
+[FullPPO] ep 150/166 loss=214.3260 policy=0.0070 value=214.3881 ent=6.9143
+[FullPPO] ep 160/166 loss=196.2967 policy=0.0005 value=196.3654 ent=6.9256
+[FullPlacer] Window 256: Degraded HPWL (872482.020 >= 853880.040). Reverting.
+[RLTiming] full_placer_window size=256 eps=166 time=5649.577s
+[FullPPO] ep 10/166 loss=421.2167 policy=0.0060 value=421.2798 ent=6.9156
+[FullPPO] ep 20/166 loss=401.6788 policy=0.0162 value=401.7318 ent=6.9119
+[FullPPO] ep 30/166 loss=466.7525 policy=-0.0013 value=466.8230 ent=6.9172
+[FullPPO] ep 40/166 loss=448.1596 policy=-0.0073 value=448.2360 ent=6.9217
+[FullPPO] ep 50/166 loss=469.2220 policy=-0.0000 value=469.2912 ent=6.9196
+[FullPPO] ep 60/166 loss=457.2081 policy=0.0007 value=457.2766 ent=6.9203
+[FullPPO] ep 70/166 loss=447.1853 policy=0.0152 value=447.2393 ent=6.9220
+[FullPPO] ep 80/166 loss=425.6436 policy=-0.0062 value=425.7190 ent=6.9179
+[FullPPO] ep 90/166 loss=460.0813 policy=-0.0106 value=460.1611 ent=6.9202
+[FullPPO] ep 100/166 loss=435.1177 policy=-0.0073 value=435.1942 ent=6.9196
+[FullPPO] ep 110/166 loss=417.2251 policy=0.0049 value=417.2894 ent=6.9240
+[FullPPO] ep 120/166 loss=444.1739 policy=0.0034 value=444.2397 ent=6.9238
+[FullPPO] ep 130/166 loss=437.9520 policy=0.0088 value=438.0123 ent=6.9201
+[FullPPO] ep 140/166 loss=410.7083 policy=0.0036 value=410.7739 ent=6.9196
+[FullPPO] ep 150/166 loss=469.7424 policy=0.0044 value=469.8072 ent=6.9226
+[FullPPO] ep 160/166 loss=403.5981 policy=0.0125 value=403.6548 ent=6.9174
+[FullPlacer] Window 512: Degraded HPWL (859758.800 >= 853880.040). Reverting.
+[RLTiming] full_placer_window size=512 eps=166 time=16655.238s
+[FullPlacer] SUCCESS: Training improved HPWL (853880.040 <= 853880.040). Keeping new placement.
+[Clustering] Added 81 batches from graph clustering.
+[SwapPPO] ep 10/1000 loss=171.4849
+[SwapPPO] ep 20/1000 loss=149.1687
+[SwapPPO] ep 30/1000 loss=154.9191
+[SwapPPO] ep 40/1000 loss=146.5146
+[SwapPPO] ep 50/1000 loss=166.4356
+[SwapPPO] ep 60/1000 loss=171.8803
+[SwapPPO] ep 70/1000 loss=186.0408
+[SwapPPO] ep 80/1000 loss=168.0837
+[SwapPPO] ep 90/1000 loss=170.7185
+[SwapPPO] ep 100/1000 loss=201.7533
+[SwapPPO] ep 110/1000 loss=171.4455
+[SwapPPO] ep 120/1000 loss=180.3920
+[SwapPPO] ep 130/1000 loss=180.1605
+[SwapPPO] ep 140/1000 loss=187.9894
+[SwapPPO] ep 150/1000 loss=166.5285
+[SwapPPO] ep 160/1000 loss=163.6750
+[SwapPPO] ep 170/1000 loss=160.8685
+[SwapPPO] ep 180/1000 loss=213.2623
+[SwapPPO] ep 190/1000 loss=197.8315
+[SwapPPO] ep 200/1000 loss=186.7201
+[SwapPPO] ep 210/1000 loss=185.4346
+[SwapPPO] ep 220/1000 loss=177.2988
+[SwapPPO] ep 230/1000 loss=180.1629
+[SwapPPO] ep 240/1000 loss=177.6509
+[SwapPPO] ep 250/1000 loss=173.5754
+[SwapPPO] ep 260/1000 loss=162.8936
+[SwapPPO] ep 270/1000 loss=178.7518
+[SwapPPO] ep 280/1000 loss=154.8724
+[SwapPPO] ep 290/1000 loss=168.7173
+[SwapPPO] ep 300/1000 loss=156.1730
+[SwapPPO] ep 310/1000 loss=180.0987
+[SwapPPO] ep 320/1000 loss=152.7076
+[SwapPPO] ep 330/1000 loss=181.5299
+[SwapPPO] ep 340/1000 loss=179.0466
+[SwapPPO] ep 350/1000 loss=196.3483
+[SwapPPO] ep 360/1000 loss=162.4381
+[SwapPPO] ep 370/1000 loss=165.2312
+[SwapPPO] ep 380/1000 loss=167.8442
+[SwapPPO] ep 390/1000 loss=176.7289
+[SwapPPO] ep 400/1000 loss=184.2255
+[SwapPPO] ep 410/1000 loss=169.9088
+[SwapPPO] ep 420/1000 loss=169.7798
+[SwapPPO] ep 430/1000 loss=172.5000
+[SwapPPO] ep 440/1000 loss=165.1487
+[SwapPPO] ep 450/1000 loss=184.1145
+[SwapPPO] ep 460/1000 loss=166.3141
+[SwapPPO] ep 470/1000 loss=198.7437
+[SwapPPO] ep 480/1000 loss=187.7247
+[SwapPPO] ep 490/1000 loss=182.9849
+[SwapPPO] ep 500/1000 loss=171.3304
+[SwapPPO] ep 510/1000 loss=164.0722
+[SwapPPO] ep 520/1000 loss=182.5802
+[SwapPPO] ep 530/1000 loss=178.8114
+[SwapPPO] ep 540/1000 loss=190.2816
+[SwapPPO] ep 550/1000 loss=164.6749
+[SwapPPO] ep 560/1000 loss=160.0101
+[SwapPPO] ep 570/1000 loss=182.4388
+[SwapPPO] ep 580/1000 loss=176.5937
+[SwapPPO] ep 590/1000 loss=183.8797
+[SwapPPO] ep 600/1000 loss=162.5163
+[SwapPPO] ep 610/1000 loss=184.5857
+[SwapPPO] ep 620/1000 loss=188.0684
+[SwapPPO] ep 630/1000 loss=169.4013
+[SwapPPO] ep 640/1000 loss=171.5013
+[SwapPPO] ep 650/1000 loss=173.8576
+[SwapPPO] ep 660/1000 loss=169.4229
+[SwapPPO] ep 670/1000 loss=164.1604
+[SwapPPO] ep 680/1000 loss=182.9005
+[SwapPPO] ep 690/1000 loss=173.8666
+[SwapPPO] ep 700/1000 loss=179.4320
+[SwapPPO] ep 710/1000 loss=155.4232
+[SwapPPO] ep 720/1000 loss=176.4187
+[SwapPPO] ep 730/1000 loss=156.9481
+[SwapPPO] ep 740/1000 loss=176.4271
+[SwapPPO] ep 750/1000 loss=166.0576
+[SwapPPO] ep 760/1000 loss=177.6170
+[SwapPPO] ep 770/1000 loss=182.7222
+[SwapPPO] ep 780/1000 loss=193.0064
+[SwapPPO] ep 790/1000 loss=175.4437
+[SwapPPO] ep 800/1000 loss=169.4041
+[SwapPPO] ep 810/1000 loss=188.5565
+[SwapPPO] ep 820/1000 loss=184.0330
+[SwapPPO] ep 830/1000 loss=181.3401
+[SwapPPO] ep 840/1000 loss=146.1909
+[SwapPPO] ep 850/1000 loss=191.9756
+[SwapPPO] ep 860/1000 loss=175.3903
+[SwapPPO] ep 870/1000 loss=184.7983
+[SwapPPO] ep 880/1000 loss=184.6127
+[SwapPPO] ep 890/1000 loss=178.2910
+[SwapPPO] ep 900/1000 loss=147.3146
+[SwapPPO] ep 910/1000 loss=174.9783
+[SwapPPO] ep 920/1000 loss=168.7644
+[SwapPPO] ep 930/1000 loss=176.8913
+[SwapPPO] ep 940/1000 loss=179.5156
+[SwapPPO] ep 950/1000 loss=186.3804
+[SwapPPO] ep 960/1000 loss=169.3688
+[SwapPPO] ep 970/1000 loss=175.9207
+[SwapPPO] ep 980/1000 loss=191.7744
+[SwapPPO] ep 990/1000 loss=183.7806
+[SwapPPO] ep 1000/1000 loss=181.5728
+[RLTiming] swap_train_batch index=0 time=6129.567s
+[SwapPPO] ep 10/1000 loss=178.5983
+[SwapPPO] ep 20/1000 loss=177.5815
+[SwapPPO] ep 30/1000 loss=185.1356
+[SwapPPO] ep 40/1000 loss=190.1154
+[SwapPPO] ep 50/1000 loss=185.6593
+[SwapPPO] ep 60/1000 loss=175.0987
+[SwapPPO] ep 70/1000 loss=162.8126
+[SwapPPO] ep 80/1000 loss=183.6828
+[SwapPPO] ep 90/1000 loss=178.5031
+[SwapPPO] ep 100/1000 loss=173.3746
+[SwapPPO] ep 110/1000 loss=184.2776
+[SwapPPO] ep 120/1000 loss=178.6975
+[SwapPPO] ep 130/1000 loss=172.1011
+[SwapPPO] ep 140/1000 loss=180.2764
+[SwapPPO] ep 150/1000 loss=168.3821
+[SwapPPO] ep 160/1000 loss=172.1756
+[SwapPPO] ep 170/1000 loss=164.5521
+[SwapPPO] ep 180/1000 loss=176.0634
+[SwapPPO] ep 190/1000 loss=168.9194
+[SwapPPO] ep 200/1000 loss=182.1256
+[SwapPPO] ep 210/1000 loss=179.0284
+[SwapPPO] ep 220/1000 loss=171.1459
+[SwapPPO] ep 230/1000 loss=175.5098
+[SwapPPO] ep 240/1000 loss=179.6491
+[SwapPPO] ep 250/1000 loss=188.4206
+[SwapPPO] ep 260/1000 loss=183.3626
+[SwapPPO] ep 270/1000 loss=178.2771
+[SwapPPO] ep 280/1000 loss=195.5675
+[SwapPPO] ep 290/1000 loss=169.6065
+[SwapPPO] ep 300/1000 loss=179.5172
+[SwapPPO] ep 310/1000 loss=179.5070
+[SwapPPO] ep 320/1000 loss=165.5368
+[SwapPPO] ep 330/1000 loss=166.6107
+[SwapPPO] ep 340/1000 loss=182.3182
+[SwapPPO] ep 350/1000 loss=164.5616
+[SwapPPO] ep 360/1000 loss=174.9316
+[SwapPPO] ep 370/1000 loss=180.7687
+[SwapPPO] ep 380/1000 loss=185.9225
+[SwapPPO] ep 390/1000 loss=186.0990
+[SwapPPO] ep 400/1000 loss=165.9427
+[SwapPPO] ep 410/1000 loss=179.2772
+[SwapPPO] ep 420/1000 loss=179.7472
+[SwapPPO] ep 430/1000 loss=191.9806
+[SwapPPO] ep 440/1000 loss=185.3947
+[SwapPPO] ep 450/1000 loss=180.8808
+[SwapPPO] ep 460/1000 loss=175.4558
+[SwapPPO] ep 470/1000 loss=162.7720
+[SwapPPO] ep 480/1000 loss=174.5648
+[SwapPPO] ep 490/1000 loss=176.5338
+[SwapPPO] ep 500/1000 loss=166.1723
+[SwapPPO] ep 510/1000 loss=177.3507
+[SwapPPO] ep 520/1000 loss=191.2188
+[SwapPPO] ep 530/1000 loss=175.0028
+[SwapPPO] ep 540/1000 loss=162.3043
+[SwapPPO] ep 550/1000 loss=160.6610

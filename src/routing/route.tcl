@@ -12,7 +12,14 @@ foreach var $required_vars {
         puts "Error: Environment variable $var is not set."
         exit 1
     }
-    }
+}
+
+# Optional OUTPUT_SUFFIX for distinguishing RL from SA output files (e.g., "_rl")
+if {[info exists ::env(OUTPUT_SUFFIX)]} {
+    set output_suffix $::env(OUTPUT_SUFFIX)
+} else {
+    set output_suffix ""
+}
 
 set has_merged_lef 0
 if {[info exists ::env(MERGED_LEF)] && [file exists $::env(MERGED_LEF)]} {
@@ -123,12 +130,12 @@ if {[catch {global_route -congestion_iterations 100 -verbose} error_msg]} {
 
 # 3. Detailed Routing
 puts "\[Generic-Route\] Starting Detailed Route..."
-set drc_rpt $::env(OUTPUT_DIR)/${design_name}_drc.rpt
+set drc_rpt $::env(OUTPUT_DIR)/${design_name}${output_suffix}_drc.rpt
 set_routing_layers -signal met1-met5 -clock met1-met5
 detailed_route \
                -output_drc $drc_rpt \
-               -output_maze $::env(OUTPUT_DIR)/${design_name}_maze.log \
-               -output_guide $::env(OUTPUT_DIR)/${design_name}.guide
+               -output_maze $::env(OUTPUT_DIR)/${design_name}${output_suffix}_maze.log \
+               -output_guide $::env(OUTPUT_DIR)/${design_name}${output_suffix}.guide
 
 # 4. Extract Parasitics
 puts "\[Generic-Route\] Skipping parasitic extraction due to missing RCX rules."
@@ -142,14 +149,14 @@ puts "\[Generic-Route\] Skipping parasitic extraction due to missing RCX rules."
 
 # 5. Report Congestion (optional - command may not exist in all OpenROAD versions)
 puts "\[Generic-Route\] Reporting Congestion..."
-if {[catch {report_congestion -histogram > $::env(OUTPUT_DIR)/${design_name}_congestion.rpt} err]} {
+if {[catch {report_congestion -histogram > $::env(OUTPUT_DIR)/${design_name}${output_suffix}_congestion.rpt} err]} {
     puts "\[Generic-Route\] Warning: report_congestion not available ($err)"
 }
 
 # Save Outputs
 puts "\[Generic-Route\] Saving outputs..."
-write_def $::env(OUTPUT_DIR)/${design_name}_routed.def
-write_db $::env(OUTPUT_DIR)/${design_name}_routed.odb
+write_def $::env(OUTPUT_DIR)/${design_name}${output_suffix}_routed.def
+write_db $::env(OUTPUT_DIR)/${design_name}${output_suffix}_routed.odb
 
 # DRC gate: fail the flow if any violations are present
 if {[file exists $drc_rpt]} {

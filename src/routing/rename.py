@@ -59,14 +59,16 @@ def sanitize_token(match):
     token = match.group(0)
     if token in KEYWORDS:
         return token
-    return token.replace("$", "_").replace(".", "_").replace(":", "_").replace("\\", "_")
+    # Sanitize special characters that are invalid in Verilog identifiers
+    # Note: [ and ] in signal names cause OpenROAD to misparse them as bus declarations
+    return token.replace("$", "_").replace(".", "_").replace(":", "_").replace("\\", "_").replace("[", "_").replace("]", "_")
 
-def rename_instances(design_name, fabric_path=None):
-    # Paths
+def rename_instances(design_name, fabric_path=None, suffix=""):
+    # Paths (suffix allows distinguishing RL from SA outputs, e.g., suffix="_rl")
     build_dir = os.path.join("build", design_name)
-    verilog_path = os.path.join(build_dir, f"{design_name}_final.v")
-    map_path = os.path.join(build_dir, f"{design_name}.map")
-    output_path = os.path.join(build_dir, f"{design_name}_renamed.v")
+    verilog_path = os.path.join(build_dir, f"{design_name}{suffix}_final.v")
+    map_path = os.path.join(build_dir, f"{design_name}{suffix}.map")
+    output_path = os.path.join(build_dir, f"{design_name}{suffix}_renamed.v")
 
     print(f"Processing design: {design_name}")
     print(f"Reading map: {map_path}")
@@ -109,16 +111,25 @@ def rename_instances(design_name, fabric_path=None):
             # 1. Sanitize entire line (token replacement)
             sanitized_line = identifier_pattern.sub(sanitize_token, line)
             
+            # 1b. Global bracket replacement for signal names like _abc[0:0]
+            # These appear in wire declarations and can't be captured by identifier pattern
+            # We need to replace [X] or [X:Y] patterns that are part of signal names (not bus declarations)
+            # Pattern: identifier followed by [digits] or [digits:digits] where identifier has underscore prefix
+            sanitized_line = re.sub(r'(_\w+)\[(\d+):(\d+)\]', r'\1_\2_\3_', sanitized_line)
+            sanitized_line = re.sub(r'(_\w+)\[(\d+)\]', r'\1_\2_', sanitized_line)
+            
             # 2. Rename Top Module text
+            # Note: Verilog module names cannot start with a digit, so prepend 'm_' if needed
             if "module sasic_top" in sanitized_line:
-                 sanitized_line = sanitized_line.replace("module sasic_top", f"module {design_name}")
+                verilog_safe_name = design_name if not design_name[0].isdigit() else f"m_{design_name}"
+                sanitized_line = sanitized_line.replace("module sasic_top", f"module {verilog_safe_name}")
 
             # 3. Rename Instance AND Module Type
             match = instance_pattern.match(sanitized_line)
             if match:
                 prefix_group = match.group(1) # "  R0_BUF_0 "
                 inst_name = match.group(2)    # "inst_1"
-                suffix = match.group(3)       # " ("
+                paren_suffix = match.group(3)       # " ("
                 
                 # A. Rename Module Type
                 # Extract clean module name from prefix (strip spaces)
@@ -147,7 +158,7 @@ def rename_instances(design_name, fabric_path=None):
                     new_inst_name = inst_name
                 
                 # Write new line
-                new_line = f"{new_prefix}{new_inst_name}{suffix}{sanitized_line[match.end():]}"
+                new_line = f"{new_prefix}{new_inst_name}{paren_suffix}{sanitized_line[match.end():]}"
                 fout.write(new_line)
             else:
                 fout.write(sanitized_line)
@@ -159,6 +170,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("design_name", help="Name of the design (e.g. arith)")
     parser.add_argument("--fabric", help="Path to fabric.yaml for module renaming", default=None)
+    parser.add_argument("--suffix", help="Suffix for file names (e.g. '_rl' for RL flow)", default="")
     
     args = parser.parse_args()
-    rename_instances(args.design_name, args.fabric)
+    rename_instances(args.design_name, args.fabric, args.suffix)

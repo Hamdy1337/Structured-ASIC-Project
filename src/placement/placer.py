@@ -816,7 +816,7 @@ def place_cells_greedy_sim_anneal(
 
 
 
-def run_placement(design_name: str = "arith") -> None:
+def run_placement(design_name: str = "arith", sa_moves_per_temp: int = 5000, sa_cooling_rate: float = 0.95) -> None:
     # Define project root (assuming this file is in src/placement/)
     project_root = Path(__file__).resolve().parent.parent.parent
     
@@ -847,6 +847,8 @@ def run_placement(design_name: str = "arith") -> None:
         ports_df=ports_df,
         netlist_graph=netlist_graph,
         design_name=design_name,
+        sa_moves_per_temp=sa_moves_per_temp,
+        sa_cooling_rate=sa_cooling_rate,
     )
     placement_end = time.time()
     total_time_with_overhead = placement_end - placement_start

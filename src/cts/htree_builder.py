@@ -156,7 +156,7 @@ class VerilogWriter:
         lines.append("endmodule")
         return "\n".join(lines)
 
-def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric_cells_path: str, fabric_path: str, output_dir: str, pins_path: str = None, skip_verilog: bool = False):
+def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric_cells_path: str, fabric_path: str, output_dir: str, pins_path: str = None, skip_verilog: bool = False, output_prefix: str = ""):
     """
     Run ECO flow with CTS and Power-Down ECO.
     
@@ -169,6 +169,7 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
         output_dir: Directory for output files
         pins_path: Path to pins.yaml
         skip_verilog: If True, do not generate the final Verilog netlist
+        output_prefix: Prefix to add to output files (e.g., "_rl" for RL flow)
     """
     print(f"Starting ECO Flow for {design_name}...")
     
@@ -569,6 +570,10 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
 
         next_net_bit = max_net_bit + 1
         
+        # Note: Unused DFF control pins (RESET_B, SET_B, D) are connected in the
+        # Power-Down ECO phase using the NEAREST tie cell for better routing.
+        # This avoids creating a single high-fanout global tie net.
+        
         def traverse_update(node, input_net_bit):
             nonlocal next_net_bit
             
@@ -589,10 +594,12 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
                     elif '__' in node.physical_name:
                         ctype = node.physical_name.split('__', 1)[1]
                         
-                    # Add to netlist
+                    # Add to netlist - control pins (RESET_B, SET_B, D) will be connected 
+                    # in Power-Down ECO phase using NEAREST tie cell for better routing
+                    # Q is an output, no need to connect (will be floating but that's OK)
                     module['cells'][cell_name] = {
                         'type': ctype,
-                        'connections': {},
+                        'connections': {},  # Control pins connected later by Power-Down ECO
                         'attributes': {'physical_name': node.physical_name, 'unused_dff': True}
                     }
                 
@@ -1071,6 +1078,53 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
             print(f"Warning: Could not find port_directions for {len(cells_without_port_info)} cell types: {sorted(cells_without_port_info)}")
         
         print(f"Power-Down ECO complete: Tied {unused_logic_added} unused logic cells")
+        
+        # =========================================================================
+        # Step 6b: Connect Unused DFF Control Pins to Nearest Tie Cells
+        # DFFs were added during CTS with only CLK connected. Now connect control pins.
+        # =========================================================================
+        print("\\nConnecting unused DFF control pins to nearest tie cells...")
+        dff_pins_connected = 0
+        
+        for cell_name, cell_data in module['cells'].items():
+            if not cell_data.get('attributes', {}).get('unused_dff', False):
+                continue
+            
+            phys_name = cell_data.get('attributes', {}).get('physical_name')
+            if not phys_name or not tie_cell_coords_map:
+                continue
+            
+            # Find nearest tie cell
+            dff_coords = physical_to_coords.get(phys_name)
+            if not dff_coords:
+                continue
+                
+            min_dist = float('inf')
+            nearest_tie_idx = 0
+            for tie_idx, tie_coords in tie_cell_coords_map.items():
+                dist = ((dff_coords[0] - tie_coords[0])**2 + 
+                       (dff_coords[1] - tie_coords[1])**2)**0.5
+                if dist < min_dist:
+                    min_dist = dist
+                    nearest_tie_idx = tie_idx
+            
+            # Get the tie nets for this tie cell
+            tie_nets = tie_nets_map.get(nearest_tie_idx)
+            if not tie_nets:
+                continue
+            
+            # Connect control pins:
+            # RESET_B and SET_B are active-low -> tie HIGH (inactive)
+            # D is data input -> tie LOW (safe default)
+            cell_data['connections']['RESET_B'] = [tie_nets['high']]
+            cell_data['connections']['SET_B'] = [tie_nets['high']]
+            cell_data['connections']['D'] = [tie_nets['low']]
+            
+            # Track assignment for statistics
+            tie_cell_assignments[nearest_tie_idx] += 3  # 3 pins per DFF
+            dff_pins_connected += 1
+        
+        print(f"Connected control pins for {dff_pins_connected} unused DFFs")
         print(f"  - Tie-low net: {tie_low_net_name} (bit {tie_low_net_bit})")
         print(f"  - Tie-high net: {tie_high_net_name} (bit {tie_high_net_bit})")
         print(f"  - Using {len(selected_tie_cells)} distributed tie cells")
@@ -1234,7 +1288,7 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
         writer = VerilogWriter(top_module_name, module['ports'], module['cells'], module['netnames'])
         verilog_code = writer.generate()
         
-        output_path = Path(output_dir) / f"{design_name}_final.v"
+        output_path = Path(output_dir) / f"{design_name}{output_prefix}_final.v"
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, 'w') as f:
             f.write(verilog_code)
@@ -1256,7 +1310,7 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
     # =========================================================================
     print("\nGenerating ECO-updated .map file with ALL fabric cells...")
     
-    eco_map_path = Path(output_dir) / f"{design_name}_eco.map"
+    eco_map_path = Path(output_dir) / f"{design_name}{output_prefix}_eco.map"
     
     # Track which physical cells have been written to avoid duplicates
     written_physicals = set()
@@ -1295,6 +1349,8 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
             f.write(f"{tie_logical_name} {phys}\n")
             written_physicals.add(phys)
             tie_count += 1
+        
+        # Note: cts_tie_cell removed - unused DFF control pins now use nearest tie cells
             
         # 4. Unused DFF mappings (added for complete clock coverage)
         f.write(f"\n# Unused DFF mappings (added for complete clock coverage)\n")
