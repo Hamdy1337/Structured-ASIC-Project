@@ -361,7 +361,7 @@ Modify the netlist to instantiate the clock tree and tie-off all unused logic in
 - **Tree Levels**: 4-5 levels
 - **Skew**: Minimized through balanced H-tree structure
 
-![CTS Tree](build/6502/6502_cts_tree.png)
+![CTS Tree](build/6502/6502_cts.png)
 
 ---
 
