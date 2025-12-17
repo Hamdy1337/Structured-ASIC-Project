@@ -677,12 +677,6 @@ Based on comprehensive analysis of 50 experiments, we recommend:
 
 **Description**: 2D histogram showing cell placement density across the chip. Color intensity represents the number of cells placed in each region.
 
-**Analysis**:
-- Well-distributed placement indicates good optimization
-- No severe hotspots or empty regions
-- Cells spread across available fabric area
-- Good utilization of fabric resources
-
 #### Net Length Histogram
 
 ![6502 Net Length](build/6502/6502_net_length.png)
@@ -690,17 +684,6 @@ Based on comprehensive analysis of 50 experiments, we recommend:
 **File**: `build/6502/6502_net_length.png`
 
 **Description**: 1D histogram showing the distribution of all net HPWLs in the design.
-
-**Analysis**:
-- Most nets are short (< 10,000 μm), indicating good placement quality
-- Long tail of longer nets (likely clock and global signals)
-- Mean/median net length provides quality metric
-- Helps identify routing challenges
-
-**Statistics** (example from 6502):
-- Total nets: ~5,000-10,000 (design-dependent)
-- Most nets: < 5,000 μm
-- Longest nets: < 50,000 μm (likely clock tree)
 
 ### 10.3 Phase 3: CTS Visualization
 
@@ -710,32 +693,16 @@ Based on comprehensive analysis of 50 experiments, we recommend:
 
 **Description**: Visual representation of the synthesized H-tree clock distribution overlaid on the chip layout.
 
-**Elements**:
-- **DFFs (Sinks)**: Blue markers showing clock sink locations
-- **Buffers (Nodes)**: Red markers showing CTS buffer locations
-- **Tree Connections**: Green lines connecting buffers and sinks
-- **Clock Pin**: Connection from top-level clock pin to root buffer
-- **Tree Levels**: Different colors/markers for different tree levels
-
-**Analysis**:
-- Balanced tree structure minimizes clock skew
-- Buffers distributed spatially near sink clusters
-- Tree depth: 4-5 levels typical for 6502 design
-- ~150 buffers used for ~800 DFFs
-
-**Interactive Version**: `build/6502/6502_cts.html` (if available)
-
 ### 10.4 SA Knob Analysis Plots
-
-All individual knob effect plots show two subplots:
-- **Left**: Knob value vs. HPWL (quality metric)
-- **Right**: Knob value vs. Runtime (speed metric)
 
 #### Cooling Rate Effect
 
 ![Cooling Rate Effect](build/6502/effect_cooling_rate.png)
 
+**File**: `build/6502/effect_cooling_rate.png`
+
 **Key Insight**: Lower cooling rates (0.8-0.9) give significantly better HPWL than very slow cooling (0.95-0.99).
+
 
 #### Moves Per Temperature Effect
 
