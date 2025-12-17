@@ -101,7 +101,7 @@ def main():
         # ============================================================
         print("[Phase 2] Running Placement...")
         print("  Using slow SA cooling (sa_moves_per_temp=30000, sa_cooling_rate=0.995)")
-        run_placement(design_name, sa_moves_per_temp=30000, sa_cooling_rate=0.995, spreading_factor=0.5, enable_sa_animation=True)
+        run_placement(design_name, sa_moves_per_temp=20000, sa_cooling_rate=0.995, spreading_factor=0.7, enable_sa_animation=True)
         print()
         
         # ============================================================

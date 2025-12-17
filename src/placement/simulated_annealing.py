@@ -238,8 +238,11 @@ def anneal_batch(
         T0 = T_initial
     else:
         # Auto-calculate T0 based on initial HPWL
-        # T0 should accept ~80% of bad moves initially? Or just be proportional to delta.
-        # Fixed logic: T0 = cur / 500.0
+        # We want initial acceptance probability of bad moves to be low for refinement
+        # If typical delta is ~1% of HPWL, say delta = cur * 0.01
+        # We want exp(-delta/T) to be small, e.g. 0.1
+        # -delta/T = ln(0.1) ~ -2.3 => T = delta/2.3 ~ 0.004 * cur
+        # Let's use T0 = cur / 500.0 (0.2%)
         T0 = max(0.1, cur / 500.0)
         print(f"      [SA] Start Batch: Cells={len(batch_cells)} T0={T0:.3f} HPWL={cur:.1f}")
 
@@ -467,71 +470,14 @@ def anneal_batch(
             old_y_a = float(site_y_arr[sa])
             old_x_b = float(site_x_arr[sb])
             old_y_b = float(site_y_arr[sb])
-    total_moves = 0
-    
-    # Stopping condition: T < T_min
-    # We want to cool down until T is small enough that acceptance is negligible
-    T_min = T0 * 1e-4
-    
-    step_idx = 0
-    
-    while temp > T_min:
-        step_accepted = 0
-        
-        # Run 'iters' moves at this temperature (as per docstring)
-        for _ in range(iters):
-            # Choose move type based on probability
-            move_type_rand = rng.random()
-            if move_type_rand < p_refine_norm:
-                # Refine move: swap nearby cells
-                move_result = _pick_refine_move_optimized(
-                    batch_cells, cell_pos_x, cell_pos_y, cell_to_idx, 
-                    refine_max_distance, rng
-                )
-            else:
-                # Explore move: swap cells within current window
-                move_result = _pick_explore_move_optimized(
-                    batch_cells, cell_pos_x, cell_pos_y, cell_to_idx, 
-                    window_size, rng
-                )
             
-            if move_result is None:
-                continue
+            pos_cells[a] = (old_x_a, old_y_a)
+            pos_cells[b] = (old_x_b, old_y_b)
             
-            a, b = move_result
-            if a == b:
-                continue
-            
-            sa = assignments[a]
-            sb = assignments[b]
-            
-            # Enforce site-type compatibility
-            if not (_is_compatible(a, sb) and _is_compatible(b, sa)):
-                continue
-            
-            # Nets affected by swap
-            nets_aff: Set[int] = set()
-            nets_aff |= cell_nets.get(a, set())
-            nets_aff |= cell_nets.get(b, set())
-            
-            # Calculate HPWL before swap
-            old = _hpwl_for_nets_optimized(nets_aff, pos_cells, net_to_cells, fixed_pts)
-            
-            # Apply swap (optimistic)
-            assignments[a], assignments[b] = sb, sa
-            new_x_a = float(site_x_arr[sb])
-            new_y_a = float(site_y_arr[sb])
-            new_x_b = float(site_x_arr[sa])
-            new_y_b = float(site_y_arr[sa])
-            
-            pos_cells[a] = (new_x_a, new_y_a)
-            pos_cells[b] = (new_x_b, new_y_b)
-            
-            idx_a = cell_to_idx.get(a)
-            idx_b = cell_to_idx.get(b)
+            # Update NumPy arrays
             if idx_a is not None:
-                cell_pos_x[idx_a] = new_x_a
-                cell_pos_y[idx_a] = new_y_a
+                cell_pos_x[idx_a] = old_x_a
+                cell_pos_y[idx_a] = old_y_a
             if idx_b is not None:
                 cell_pos_x[idx_b] = old_x_b
                 cell_pos_y[idx_b] = old_y_b
