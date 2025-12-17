@@ -1811,6 +1811,11 @@ def apply_swap_refiner(agent: PPOAgent, batch_cells: List[str], placement_map: D
     def _local_delta(i: int, j: int) -> float:
         ci = env.batch[i]; cj = env.batch[j]
         xi, yi, sidi = env.placement[ci]; xj, yj, sidj = env.placement[cj]
+        
+        # Early reject: if swap is type-incompatible, return large positive (bad) delta
+        if not (env._is_type_compatible(ci, sidj) and env._is_type_compatible(cj, sidi)):
+            return float('inf')  # Incompatible swap - never accept
+        
         # only check nets touching these two cells
         nets_aff = set(env.cell_to_nets.get(ci,set())) | set(env.cell_to_nets.get(cj,set()))
         # simple HPWL diff
@@ -1851,6 +1856,11 @@ def apply_swap_refiner(agent: PPOAgent, batch_cells: List[str], placement_map: D
         if d < -1e-9: # small epsilon for float stability
             ci = env.batch[i]; cj = env.batch[j]
             xi, yi, sidi = env.placement[ci]; xj, yj, sidj = env.placement[cj]
+            
+            # CRITICAL: Check type compatibility before swapping
+            if not (env._is_type_compatible(ci, sidj) and env._is_type_compatible(cj, sidi)):
+                continue  # Skip incompatible swaps
+            
             env.placement[ci] = (xj, yj, sidj)
             env.placement[cj] = (xi, yi, sidi)
             swaps_done += 1

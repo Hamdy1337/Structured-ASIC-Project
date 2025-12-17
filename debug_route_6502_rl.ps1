@@ -75,7 +75,7 @@ docker run --rm `
     -e OUTPUT_DIR=$env:OUTPUT_DIR `
     -e OUTPUT_SUFFIX=$env:OUTPUT_SUFFIX `
     openroad/orfs:latest `
-    /OpenROAD-flow-scripts/tools/install/OpenROAD/bin/openroad -gui -exit src/routing/route.tcl
+    /OpenROAD-flow-scripts/tools/install/OpenROAD/bin/openroad -no_init -exit src/routing/route.tcl
 
 Write-Output ""
 Write-Output "=============================================="

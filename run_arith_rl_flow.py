@@ -24,6 +24,9 @@ import sys
 project_root = Path(__file__).resolve().parent
 sys.path.insert(0, str(project_root))
 
+from src.validation.validator import validate_design, print_validation_report
+from src.parsers.fabric_db import get_fabric_db
+from src.parsers.netlist_parser import get_logical_db
 from src.placement.placer_rl import run_greedy_sa_then_rl_pipeline
 from src.cts.htree_builder import run_eco_flow
 from src.parsers.fabric_parser import parse_fabric_file_cached
@@ -84,8 +87,41 @@ def main():
         # Ensure output directory exists
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Step 1: Load Data
-        print("[Step 1] Loading design data...")
+        # ============================================================
+        # PHASE 1: Validation
+        # ============================================================
+        print("[Phase 1] Validating Design...")
+        print("  Checking if design fits on fabric...")
+        
+        # Load fabric database (available slots)
+        _, fabric_db = get_fabric_db(
+            str(fabric_path),
+            str(fabric_cells_path)
+        )
+        
+        # Load logical database (required cells)
+        logical_db = get_logical_db(str(netlist_path))
+        
+        # Validate design
+        validation_result = validate_design(fabric_db, logical_db)
+        
+        # Print validation report
+        print()
+        print_validation_report(validation_result)
+        print()
+        
+        if not validation_result.passed:
+            print(f"ERROR: Design '{design_name}' cannot be implemented on this fabric!")
+            print("Aborting flow.")
+            sys.exit(1)
+        
+        print("[Phase 1] Validation PASSED!")
+        print()
+        
+        # ============================================================
+        # PHASE 2: Load Data & RL Placement
+        # ============================================================
+        print("[Phase 2] Loading design data...")
         
         # Load fabric
         fabric, _ = parse_fabric_file_cached(str(fabric_path))

@@ -24,6 +24,9 @@ import sys
 project_root = Path(__file__).resolve().parent
 sys.path.insert(0, str(project_root))
 
+from src.validation.validator import validate_design, print_validation_report
+from src.parsers.fabric_db import get_fabric_db
+from src.parsers.netlist_parser import get_logical_db
 from src.placement.placer_rl import run_greedy_sa_then_rl_pipeline
 from src.cts.htree_builder import run_eco_flow
 from src.parsers.fabric_parser import parse_fabric_file_cached
@@ -84,8 +87,41 @@ def main():
         # Ensure output directory exists
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Step 1: Load Data
-        print("[Step 1] Loading design data...")
+        # ============================================================
+        # PHASE 1: Validation
+        # ============================================================
+        print("[Phase 1] Validating Design...")
+        print("  Checking if design fits on fabric...")
+        
+        # Load fabric database (available slots)
+        _, fabric_db = get_fabric_db(
+            str(fabric_path),
+            str(fabric_cells_path)
+        )
+        
+        # Load logical database (required cells)
+        logical_db = get_logical_db(str(netlist_path))
+        
+        # Validate design
+        validation_result = validate_design(fabric_db, logical_db)
+        
+        # Print validation report
+        print()
+        print_validation_report(validation_result)
+        print()
+        
+        if not validation_result.passed:
+            print(f"ERROR: Design '{design_name}' cannot be implemented on this fabric!")
+            print("Aborting flow.")
+            sys.exit(1)
+        
+        print("[Phase 1] Validation PASSED!")
+        print()
+        
+        # ============================================================
+        # PHASE 2: Load Data & RL Placement
+        # ============================================================
+        print("[Phase 2] Loading design data...")
         
         # Load fabric
         fabric, _ = parse_fabric_file_cached(str(fabric_path))
@@ -93,18 +129,34 @@ def main():
         
         # Build fabric_df from fabric_cells with ABSOLUTE coordinates (tile.x + cell.x)
         # This is used for the RL placer and for mapping placement to physical cells
+        
+        # First, build template_name -> cell_type mapping from fabric tile_definition
+        template_to_cell_type = {}
+        tile_def = getattr(fabric, 'tile_definition', {}) or {}
+        for cell in tile_def.get('cells', []) or []:
+            try:
+                template_name = cell['template_name']
+                cell_type = cell['cell_type']
+                template_to_cell_type[str(template_name)] = str(cell_type)
+            except Exception:
+                continue
+        
         rows = []
         for tile_name, tile_info in fabric_cells.tiles.items():
             for cell in tile_info.cells:
+                # Extract template from physical name (e.g., "T0Y3__R0_TAP_0" -> "R0_TAP_0")
+                template_name = cell.name.split('__', 1)[1] if '__' in cell.name else cell.name
+                cell_type = template_to_cell_type.get(template_name, 'UNKNOWN')
                 rows.append({
                     'tile_name': tile_name,
                     'cell_x': tile_info.x + cell.x,  # Absolute X coordinate
                     'cell_y': tile_info.y + cell.y,  # Absolute Y coordinate
                     'cell_name': cell.name,          # Full physical name (e.g., "T0Y3__R0_TAP_0")
                     'cell_orient': cell.orient,
+                    'cell_type': cell_type,          # Liberty cell type (e.g., "sky130_fd_sc_hd__tapvpwrvgnd_1")
                 })
         fabric_df = pd.DataFrame(rows)
-        print(f"  - Loaded {len(fabric_df)} fabric cells")
+        print(f"  - Loaded {len(fabric_df)} fabric cells with type info")
         
         # Load pins
         pins_df, pins_meta = load_pins_df(str(pins_path))
@@ -175,6 +227,14 @@ def main():
         print("[Step 3] Saving RL-refined placement map...")
         
         from src.placement.placement_mapper import map_placement_to_physical_cells, generate_map_file
+        
+        # Add cell_type from netlist_graph to rl_placement_df for type-aware physical cell matching
+        if 'cell_type' in netlist_graph.columns:
+            cell_type_map = netlist_graph.groupby('cell_name')['cell_type'].first().to_dict()
+            rl_placement_df['cell_type'] = rl_placement_df['cell_name'].map(cell_type_map).fillna('UNKNOWN')
+            print(f"  - Added cell_type info for {(rl_placement_df['cell_type'] != 'UNKNOWN').sum()} cells")
+        else:
+            print(f"  - Warning: netlist_graph has no cell_type column")
         
         placement_with_physical = map_placement_to_physical_cells(
             placement_df=rl_placement_df,

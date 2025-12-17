@@ -330,6 +330,10 @@ def place_cells_greedy_sim_anneal(
     sa_seed: int = 42,
     sa_batch_size: int = 150,
     design_name: Optional[str] = None,
+    spreading_factor: float = 0.3,  # 0.0 = no spreading, 1.0 = maximum spreading
+    enable_sa_animation: bool = False,  # Enable SA animation frame capture
+    sa_anim_dir: Optional[Path] = None,  # Directory for SA animation frames
+    sa_frame_interval: int = 100,  # Capture frame every N SA iterations
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Place cells on the fabric using a greedy simulated annealing algorithm.
 
@@ -543,6 +547,40 @@ def place_cells_greedy_sim_anneal(
                     # Ultimate fallback: center of available sites
                     tx = float(sites_df["x_um"].median())
                     ty = float(sites_df["y_um"].median())
+            
+            # SPREADING ADJUSTMENT: Push target away from high-density cluster center
+            if spreading_factor > 0 and len(pos_cells) > 20:
+                # Compute centroid of already-placed cells
+                placed_xs = [p[0] for p in pos_cells.values()]
+                placed_ys = [p[1] for p in pos_cells.values()]
+                centroid_x = sum(placed_xs) / len(placed_xs)
+                centroid_y = sum(placed_ys) / len(placed_ys)
+                
+                # Compute local density around target (count cells within radius)
+                density_radius = 100.0  # microns
+                local_count = sum(1 for px, py in pos_cells.values() 
+                                  if abs(px - tx) + abs(py - ty) < density_radius)
+                density_ratio = local_count / max(1, len(pos_cells))
+                
+                # If density is high (>5% of cells in small area), push outward
+                if density_ratio > 0.05:
+                    # Direction from centroid to target
+                    dx = tx - centroid_x
+                    dy = ty - centroid_y
+                    dist = max(1.0, (dx*dx + dy*dy) ** 0.5)
+                    
+                    # Push target outward proportional to density and spreading_factor
+                    # Maximum push = 200um * spreading_factor
+                    push_amount = min(200.0, density_ratio * 1000.0) * spreading_factor
+                    tx += (dx / dist) * push_amount
+                    ty += (dy / dist) * push_amount
+                    
+                    # Clamp to die bounds
+                    die_x_min, die_x_max = float(sites_df["x_um"].min()), float(sites_df["x_um"].max())
+                    die_y_min, die_y_max = float(sites_df["y_um"].min()), float(sites_df["y_um"].max())
+                    tx = max(die_x_min, min(die_x_max, tx))
+                    ty = max(die_y_min, min(die_y_max, ty))
+            
             required_type = cell_type_by_cell.get(c)
             sid = nearest_site((tx, ty), is_free, sites_df, site_x, site_y, site_type_arr, minx, miny, cell_w, cell_h, gx, gy, bins, required_type=required_type)
             if sid is None:
@@ -660,6 +698,30 @@ def place_cells_greedy_sim_anneal(
     
     print(f"[DEBUG] Global SA: Processing {len(all_placed_cells)} cells in {total_batches} batches")
 
+    # SA Animation setup
+    sa_frame_counter = 0
+    if enable_sa_animation:
+        if sa_anim_dir is None:
+            project_root = Path(__file__).resolve().parent.parent.parent
+            sa_anim_dir = project_root / "build" / (design_name or "default") / "sa_animation_frames"
+        sa_anim_dir.mkdir(parents=True, exist_ok=True)
+        print(f"[DEBUG] SA Animation enabled, saving frames to: {sa_anim_dir}")
+    
+    def _sa_frame_callback(iteration: int, hpwl: float, temp: float, relocations: int) -> None:
+        nonlocal sa_frame_counter
+        if not enable_sa_animation:
+            return
+        sa_frame_counter += 1
+        frame_path = sa_anim_dir / f"sa_frame_{sa_frame_counter:04d}.png"
+        capture_placement_frame(
+            pos_cells=pos_cells,
+            sites_df=sites_df,
+            frame_path=frame_path,
+            frame_number=sa_frame_counter,
+            total_cells=len(pos_cells),
+            title_suffix=f" | SA Iter {iteration} | HPWL: {hpwl:.0f} | T: {temp:.2f} | Reloc: {relocations}"
+        )
+
     for cell_type, type_cells in cells_by_type.items():
         if len(type_cells) < 2:
             continue
@@ -686,7 +748,9 @@ def place_cells_greedy_sim_anneal(
                 W_initial=sa_W_initial,
                 seed=sa_seed,
                 cell_types=cell_type_by_cell,
-                net_to_cells=net_to_cells
+                net_to_cells=net_to_cells,
+                frame_callback=_sa_frame_callback if enable_sa_animation else None,
+                frame_interval=sa_frame_interval,
             )
 
     t_sa_end = time.perf_counter()
@@ -702,6 +766,26 @@ def place_cells_greedy_sim_anneal(
         if improvement < 0:
             print(f"[WARNING] SA made HPWL WORSE by {abs(improvement):.3f}! Consider reducing batch_size or adjusting SA parameters.")
     print()
+    
+    # Create SA animation video if frames were captured
+    if enable_sa_animation and sa_frame_counter > 0:
+        project_root = Path(__file__).resolve().parent.parent.parent
+        build_dir = project_root / "build" / (design_name or "default")
+        sa_anim_output = build_dir / f"{design_name or 'design'}_sa_animation.mp4"
+        
+        print(f"[DEBUG] Creating SA animation from {sa_frame_counter} frames...")
+        try:
+            create_placement_animation(
+                frame_dir=sa_anim_dir,
+                output_path=sa_anim_output,
+                frame_prefix="sa_frame_",
+                duration=0.1,  # 100ms per frame (10 fps)
+                loop=0,
+                format="mp4",
+            )
+            print(f"[DEBUG] SA animation saved to: {sa_anim_output}")
+        except Exception as e:
+            print(f"[WARNING] Failed to create SA animation: {e}")
     
     # Capture final SA placement frame and create animation
     if animation_enabled and animation_frames_dir is not None:
@@ -816,7 +900,7 @@ def place_cells_greedy_sim_anneal(
 
 
 
-def run_placement(design_name: str = "arith", sa_moves_per_temp: int = 5000, sa_cooling_rate: float = 0.95) -> None:
+def run_placement(design_name: str = "arith", sa_moves_per_temp: int = 5000, sa_cooling_rate: float = 0.95, spreading_factor: float = 0.3, enable_sa_animation: bool = False) -> None:
     # Define project root (assuming this file is in src/placement/)
     project_root = Path(__file__).resolve().parent.parent.parent
     
@@ -849,6 +933,8 @@ def run_placement(design_name: str = "arith", sa_moves_per_temp: int = 5000, sa_
         design_name=design_name,
         sa_moves_per_temp=sa_moves_per_temp,
         sa_cooling_rate=sa_cooling_rate,
+        spreading_factor=spreading_factor,
+        enable_sa_animation=enable_sa_animation,
     )
     placement_end = time.time()
     total_time_with_overhead = placement_end - placement_start

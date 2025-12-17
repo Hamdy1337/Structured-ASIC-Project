@@ -1,0 +1,663 @@
+=== Starting Flow for arith ===
+Time: 2025-12-17 20:46:25.187507
+
+[Phase 1] Validating Design...
+  Checking if design fits on fabric...
+Parsing C:\College Work\AUC Study Work\Digital Design 2\Project\Structred-ASIC-Project\inputs\Platform\fabric_cells.yaml using stream parser...
+Finished parsing 3240 tiles in 0.58s
+
+================================================================================
+FABRIC UTILIZATION REPORT
+================================================================================
+Template   Cell Type                        Required     Available    Utilization  Status
+--------------------------------------------------------------------------------
+BUF        sky130_fd_sc_hd__clkbuf_4        67           9720                0.7% ✓ OK
+INV        sky130_fd_sc_hd__clkinv_2        68           12960               0.5% ✓ OK
+CONB       sky130_fd_sc_hd__conb_1          3            9720                0.0% ✓ OK
+DECAP      sky130_fd_sc_hd__decap_3         0            6480                0.0% ✓ OK
+DECAP      sky130_fd_sc_hd__decap_4         0            12960               0.0% ✓ OK
+DFBBP      sky130_fd_sc_hd__dfbbp_1         11           6480                0.2% ✓ OK
+NAND2      sky130_fd_sc_hd__nand2_2         187          48600               0.4% ✓ OK
+OR2        sky130_fd_sc_hd__or2_2           127          25920               0.5% ✓ OK
+TAP        sky130_fd_sc_hd__tapvpwrvgnd_1   0            25920               0.0% ✓ OK
+================================================================================
+==============VERDICT: PASSED==============
+
+✓ VALIDATION PASSED!
+✓ This design can be implemented on this fabric.
+
+[Phase 1] Validation PASSED!
+
+[Phase 2] Running Placement...
+Parsing C:\College Work\AUC Study Work\Digital Design 2\Project\Structred-ASIC-Project\inputs\Platform\fabric_cells.yaml using stream parser...
+Finished parsing 3240 tiles in 0.61s
+Parsing C:\College Work\AUC Study Work\Digital Design 2\Project\Structred-ASIC-Project\inputs\Platform\fabric_cells.yaml using stream parser...
+Finished parsing 3240 tiles in 0.56s
+Running placement for design: arith
+Total cells to place: 463
+[DEBUG] === PHASE 1: PORT ASSIGNMENT (SEEDING) ===
+[DEBUG] [Seeding] Initializing pin assignment...
+[DEBUG] [Seeding] Initialization completed in 0.002s
+[DEBUG] [Seeding] Processing 122 pins and 122 ports
+[DEBUG] [Seeding] Building candidate pin pools...
+[DEBUG] [Seeding] Built candidate pools for 2 directions in 0.007s
+[DEBUG] [Seeding] Processing special ports (clock/reset)...
+[DEBUG] [Seeding] Assigned 2 special ports in 0.004s
+[DEBUG] [Seeding] Processing 120 residual ports...
+[DEBUG] [Seeding] Processing 3 port groups...
+[PROGRESS] [Seeding] Groups: 1/3 (33.3%) | Assigned: 0
+[PROGRESS] [Seeding] Groups: 2/3 (66.7%) | Assigned: 40
+[DEBUG] [Seeding] Found 40 pins for base 'oeb' in direction 'input'
+[PROGRESS] [Seeding] Groups: 3/3 (100.0%) | Assigned: 80
+[DEBUG] [Seeding] Assigned 120 regular ports in 0.013s
+[DEBUG] [Seeding] Built assignments DataFrame with 122 assignments in 0.002s
+[DEBUG] [Seeding] Total assignments: 122 (special: 2, regular: 120)
+[DEBUG] Port assignment (seeding) completed in 0.030s
+[DEBUG] Assigned 122 port-to-pin mappings
+
+[DEBUG] === PHASE 2: BUILDING SITES AND SPATIAL INDEX ===
+[DEBUG] Built 158760 sites from fabric
+[DEBUG] Spatial index built: grid=39x39, 158760 sites
+[DEBUG] Building sites and spatial index completed in 0.105s
+
+[DEBUG] === PHASE 3: BUILDING FIXED POINTS ===
+[DEBUG] Built 122 fixed point nets
+[DEBUG] Building fixed points completed in 0.002s
+
+[DEBUG] === PHASE 4: BUILDING DEPENDENCY LEVELS (LEVELIZATION) ===
+[DEBUG] Levelization completed: 23 levels found
+[DEBUG] Building dependency levels completed in 0.354s
+
+[DEBUG] === PHASE 5: BUILDING CELL MAPPINGS ===
+[DEBUG] Built mappings for 463 cells
+[DEBUG] Building cell mappings completed in 0.440s
+
+[DEBUG] === PHASE 6: BUILDING CELL TYPE MAPPING ===
+[DEBUG] Built cell type mapping for 463 cells
+[DEBUG] Building cell type mapping completed in 0.092s
+
+[DEBUG] === PHASE 7: ORDERING CELLS BY LEVEL ===
+[DEBUG] Ordered 463 cells across 23 levels
+[DEBUG] Ordering cells completed in 0.004s
+
+[DEBUG] Built 122 I/O pin positions for fallback
+[DEBUG] === PHASE 8: LEVEL-BY-LEVEL PLACEMENT (GROWING) ===
+[DEBUG] Placement animation enabled. Frames will be saved to: C:\College Work\AUC Study Work\Digital Design 2\Project\Structred-ASIC-Project\build\arith\placement_animation_frames
+[DEBUG] Animation will show: Greedy placement progression → Final greedy → SA optimization → Final SA result
+[DEBUG] --- Processing Level 0 (1/23) ---
+[DEBUG] Level 0: 94 cells to place
+[DEBUG] Level 0: Starting greedy placement...
+[PROGRESS] L0: 9/94 (9.6%) | Placed: 9 | Latest: $abc$2096$auto$blifp @ (5.5, 543.6)
+[PROGRESS] L0: 18/94 (19.1%) | Placed: 18 | Latest: $abc$2096$auto$blifp @ (23.9, 59.4)
+[PROGRESS] L0: 27/94 (28.7%) | Placed: 27 | Latest: $abc$2096$auto$blifp @ (171.1, 274.3)
+[PROGRESS] L0: 36/94 (38.3%) | Placed: 36 | Latest: $auto$insbuf.cc:97:e @ (11.9, 7.7)
+[PROGRESS] L0: 45/94 (47.9%) | Placed: 45 | Latest: $auto$insbuf.cc:97:e @ (14.7, 34.9)
+[PROGRESS] L0: 54/94 (57.4%) | Placed: 54 | Latest: $auto$insbuf.cc:97:e @ (980.7, 209.0)
+[PROGRESS] L0: 63/94 (67.0%) | Placed: 63 | Latest: $auto$insbuf.cc:97:e @ (977.9, 203.6)
+[PROGRESS] L0: 72/94 (76.6%) | Placed: 72 | Latest: $auto$insbuf.cc:97:e @ (41.8, 26.8)
+[PROGRESS] L0: 81/94 (86.2%) | Placed: 81 | Latest: $auto$insbuf.cc:97:e @ (950.3, 236.2)
+[PROGRESS] L0: 90/94 (95.7%) | Placed: 90 | Latest: $auto$insbuf.cc:97:e @ (952.6, 255.2)
+[PROGRESS] L0: 94/94 (100.0%) | Placed: 94 | Latest: $auto$insbuf.cc:97:e @ (950.3, 192.7)
+[DEBUG] Level 0: Greedy placement completed - placed 94/94 cells in 2.726s
+[DEBUG] Level 0: Total level processing time: 2.915s (greedy only)
+[PROGRESS] L0: COMPLETE | Total placed so far: 94 cells
+
+[DEBUG] --- Processing Level 1 (2/23) ---
+[DEBUG] Level 1: 31 cells to place
+[DEBUG] Level 1: Starting greedy placement...
+[PROGRESS] L1: 3/31 (9.7%) | Placed: 3 | Latest: $abc$2096$auto$blifp @ (5.5, 445.6)
+[PROGRESS] L1: 6/31 (19.4%) | Placed: 6 | Latest: $abc$2096$auto$blifp @ (799.0, 5.0)
+[PROGRESS] L1: 9/31 (29.0%) | Placed: 9 | Latest: $abc$2096$auto$blifp @ (21.6, 543.6)
+[PROGRESS] L1: 12/31 (38.7%) | Placed: 12 | Latest: $abc$2096$auto$blifp @ (741.5, 5.0)
+[PROGRESS] L1: 15/31 (48.4%) | Placed: 15 | Latest: $abc$2096$auto$blifp @ (19.3, 97.5)
+[PROGRESS] L1: 18/31 (58.1%) | Placed: 18 | Latest: $abc$2096$auto$blifp @ (23.9, 135.6)
+[PROGRESS] L1: 21/31 (67.7%) | Placed: 21 | Latest: $abc$2096$auto$blifp @ (46.9, 162.8)
+[PROGRESS] L1: 24/31 (77.4%) | Placed: 24 | Latest: $abc$2096$auto$blifp @ (115.9, 214.4)
+[PROGRESS] L1: 27/31 (87.1%) | Placed: 27 | Latest: $abc$2096$auto$blifp @ (221.7, 331.4)
+[PROGRESS] L1: 30/31 (96.8%) | Placed: 30 | Latest: $abc$2096$auto$blifp @ (274.6, 385.8)
+[PROGRESS] L1: 31/31 (100.0%) | Placed: 31 | Latest: $abc$2096$auto$blifp @ (281.5, 391.2)
+[DEBUG] Level 1: Greedy placement completed - placed 31/31 cells in 0.593s
+[DEBUG] Level 1: Total level processing time: 0.789s (greedy only)
+[PROGRESS] L1: COMPLETE | Total placed so far: 125 cells
+
+[DEBUG] --- Processing Level 2 (3/23) ---
+[DEBUG] Level 2: 38 cells to place
+[DEBUG] Level 2: Starting greedy placement...
+[PROGRESS] L2: 3/38 (7.9%) | Placed: 3 | Latest: $abc$2096$auto$blifp @ (580.5, 5.0)
+[PROGRESS] L2: 6/38 (15.8%) | Placed: 6 | Latest: $abc$2096$auto$blifp @ (412.6, 59.4)
+[PROGRESS] L2: 9/38 (23.7%) | Placed: 9 | Latest: $abc$2096$auto$blifp @ (828.9, 5.0)
+[PROGRESS] L2: 12/38 (31.6%) | Placed: 12 | Latest: $abc$2096$auto$blifp @ (7.3, 445.6)
+[PROGRESS] L2: 15/38 (39.5%) | Placed: 15 | Latest: $abc$2096$auto$blifp @ (5.5, 83.9)
+[PROGRESS] L2: 18/38 (47.4%) | Placed: 18 | Latest: $abc$2096$auto$blifp @ (412.6, 113.8)
+[PROGRESS] L2: 21/38 (55.3%) | Placed: 21 | Latest: $abc$2096$auto$blifp @ (7.8, 236.2)
+[PROGRESS] L2: 24/38 (63.2%) | Placed: 24 | Latest: $abc$2096$auto$blifp @ (433.3, 86.6)
+[PROGRESS] L2: 27/38 (71.1%) | Placed: 27 | Latest: $abc$2096$auto$blifp @ (118.2, 214.4)
+[PROGRESS] L2: 30/38 (78.9%) | Placed: 30 | Latest: $abc$2096$auto$blifp @ (173.4, 268.8)
+[PROGRESS] L2: 33/38 (86.8%) | Placed: 33 | Latest: $abc$2096$auto$blifp @ (226.3, 336.8)
+[PROGRESS] L2: 36/38 (94.7%) | Placed: 36 | Latest: $abc$2096$auto$blifp @ (412.6, 331.4)
+[PROGRESS] L2: 38/38 (100.0%) | Placed: 38 | Latest: $abc$2096$auto$blifp @ (543.7, 195.4)
+[DEBUG] Level 2: Greedy placement completed - placed 38/38 cells in 0.971s
+[DEBUG] Level 2: Total level processing time: 1.167s (greedy only)
+[PROGRESS] L2: COMPLETE | Total placed so far: 163 cells
+
+[DEBUG] --- Processing Level 3 (4/23) ---
+[DEBUG] Level 3: 33 cells to place
+[DEBUG] Level 3: Starting greedy placement...
+[PROGRESS] L3: 3/33 (9.1%) | Placed: 3 | Latest: $abc$2096$auto$blifp @ (408.0, 168.2)
+[PROGRESS] L3: 6/33 (18.2%) | Placed: 6 | Latest: $abc$2096$auto$blifp @ (865.7, 7.7)
+[PROGRESS] L3: 9/33 (27.3%) | Placed: 9 | Latest: $abc$2096$auto$blifp @ (5.5, 508.2)
+[PROGRESS] L3: 12/33 (36.4%) | Placed: 12 | Latest: $abc$2096$auto$blifp @ (21.6, 510.9)
+[PROGRESS] L3: 15/33 (45.5%) | Placed: 15 | Latest: $abc$2096$auto$blifp @ (414.9, 70.3)
+[PROGRESS] L3: 18/33 (54.5%) | Placed: 18 | Latest: $abc$2096$auto$blifp @ (425.4, 108.4)
+[PROGRESS] L3: 21/33 (63.6%) | Placed: 21 | Latest: $abc$2096$auto$blifp @ (13.7, 336.8)
+[PROGRESS] L3: 24/33 (72.7%) | Placed: 24 | Latest: $abc$2096$auto$blifp @ (21.6, 336.8)
+[PROGRESS] L3: 27/33 (81.8%) | Placed: 27 | Latest: $abc$2096$auto$blifp @ (419.5, 271.6)
+[PROGRESS] L3: 30/33 (90.9%) | Placed: 30 | Latest: $abc$2096$auto$blifp @ (283.3, 391.2)
+[PROGRESS] L3: 33/33 (100.0%) | Placed: 33 | Latest: $abc$2096$auto$blifp @ (987.6, 222.6)
+[DEBUG] Level 3: Greedy placement completed - placed 33/33 cells in 0.610s
+[DEBUG] Level 3: Total level processing time: 0.813s (greedy only)
+[PROGRESS] L3: COMPLETE | Total placed so far: 196 cells
+
+[DEBUG] --- Processing Level 4 (5/23) ---
+[DEBUG] Level 4: 31 cells to place
+[DEBUG] Level 4: Starting greedy placement...
+[PROGRESS] L4: 3/31 (9.7%) | Placed: 3 | Latest: $abc$2096$auto$blifp @ (447.1, 274.3)
+[PROGRESS] L4: 6/31 (19.4%) | Placed: 6 | Latest: $abc$2096$auto$blifp @ (5.5, 524.5)
+[PROGRESS] L4: 9/31 (29.0%) | Placed: 9 | Latest: $abc$2096$auto$blifp @ (5.5, 540.8)
+[PROGRESS] L4: 12/31 (38.7%) | Placed: 12 | Latest: $abc$2096$auto$blifp @ (447.1, 51.2)
+[PROGRESS] L4: 15/31 (48.4%) | Placed: 15 | Latest: $abc$2096$auto$blifp @ (424.1, 73.0)
+[PROGRESS] L4: 18/31 (58.1%) | Placed: 18 | Latest: $abc$2096$auto$blifp @ (14.7, 334.1)
+[PROGRESS] L4: 21/31 (67.7%) | Placed: 21 | Latest: $abc$2096$auto$blifp @ (474.7, 141.0)
+[PROGRESS] L4: 24/31 (77.4%) | Placed: 24 | Latest: $abc$2096$auto$blifp @ (5.5, 453.8)
+[PROGRESS] L4: 27/31 (87.1%) | Placed: 27 | Latest: $abc$2096$auto$blifp @ (546.0, 168.2)
+[PROGRESS] L4: 30/31 (96.8%) | Placed: 30 | Latest: $abc$2096$auto$blifp @ (226.3, 391.2)
+[PROGRESS] L4: 31/31 (100.0%) | Placed: 31 | Latest: $abc$2096$auto$blifp @ (566.7, 203.6)
+[DEBUG] Level 4: Greedy placement completed - placed 31/31 cells in 0.818s
+[DEBUG] Level 4: Total level processing time: 1.017s (greedy only)
+[PROGRESS] L4: COMPLETE | Total placed so far: 227 cells
+
+[DEBUG] --- Processing Level 5 (6/23) ---
+[DEBUG] Level 5: 24 cells to place
+[DEBUG] Level 5: Starting greedy placement...
+[PROGRESS] L5: 2/24 (8.3%) | Placed: 2 | Latest: $abc$2096$auto$blifp @ (454.0, 132.8)
+[PROGRESS] L5: 4/24 (16.7%) | Placed: 4 | Latest: $abc$2096$auto$blifp @ (214.8, 413.0)
+[PROGRESS] L5: 6/24 (25.0%) | Placed: 6 | Latest: $abc$2096$auto$blifp @ (23.9, 309.6)
+[PROGRESS] L5: 8/24 (33.3%) | Placed: 8 | Latest: $abc$2096$auto$blifp @ (19.3, 326.0)
+[PROGRESS] L5: 10/24 (41.7%) | Placed: 10 | Latest: $abc$2096$auto$blifp @ (408.0, 37.6)
+[PROGRESS] L5: 12/24 (50.0%) | Placed: 12 | Latest: $abc$2096$auto$blifp @ (640.3, 34.9)
+[PROGRESS] L5: 14/24 (58.3%) | Placed: 14 | Latest: $abc$2096$auto$blifp @ (455.3, 162.8)
+[PROGRESS] L5: 16/24 (66.7%) | Placed: 16 | Latest: $abc$2096$auto$blifp @ (5.5, 459.2)
+[PROGRESS] L5: 18/24 (75.0%) | Placed: 18 | Latest: $abc$2096$auto$blifp @ (667.9, 67.6)
+[PROGRESS] L5: 20/24 (83.3%) | Placed: 20 | Latest: $abc$2096$auto$blifp @ (460.9, 233.5)
+[PROGRESS] L5: 22/24 (91.7%) | Placed: 22 | Latest: $abc$2096$auto$blifp @ (557.5, 165.5)
+[PROGRESS] L5: 24/24 (100.0%) | Placed: 24 | Latest: $abc$2096$auto$blifp @ (387.3, 298.8)
+[DEBUG] Level 5: Greedy placement completed - placed 24/24 cells in 0.408s
+[DEBUG] Level 5: Total level processing time: 0.599s (greedy only)
+[PROGRESS] L5: COMPLETE | Total placed so far: 251 cells
+
+[DEBUG] --- Processing Level 6 (7/23) ---
+[DEBUG] Level 6: 20 cells to place
+[DEBUG] Level 6: Starting greedy placement...
+[PROGRESS] L6: 2/20 (10.0%) | Placed: 2 | Latest: $abc$2096$auto$blifp @ (315.0, 347.7)
+[PROGRESS] L6: 4/20 (20.0%) | Placed: 4 | Latest: $abc$2096$auto$blifp @ (463.2, 146.4)
+[PROGRESS] L6: 6/20 (30.0%) | Placed: 6 | Latest: $abc$2096$auto$blifp @ (317.3, 64.8)
+[PROGRESS] L6: 8/20 (40.0%) | Placed: 8 | Latest: $abc$2096$auto$blifp @ (5.5, 214.4)
+[PROGRESS] L6: 10/20 (50.0%) | Placed: 10 | Latest: $abc$2096$auto$blifp @ (380.4, 113.8)
+[PROGRESS] L6: 12/20 (60.0%) | Placed: 12 | Latest: $abc$2096$auto$blifp @ (433.3, 249.8)
+[PROGRESS] L6: 14/20 (70.0%) | Placed: 14 | Latest: $abc$2096$auto$blifp @ (435.6, 146.4)
+[PROGRESS] L6: 16/20 (80.0%) | Placed: 16 | Latest: $abc$2096$auto$blifp @ (433.3, 304.2)
+[PROGRESS] L6: 18/20 (90.0%) | Placed: 18 | Latest: $abc$2096$auto$blifp @ (453.0, 304.2)
+[PROGRESS] L6: 20/20 (100.0%) | Placed: 20 | Latest: $abc$2096$auto$blifp @ (391.9, 315.1)
+[DEBUG] Level 6: Greedy placement completed - placed 20/20 cells in 0.596s
+[DEBUG] Level 6: Total level processing time: 0.784s (greedy only)
+[PROGRESS] L6: COMPLETE | Total placed so far: 271 cells
+
+[DEBUG] --- Processing Level 7 (8/23) ---
+[DEBUG] Level 7: 17 cells to place
+[DEBUG] Level 7: Starting greedy placement...
+[PROGRESS] L7: 1/17 (5.9%) | Placed: 1 | Latest: $abc$2096$auto$blifp @ (442.5, 119.2)
+[PROGRESS] L7: 2/17 (11.8%) | Placed: 2 | Latest: $abc$2096$auto$blifp @ (244.7, 233.5)
+[PROGRESS] L7: 3/17 (17.6%) | Placed: 3 | Latest: $abc$2096$auto$blifp @ (433.3, 151.9)
+[PROGRESS] L7: 4/17 (23.5%) | Placed: 4 | Latest: $abc$2096$auto$blifp @ (380.4, 37.6)
+[PROGRESS] L7: 5/17 (29.4%) | Placed: 5 | Latest: $abc$2096$auto$blifp @ (5.5, 195.4)
+[PROGRESS] L7: 6/17 (35.3%) | Placed: 6 | Latest: $abc$2096$auto$blifp @ (5.5, 187.2)
+[PROGRESS] L7: 7/17 (41.2%) | Placed: 7 | Latest: $abc$2096$auto$blifp @ (19.3, 184.5)
+[PROGRESS] L7: 8/17 (47.1%) | Placed: 8 | Latest: $abc$2096$auto$blifp @ (391.9, 67.6)
+[PROGRESS] L7: 9/17 (52.9%) | Placed: 9 | Latest: $abc$2096$auto$blifp @ (5.5, 181.8)
+[PROGRESS] L7: 10/17 (58.8%) | Placed: 10 | Latest: $abc$2096$auto$blifp @ (435.6, 113.8)
+[PROGRESS] L7: 11/17 (64.7%) | Placed: 11 | Latest: $abc$2096$auto$blifp @ (460.9, 266.1)
+[PROGRESS] L7: 12/17 (70.6%) | Placed: 12 | Latest: $abc$2096$auto$blifp @ (479.3, 122.0)
+[PROGRESS] L7: 13/17 (76.5%) | Placed: 13 | Latest: $abc$2096$auto$blifp @ (474.7, 277.0)
+[PROGRESS] L7: 14/17 (82.4%) | Placed: 14 | Latest: $abc$2096$auto$blifp @ (221.7, 385.8)
+[PROGRESS] L7: 15/17 (88.2%) | Placed: 15 | Latest: $abc$2096$auto$blifp @ (481.6, 241.6)
+[PROGRESS] L7: 16/17 (94.1%) | Placed: 16 | Latest: $abc$2096$auto$blifp @ (463.2, 320.5)
+[PROGRESS] L7: 17/17 (100.0%) | Placed: 17 | Latest: $abc$2096$auto$blifp @ (447.1, 328.7)
+[DEBUG] Level 7: Greedy placement completed - placed 17/17 cells in 0.415s
+[DEBUG] Level 7: Total level processing time: 0.610s (greedy only)
+[PROGRESS] L7: COMPLETE | Total placed so far: 288 cells
+
+[DEBUG] --- Processing Level 8 (9/23) ---
+[DEBUG] Level 8: 17 cells to place
+[DEBUG] Level 8: Starting greedy placement...
+[PROGRESS] L8: 1/17 (5.9%) | Placed: 1 | Latest: $abc$2096$auto$blifp @ (322.9, 347.7)
+[PROGRESS] L8: 2/17 (11.8%) | Placed: 2 | Latest: $abc$2096$auto$blifp @ (253.9, 238.9)
+[PROGRESS] L8: 3/17 (17.6%) | Placed: 3 | Latest: $abc$2096$auto$blifp @ (451.7, 127.4)
+[PROGRESS] L8: 4/17 (23.5%) | Placed: 4 | Latest: $abc$2096$auto$blifp @ (387.3, 15.9)
+[PROGRESS] L8: 5/17 (29.4%) | Placed: 5 | Latest: $abc$2096$auto$blifp @ (5.5, 176.4)
+[PROGRESS] L8: 6/17 (35.3%) | Placed: 6 | Latest: $abc$2096$auto$blifp @ (19.3, 173.6)
+[PROGRESS] L8: 7/17 (41.2%) | Placed: 7 | Latest: $abc$2096$auto$blifp @ (9.1, 184.5)
+[PROGRESS] L8: 8/17 (47.1%) | Placed: 8 | Latest: $abc$2096$auto$blifp @ (433.3, 32.2)
+[PROGRESS] L8: 9/17 (52.9%) | Placed: 9 | Latest: $abc$2096$auto$blifp @ (5.5, 168.2)
+[PROGRESS] L8: 10/17 (58.8%) | Placed: 10 | Latest: $abc$2096$auto$blifp @ (5.5, 170.9)
+[PROGRESS] L8: 11/17 (64.7%) | Placed: 11 | Latest: $abc$2096$auto$blifp @ (470.1, 97.5)
+[PROGRESS] L8: 12/17 (70.6%) | Placed: 12 | Latest: $abc$2096$auto$blifp @ (497.7, 190.0)
+[PROGRESS] L8: 13/17 (76.5%) | Placed: 13 | Latest: $abc$2096$auto$blifp @ (234.5, 467.4)
+[PROGRESS] L8: 14/17 (82.4%) | Placed: 14 | Latest: $abc$2096$auto$blifp @ (520.7, 200.8)
+[PROGRESS] L8: 15/17 (88.2%) | Placed: 15 | Latest: $abc$2096$auto$blifp @ (317.3, 358.6)
+[PROGRESS] L8: 16/17 (94.1%) | Placed: 16 | Latest: $abc$2096$auto$blifp @ (232.2, 543.6)
+[PROGRESS] L8: 17/17 (100.0%) | Placed: 17 | Latest: $abc$2096$auto$blifp @ (654.1, 162.8)
+[DEBUG] Level 8: Greedy placement completed - placed 17/17 cells in 0.209s
+[DEBUG] Level 8: Total level processing time: 0.403s (greedy only)
+[PROGRESS] L8: COMPLETE | Total placed so far: 305 cells
+
+[DEBUG] --- Processing Level 9 (10/23) ---
+[DEBUG] Level 9: 13 cells to place
+[DEBUG] Level 9: Starting greedy placement...
+[PROGRESS] L9: 1/13 (7.7%) | Placed: 1 | Latest: $abc$2096$auto$blifp @ (322.9, 130.1)
+[PROGRESS] L9: 2/13 (15.4%) | Placed: 2 | Latest: $abc$2096$auto$blifp @ (7.8, 170.9)
+[PROGRESS] L9: 3/13 (23.1%) | Placed: 3 | Latest: $abc$2096$auto$blifp @ (433.3, 64.8)
+[PROGRESS] L9: 4/13 (30.8%) | Placed: 4 | Latest: $abc$2096$auto$blifp @ (447.1, 10.4)
+[PROGRESS] L9: 5/13 (38.5%) | Placed: 5 | Latest: $abc$2096$auto$blifp @ (33.1, 190.0)
+[PROGRESS] L9: 6/13 (46.2%) | Placed: 6 | Latest: $abc$2096$auto$blifp @ (51.5, 190.0)
+[PROGRESS] L9: 7/13 (53.8%) | Placed: 7 | Latest: $abc$2096$auto$blifp @ (21.6, 190.0)
+[PROGRESS] L9: 8/13 (61.5%) | Placed: 8 | Latest: $abc$2096$auto$blifp @ (28.5, 190.0)
+[PROGRESS] L9: 9/13 (69.2%) | Placed: 9 | Latest: $abc$2096$auto$blifp @ (502.3, 75.7)
+[PROGRESS] L9: 10/13 (76.9%) | Placed: 10 | Latest: $abc$2096$auto$blifp @ (470.1, 238.9)
+[PROGRESS] L9: 11/13 (84.6%) | Placed: 11 | Latest: $abc$2096$auto$blifp @ (313.7, 355.9)
+[PROGRESS] L9: 12/13 (92.3%) | Placed: 12 | Latest: $abc$2096$auto$blifp @ (325.2, 462.0)
+[PROGRESS] L9: 13/13 (100.0%) | Placed: 13 | Latest: $abc$2096$auto$blifp @ (219.4, 668.7)
+[DEBUG] Level 9: Greedy placement completed - placed 13/13 cells in 0.408s
+[DEBUG] Level 9: Total level processing time: 0.606s (greedy only)
+[PROGRESS] L9: COMPLETE | Total placed so far: 318 cells
+
+[DEBUG] --- Processing Level 10 (11/23) ---
+[DEBUG] Level 10: 11 cells to place
+[DEBUG] Level 10: Starting greedy placement...
+[PROGRESS] L10: 1/11 (9.1%) | Placed: 1 | Latest: $abc$2096$auto$blifp @ (325.2, 130.1)
+[PROGRESS] L10: 2/11 (18.2%) | Placed: 2 | Latest: $abc$2096$auto$blifp @ (435.6, 64.8)
+[PROGRESS] L10: 3/11 (27.3%) | Placed: 3 | Latest: $abc$2096$auto$blifp @ (451.7, 13.2)
+[PROGRESS] L10: 4/11 (36.4%) | Placed: 4 | Latest: $abc$2096$auto$blifp @ (7.8, 187.2)
+[PROGRESS] L10: 5/11 (45.5%) | Placed: 5 | Latest: $abc$2096$auto$blifp @ (5.5, 184.5)
+[PROGRESS] L10: 6/11 (54.5%) | Placed: 6 | Latest: $abc$2096$auto$blifp @ (474.7, 67.6)
+[PROGRESS] L10: 7/11 (63.6%) | Placed: 7 | Latest: $abc$2096$auto$blifp @ (37.7, 200.8)
+[PROGRESS] L10: 8/11 (72.7%) | Placed: 8 | Latest: $abc$2096$auto$blifp @ (35.4, 203.6)
+[PROGRESS] L10: 9/11 (81.8%) | Placed: 9 | Latest: $abc$2096$auto$blifp @ (502.3, 249.8)
+[PROGRESS] L10: 10/11 (90.9%) | Placed: 10 | Latest: $abc$2096$auto$blifp @ (270.0, 407.6)
+[PROGRESS] L10: 11/11 (100.0%) | Placed: 11 | Latest: $abc$2096$auto$blifp @ (281.5, 502.8)
+[DEBUG] Level 10: Greedy placement completed - placed 11/11 cells in 0.208s
+[DEBUG] Level 10: Total level processing time: 0.402s (greedy only)
+[PROGRESS] L10: COMPLETE | Total placed so far: 329 cells
+
+[DEBUG] --- Processing Level 11 (12/23) ---
+[DEBUG] Level 11: 10 cells to place
+[DEBUG] Level 11: Starting greedy placement...
+[PROGRESS] L11: 1/10 (10.0%) | Placed: 1 | Latest: $abc$2096$auto$blifp @ (454.0, 5.0)
+[PROGRESS] L11: 2/10 (20.0%) | Placed: 2 | Latest: $abc$2096$auto$blifp @ (433.3, 75.7)
+[PROGRESS] L11: 3/10 (30.0%) | Placed: 3 | Latest: $abc$2096$auto$blifp @ (240.1, 130.1)
+[PROGRESS] L11: 4/10 (40.0%) | Placed: 4 | Latest: $abc$2096$auto$blifp @ (104.4, 233.5)
+[PROGRESS] L11: 5/10 (50.0%) | Placed: 5 | Latest: $abc$2096$auto$blifp @ (106.7, 233.5)
+[PROGRESS] L11: 6/10 (60.0%) | Placed: 6 | Latest: $abc$2096$auto$blifp @ (83.7, 238.9)
+[PROGRESS] L11: 7/10 (70.0%) | Placed: 7 | Latest: $abc$2096$auto$blifp @ (88.3, 236.2)
+[PROGRESS] L11: 8/10 (80.0%) | Placed: 8 | Latest: $abc$2096$auto$blifp @ (405.7, 326.0)
+[PROGRESS] L11: 9/10 (90.0%) | Placed: 9 | Latest: $abc$2096$auto$blifp @ (414.9, 347.7)
+[PROGRESS] L11: 10/10 (100.0%) | Placed: 10 | Latest: $abc$2096$auto$blifp @ (221.7, 668.7)
+[DEBUG] Level 11: Greedy placement completed - placed 10/10 cells in 0.198s
+[DEBUG] Level 11: Total level processing time: 0.387s (greedy only)
+[PROGRESS] L11: COMPLETE | Total placed so far: 339 cells
+
+[DEBUG] --- Processing Level 12 (13/23) ---
+[DEBUG] Level 12: 10 cells to place
+[DEBUG] Level 12: Starting greedy placement...
+[PROGRESS] L12: 1/10 (10.0%) | Placed: 1 | Latest: $abc$2096$auto$blifp @ (453.0, 32.2)
+[PROGRESS] L12: 2/10 (20.0%) | Placed: 2 | Latest: $abc$2096$auto$blifp @ (451.7, 40.4)
+[PROGRESS] L12: 3/10 (30.0%) | Placed: 3 | Latest: $abc$2096$auto$blifp @ (373.5, 83.9)
+[PROGRESS] L12: 4/10 (40.0%) | Placed: 4 | Latest: $abc$2096$auto$blifp @ (90.6, 236.2)
+[PROGRESS] L12: 5/10 (50.0%) | Placed: 5 | Latest: $abc$2096$auto$blifp @ (65.3, 236.2)
+[PROGRESS] L12: 6/10 (60.0%) | Placed: 6 | Latest: $abc$2096$auto$blifp @ (502.3, 102.9)
+[PROGRESS] L12: 7/10 (70.0%) | Placed: 7 | Latest: $abc$2096$auto$blifp @ (118.2, 258.0)
+[PROGRESS] L12: 8/10 (80.0%) | Placed: 8 | Latest: $abc$2096$auto$blifp @ (115.9, 258.0)
+[PROGRESS] L12: 9/10 (90.0%) | Placed: 9 | Latest: $abc$2096$auto$blifp @ (396.5, 323.2)
+[PROGRESS] L12: 10/10 (100.0%) | Placed: 10 | Latest: $abc$2096$auto$blifp @ (421.3, 358.6)
+[DEBUG] Level 12: Greedy placement completed - placed 10/10 cells in 0.224s
+[DEBUG] Level 12: Total level processing time: 0.421s (greedy only)
+[PROGRESS] L12: COMPLETE | Total placed so far: 349 cells
+
+[DEBUG] --- Processing Level 13 (14/23) ---
+[DEBUG] Level 13: 8 cells to place
+[DEBUG] Level 13: Starting greedy placement...
+[PROGRESS] L13: 1/8 (12.5%) | Placed: 1 | Latest: $abc$2096$auto$blifp @ (470.1, 43.1)
+[PROGRESS] L13: 2/8 (25.0%) | Placed: 2 | Latest: $abc$2096$auto$blifp @ (467.8, 97.5)
+[PROGRESS] L13: 3/8 (37.5%) | Placed: 3 | Latest: $abc$2096$auto$blifp @ (276.9, 168.2)
+[PROGRESS] L13: 4/8 (50.0%) | Placed: 4 | Latest: $abc$2096$auto$blifp @ (166.5, 293.3)
+[PROGRESS] L13: 5/8 (62.5%) | Placed: 5 | Latest: $abc$2096$auto$blifp @ (175.7, 296.0)
+[PROGRESS] L13: 6/8 (75.0%) | Placed: 6 | Latest: $abc$2096$auto$blifp @ (171.1, 296.0)
+[PROGRESS] L13: 7/8 (87.5%) | Placed: 7 | Latest: $abc$2096$auto$blifp @ (159.6, 304.2)
+[PROGRESS] L13: 8/8 (100.0%) | Placed: 8 | Latest: $abc$2096$auto$blifp @ (355.1, 668.7)
+[DEBUG] Level 13: Greedy placement completed - placed 8/8 cells in 0.198s
+[DEBUG] Level 13: Total level processing time: 0.401s (greedy only)
+[PROGRESS] L13: COMPLETE | Total placed so far: 357 cells
+
+[DEBUG] --- Processing Level 14 (15/23) ---
+[DEBUG] Level 14: 9 cells to place
+[DEBUG] Level 14: Starting greedy placement...
+[PROGRESS] L14: 1/9 (11.1%) | Placed: 1 | Latest: $abc$2096$auto$blifp @ (502.3, 64.8)
+[PROGRESS] L14: 2/9 (22.2%) | Placed: 2 | Latest: $abc$2096$auto$blifp @ (391.9, 209.0)
+[PROGRESS] L14: 3/9 (33.3%) | Placed: 3 | Latest: $abc$2096$auto$blifp @ (157.3, 298.8)
+[PROGRESS] L14: 4/9 (44.4%) | Placed: 4 | Latest: $abc$2096$auto$blifp @ (148.1, 301.5)
+[PROGRESS] L14: 5/9 (55.6%) | Placed: 5 | Latest: $abc$2096$auto$blifp @ (534.5, 146.4)
+[PROGRESS] L14: 6/9 (66.7%) | Placed: 6 | Latest: $abc$2096$auto$blifp @ (184.9, 320.5)
+[PROGRESS] L14: 7/9 (77.8%) | Placed: 7 | Latest: $abc$2096$auto$blifp @ (187.2, 320.5)
+[PROGRESS] L14: 8/9 (88.9%) | Placed: 8 | Latest: $abc$2096$auto$blifp @ (442.5, 668.7)
+[PROGRESS] L14: 9/9 (100.0%) | Placed: 9 | Latest: $abc$2096$auto$blifp @ (217.1, 353.2)
+[DEBUG] Level 14: Greedy placement completed - placed 9/9 cells in 0.225s
+[DEBUG] Level 14: Total level processing time: 0.456s (greedy only)
+[PROGRESS] L14: COMPLETE | Total placed so far: 366 cells
+
+[DEBUG] --- Processing Level 15 (16/23) ---
+[DEBUG] Level 15: 8 cells to place
+[DEBUG] Level 15: Starting greedy placement...
+[PROGRESS] L15: 1/8 (12.5%) | Placed: 1 | Latest: $abc$2096$auto$blifp @ (523.0, 206.3)
+[PROGRESS] L15: 2/8 (25.0%) | Placed: 2 | Latest: $abc$2096$auto$blifp @ (518.4, 141.0)
+[PROGRESS] L15: 3/8 (37.5%) | Placed: 3 | Latest: $abc$2096$auto$blifp @ (350.5, 228.0)
+[PROGRESS] L15: 4/8 (50.0%) | Placed: 4 | Latest: $abc$2096$auto$blifp @ (226.3, 372.2)
+[PROGRESS] L15: 5/8 (62.5%) | Placed: 5 | Latest: $abc$2096$auto$blifp @ (219.4, 374.9)
+[PROGRESS] L15: 6/8 (75.0%) | Placed: 6 | Latest: $abc$2096$auto$blifp @ (219.4, 369.5)
+[PROGRESS] L15: 7/8 (87.5%) | Placed: 7 | Latest: $abc$2096$auto$blifp @ (214.8, 374.9)
+[PROGRESS] L15: 8/8 (100.0%) | Placed: 8 | Latest: $abc$2096$auto$blifp @ (309.1, 334.1)
+[DEBUG] Level 15: Greedy placement completed - placed 8/8 cells in 0.250s
+[DEBUG] Level 15: Total level processing time: 0.444s (greedy only)
+[PROGRESS] L15: COMPLETE | Total placed so far: 374 cells
+
+[DEBUG] --- Processing Level 16 (17/23) ---
+[DEBUG] Level 16: 7 cells to place
+[DEBUG] Level 16: Starting greedy placement...
+[PROGRESS] L16: 1/7 (14.3%) | Placed: 1 | Latest: $abc$2096$auto$blifp @ (557.5, 130.1)
+[PROGRESS] L16: 2/7 (28.6%) | Placed: 2 | Latest: $abc$2096$auto$blifp @ (378.1, 287.9)
+[PROGRESS] L16: 3/7 (42.9%) | Placed: 3 | Latest: $abc$2096$auto$blifp @ (212.5, 385.8)
+[PROGRESS] L16: 4/7 (57.1%) | Placed: 4 | Latest: $abc$2096$auto$blifp @ (205.6, 385.8)
+[PROGRESS] L16: 5/7 (71.4%) | Placed: 5 | Latest: $abc$2096$auto$blifp @ (557.5, 190.0)
+[PROGRESS] L16: 6/7 (85.7%) | Placed: 6 | Latest: $abc$2096$auto$blifp @ (523.0, 668.7)
+[PROGRESS] L16: 7/7 (100.0%) | Placed: 7 | Latest: $abc$2096$auto$blifp @ (649.5, 279.7)
+[DEBUG] Level 16: Greedy placement completed - placed 7/7 cells in 0.195s
+[DEBUG] Level 16: Total level processing time: 0.394s (greedy only)
+[PROGRESS] L16: COMPLETE | Total placed so far: 381 cells
+
+[DEBUG] --- Processing Level 17 (18/23) ---
+[DEBUG] Level 17: 5 cells to place
+[DEBUG] Level 17: Starting greedy placement...
+[PROGRESS] L17: 1/5 (20.0%) | Placed: 1 | Latest: $abc$2096$auto$blifp @ (552.9, 287.9)
+[PROGRESS] L17: 2/5 (40.0%) | Placed: 2 | Latest: $abc$2096$auto$blifp @ (525.3, 195.4)
+[PROGRESS] L17: 3/5 (60.0%) | Placed: 3 | Latest: $abc$2096$auto$blifp @ (387.3, 309.6)
+[PROGRESS] L17: 4/5 (80.0%) | Placed: 4 | Latest: $abc$2096$auto$blifp @ (435.6, 315.1)
+[PROGRESS] L17: 5/5 (100.0%) | Placed: 5 | Latest: $abc$2096$auto$blifp @ (746.1, 146.4)
+[DEBUG] Level 17: Greedy placement completed - placed 5/5 cells in 0.004s
+[DEBUG] Level 17: Total level processing time: 0.195s (greedy only)
+[PROGRESS] L17: COMPLETE | Total placed so far: 386 cells
+
+[DEBUG] --- Processing Level 18 (19/23) ---
+[DEBUG] Level 18: 4 cells to place
+[DEBUG] Level 18: Starting greedy placement...
+[PROGRESS] L18: 1/4 (25.0%) | Placed: 1 | Latest: $abc$2096$auto$blifp @ (393.7, 326.0)
+[PROGRESS] L18: 2/4 (50.0%) | Placed: 2 | Latest: $abc$2096$auto$blifp @ (488.5, 287.9)
+[PROGRESS] L18: 3/4 (75.0%) | Placed: 3 | Latest: $abc$2096$auto$blifp @ (552.9, 668.7)
+[PROGRESS] L18: 4/4 (100.0%) | Placed: 4 | Latest: $abc$2096$auto$blifp @ (592.0, 230.8)
+[DEBUG] Level 18: Greedy placement completed - placed 4/4 cells in 0.200s
+[DEBUG] Level 18: Total level processing time: 0.429s (greedy only)
+[PROGRESS] L18: COMPLETE | Total placed so far: 390 cells
+
+[DEBUG] --- Processing Level 19 (20/23) ---
+[DEBUG] Level 19: 2 cells to place
+[DEBUG] Level 19: Starting greedy placement...
+[PROGRESS] L19: 1/2 (50.0%) | Placed: 1 | Latest: $abc$2096$auto$blifp @ (488.5, 326.0)
+[PROGRESS] L19: 2/2 (100.0%) | Placed: 2 | Latest: $abc$2096$auto$blifp @ (730.0, 614.3)
+[DEBUG] Level 19: Greedy placement completed - placed 2/2 cells in 0.001s
+[DEBUG] Level 19: Total level processing time: 0.192s (greedy only)
+[PROGRESS] L19: COMPLETE | Total placed so far: 392 cells
+
+[DEBUG] --- Processing Level 20 (21/23) ---
+[DEBUG] Level 20: 1 cells to place
+[DEBUG] Level 20: Starting greedy placement...
+[PROGRESS] L20: 1/1 (100.0%) | Placed: 1 | Latest: $abc$2096$auto$blifp @ (550.6, 668.7)
+[DEBUG] Level 20: Greedy placement completed - placed 1/1 cells in 0.001s
+[DEBUG] Level 20: Total level processing time: 0.202s (greedy only)
+[PROGRESS] L20: COMPLETE | Total placed so far: 393 cells
+
+[DEBUG] --- Processing Level 21 (22/23) ---
+[DEBUG] Level 21: 1 cells to place
+[DEBUG] Level 21: Starting greedy placement...
+[PROGRESS] L21: 1/1 (100.0%) | Placed: 1 | Latest: $abc$2096$auto$blifp @ (778.3, 826.4)
+[DEBUG] Level 21: Greedy placement completed - placed 1/1 cells in 0.001s
+[DEBUG] Level 21: Total level processing time: 0.199s (greedy only)
+[PROGRESS] L21: COMPLETE | Total placed so far: 394 cells
+
+[DEBUG] --- Processing Level 22 (23/23) ---
+[DEBUG] Level 22: 69 cells to place
+[DEBUG] Level 22: Starting greedy placement...
+[PROGRESS] L22: 6/69 (8.7%) | Placed: 6 | Latest: $abc$2096$auto$blifp @ (978.4, 113.8)
+[PROGRESS] L22: 12/69 (17.4%) | Placed: 12 | Latest: $abc$2096$auto$blifp @ (987.6, 331.4)
+[PROGRESS] L22: 18/69 (26.1%) | Placed: 18 | Latest: $abc$2096$auto$blifp @ (985.3, 440.2)
+[PROGRESS] L22: 24/69 (34.8%) | Placed: 24 | Latest: $abc$2096$auto$blifp @ (987.6, 342.3)
+[PROGRESS] L22: 30/69 (43.5%) | Placed: 30 | Latest: $abc$2096$auto$blifp @ (985.3, 342.3)
+[PROGRESS] L22: 36/69 (52.2%) | Placed: 36 | Latest: $abc$2096$auto$blifp @ (994.5, 657.8)
+[PROGRESS] L22: 42/69 (60.9%) | Placed: 42 | Latest: $abc$2096$auto$blifp @ (5.5, 5.0)
+[PROGRESS] L22: 48/69 (69.6%) | Placed: 48 | Latest: $abc$2096$auto$blifp @ (757.6, 222.6)
+[PROGRESS] L22: 54/69 (78.3%) | Placed: 54 | Latest: $auto$insbuf.cc:97:e @ (980.2, 549.0)
+[PROGRESS] L22: 60/69 (87.0%) | Placed: 60 | Latest: $flatten\A.\counter_ @ (489.8, 13.2)
+[PROGRESS] L22: 66/69 (95.7%) | Placed: 66 | Latest: $flatten\A.\gray_ins @ (517.4, 18.6)
+[PROGRESS] L22: 69/69 (100.0%) | Placed: 69 | Latest: $flatten\A.\gray_ins @ (517.4, 34.9)
+[DEBUG] Level 22: Greedy placement completed - placed 69/69 cells in 1.625s
+[DEBUG] Level 22: Total level processing time: 1.843s (greedy only)
+[PROGRESS] L22: COMPLETE | Total placed so far: 463 cells
+
+[DEBUG] Greedy Placement HPWL: 161937.380
+[DEBUG] === PHASE 8.5: GLOBAL SIMULATED ANNEALING ===
+[DEBUG] Initial Global HPWL before SA: 161937.380
+[DEBUG] Pre-computing net_to_cells map for SA...
+[DEBUG] Global SA: Processing 463 cells in 7 batches
+      [SA] Start Batch: Cells=68 T0=74.503 HPWL=37251.7
+        [SA] Iter 5000: T=70.778 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=67.239 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=63.877 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=60.683 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=57.649 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=54.767 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=52.028 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=49.427 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=46.956 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=44.608 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=42.378 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=40.259 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=38.246 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=36.333 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=34.517 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=32.791 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=31.151 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=29.594 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=28.114 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=26.708 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=25.373 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=24.104 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=22.899 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=21.754 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=20.666 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=19.633 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=18.651 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=17.719 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=16.833 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=15.991 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=15.192 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=14.432 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=13.711 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=13.025 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=12.374 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=11.755 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=11.167 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=10.609 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=10.079 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=9.575 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=9.096 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=8.641 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=8.209 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=7.799 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=7.409 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=7.038 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=6.686 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=6.352 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=6.034 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=5.733 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=5.446 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=5.174 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=4.915 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=4.669 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=4.436 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=4.214 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=4.003 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=3.803 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=3.613 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=3.432 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=3.261 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=3.098 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=2.943 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=2.796 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=2.656 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=2.523 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=2.397 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=2.277 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=2.163 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=2.055 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=1.952 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=1.855 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=1.762 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=1.674 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=1.590 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=1.511 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=1.435 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=1.363 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=1.295 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=1.230 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=1.169 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=1.110 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=1.055 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=1.002 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.952 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.904 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.859 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.816 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.775 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.737 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.700 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.665 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.632 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.600 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.570 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.542 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.514 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.489 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.464 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.441 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.419 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.398 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.378 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.359 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.341 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.324 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.308 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.293 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.278 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.264 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.251 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.238 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.226 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.215 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.204 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.194 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.184 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.175 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.166 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.158 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.150 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.143 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.136 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.129 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.122 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.116 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.110 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.105 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.100 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.095 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.090 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.085 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.081 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.077 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.073 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.070 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.066 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.063 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.060 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.057 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.054 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.051 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.049 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.046 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.044 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.042 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.040 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.038 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.036 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.034 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.032 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.031 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.029 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.028 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.026 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.025 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.024 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.023 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.021 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.020 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.019 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.018 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.017 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.017 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.016 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.015 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.014 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.013 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.013 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.012 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.012 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.011 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.010 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.010 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.009 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.009 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.008 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.008 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.008 HPWL=-1011436.4 Acc=53.8% Reloc=235
+        [SA] Iter 5000: T=0.007 HPWL=-1011436.4 Acc=53.8% Reloc=235
+      [SA] End Batch: 37251.7 -> -1011436.4 (-1048688.1) Relocations=235
+      [SA] Start Batch: Cells=127 T0=242.773 HPWL=121386.4
+        [SA] Iter 5000: T=230.634 HPWL=-794228.9 Acc=65.5% Reloc=298
+        [SA] Iter 5000: T=219.103 HPWL=-794228.9 Acc=65.5% Reloc=298
+        [SA] Iter 5000: T=208.147 HPWL=-794228.9 Acc=65.5% Reloc=298
+        [SA] Iter 5000: T=197.740 HPWL=-794228.9 Acc=65.5% Reloc=298
+        [SA] Iter 5000: T=187.853 HPWL=-794228.9 Acc=65.5% Reloc=298
+        [SA] Iter 5000: T=178.460 HPWL=-794228.9 Acc=65.5% Reloc=298
+        [SA] Iter 5000: T=169.537 HPWL=-794228.9 Acc=65.5% Reloc=298
+        [SA] Iter 5000: T=161.060 HPWL=-794228.9 Acc=65.5% Reloc=298
+        [SA] Iter 5000: T=153.007 HPWL=-794228.9 Acc=65.5% Reloc=298
+        [SA] Iter 5000: T=145.357 HPWL=-794228.9 Acc=65.5% Reloc=298
+        [SA] Iter 5000: T=138.089 HPWL=-794228.9 Acc=65.5% Reloc=298
+        [SA] Iter 5000: T=131.185 HPWL=-794228.9 Acc=65.5% Reloc=298
+        [SA] Iter 5000: T=124.626 HPWL=-794228.9 Acc=65.5% Reloc=298
+        [SA] Iter 5000: T=118.394 HPWL=-794228.9 Acc=65.5% Reloc=298
