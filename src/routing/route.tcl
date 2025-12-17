@@ -2,13 +2,40 @@
 # Usage: openroad -exit route.tcl
 
 # Check for required environment variables
-set required_vars {DESIGN_NAME LEF_FILES LIB_FILES DEF_FILE OUTPUT_DIR}
+# Notes:
+# - DEF has no NETS, so VERILOG_FILE is required for connectivity.
+# - Provide either MERGED_LEF (single file) or LEF_FILES (space-separated list).
+# - TECH_LEF is optional; when provided it is loaded first (under a temp name).
+set required_vars {DESIGN_NAME LIB_FILES DEF_FILE VERILOG_FILE OUTPUT_DIR}
 foreach var $required_vars {
     if {![info exists ::env($var)]} {
         puts "Error: Environment variable $var is not set."
         exit 1
     }
+}
+
+# Optional OUTPUT_SUFFIX for distinguishing RL from SA output files (e.g., "_rl")
+if {[info exists ::env(OUTPUT_SUFFIX)]} {
+    set output_suffix $::env(OUTPUT_SUFFIX)
+} else {
+    set output_suffix ""
+}
+
+set has_merged_lef 0
+if {[info exists ::env(MERGED_LEF)] && [file exists $::env(MERGED_LEF)]} {
+    set has_merged_lef 1
+}
+set has_lef_files 0
+if {[info exists ::env(LEF_FILES)]} {
+    set lef_list [split $::env(LEF_FILES) " "]
+    if {[llength $lef_list] > 0} {
+        set has_lef_files 1
     }
+}
+if {!$has_merged_lef && !$has_lef_files} {
+    puts "Error: Provide MERGED_LEF (existing file) or LEF_FILES (one or more files)."
+    exit 1
+}
 
 
 # 1. Read Inputs
@@ -32,12 +59,18 @@ if {[info exists ::env(TECH_LEF)]} {
     }
 }
 
-foreach lef [split $::env(LEF_FILES) " "] {
-    if {[file exists $lef]} {
-        puts "Reading LEF: $lef"
-        read_lef $lef
-    } else {
-        puts "Warning: LEF file $lef not found"
+if {$has_merged_lef} {
+    puts "Reading Merged LEF: $::env(MERGED_LEF)"
+    read_lef $::env(MERGED_LEF)
+} else {
+    foreach lef [split $::env(LEF_FILES) " "] {
+        if {[file exists $lef]} {
+            puts "Reading LEF: $lef"
+            read_lef $lef
+        } else {
+            puts "Error: LEF file $lef not found"
+            exit 1
+        }
     }
 }
 
@@ -51,17 +84,27 @@ foreach lib [split $::env(LIB_FILES) " "] {
 }
 
 # Read Verilog - REQUIRED for connectivity since DEF lacks NETS
-if {[info exists ::env(VERILOG_FILE)]} {
-    read_verilog $::env(VERILOG_FILE)
-}
+read_verilog $::env(VERILOG_FILE)
 
 # Link Design
 set design_name $::env(DESIGN_NAME)
-link_design $design_name
-
 # Read Def (Apply placement to the linked design)
-# Use -floorplan_initialize to apply to existing block from link_design
-read_def -floorplan_initialize $::env(DEF_FILE)
+# 1. Initialize Floorplan (Die Area, etc.) using separate FP file to avoid pin duplication
+# Read Def (Apply placement to the linked design)
+# 1. Initialize Floorplan (Die Area) via generated TCL script to avoid ODB errors
+set fp_tcl [string map {".def" "_fp.tcl"} $::env(DEF_FILE)]
+if {[file exists $fp_tcl]} {
+    puts "Sourcing Floorplan from $fp_tcl..."
+    source $fp_tcl
+} else {
+    puts "Error: Floorplan TCL $fp_tcl not found!"
+    exit 1
+}
+
+# 2. Add Components (Incremental)
+read_def -incremental $::env(DEF_FILE)
+
+puts "\[Debug\] Instance Count after DEF load: [llength [get_cells *]]"
 
 # Explicitly generate tracks since they are missing from TLEF/DEF
 make_tracks li1 -x_offset 0.23 -x_pitch 0.46 -y_offset 0.17 -y_pitch 0.34
@@ -78,7 +121,7 @@ if {[info exists ::env(GR_ADJUST)]} {
     set_global_routing_layer_adjustment * $::env(GR_ADJUST)
 }
 
-if {[catch {global_route -congestion_iterations 50 -verbose} error_msg]} {
+if {[catch {global_route -congestion_iterations 100 -verbose} error_msg]} {
     puts "\[Generic-Route\] Global Routing failed with error: $error_msg"
     puts "\[Generic-Route\] Saving partial database for debugging..."
     write_db $::env(OUTPUT_DIR)/${design_name}_failed_route.odb
@@ -87,9 +130,12 @@ if {[catch {global_route -congestion_iterations 50 -verbose} error_msg]} {
 
 # 3. Detailed Routing
 puts "\[Generic-Route\] Starting Detailed Route..."
-detailed_route -output_drc $::env(OUTPUT_DIR)/${design_name}_drc.rpt \
-               -output_maze $::env(OUTPUT_DIR)/${design_name}_maze.log \
-               -output_guide $::env(OUTPUT_DIR)/${design_name}.guide
+set drc_rpt $::env(OUTPUT_DIR)/${design_name}${output_suffix}_drc.rpt
+set_routing_layers -signal met1-met5 -clock met1-met5
+detailed_route \
+               -output_drc $drc_rpt \
+               -output_maze $::env(OUTPUT_DIR)/${design_name}${output_suffix}_maze.log \
+               -output_guide $::env(OUTPUT_DIR)/${design_name}${output_suffix}.guide
 
 # 4. Extract Parasitics
 puts "\[Generic-Route\] Skipping parasitic extraction due to missing RCX rules."
@@ -101,13 +147,31 @@ puts "\[Generic-Route\] Skipping parasitic extraction due to missing RCX rules."
 #     # extract_parasitics
 # }
 
-# 5. Report Congestion
+# 5. Report Congestion (optional - command may not exist in all OpenROAD versions)
 puts "\[Generic-Route\] Reporting Congestion..."
-report_congestion -histogram > $::env(OUTPUT_DIR)/${design_name}_congestion.rpt
+if {[catch {report_congestion -histogram > $::env(OUTPUT_DIR)/${design_name}${output_suffix}_congestion.rpt} err]} {
+    puts "\[Generic-Route\] Warning: report_congestion not available ($err)"
+}
 
 # Save Outputs
 puts "\[Generic-Route\] Saving outputs..."
-write_def $::env(OUTPUT_DIR)/${design_name}_routed.def
-write_db $::env(OUTPUT_DIR)/${design_name}_routed.odb
+write_def $::env(OUTPUT_DIR)/${design_name}${output_suffix}_routed.def
+write_db $::env(OUTPUT_DIR)/${design_name}${output_suffix}_routed.odb
+
+# DRC gate: fail the flow if any violations are present
+if {[file exists $drc_rpt]} {
+    set fp [open $drc_rpt r]
+    set drc_txt [read $fp]
+    close $fp
+    set vio_count [regexp -all -line {^violation type:} $drc_txt]
+    puts "\[Generic-Route\] DRC violations: $vio_count (report: $drc_rpt)"
+    if {$vio_count > 0} {
+        puts stderr "\[Generic-Route\] ERROR: DRC violations detected ($vio_count)."
+        exit 2
+    }
+} else {
+    puts stderr "\[Generic-Route\] ERROR: DRC report not found: $drc_rpt"
+    exit 2
+}
 
 puts "\[Generic-Route\] Completed."

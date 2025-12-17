@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Dict, Any, List, Tuple, cast
 
 import yaml
@@ -224,6 +225,22 @@ def load_and_validate(path: str) -> Tuple[pd.DataFrame, PinsMeta]:
     )
 
     return df, meta
+
+
+@lru_cache(maxsize=8)
+def _load_and_validate_cached(path: str) -> Tuple[pd.DataFrame, PinsMeta]:
+    # Cache raw objects for reuse within the same Python process.
+    return load_and_validate(path)
+
+
+def load_and_validate_cached(path: str) -> Tuple[pd.DataFrame, PinsMeta]:
+    """Cached variant of load_and_validate.
+
+    Returns a copy of the DataFrame so callers can safely add/drop columns without
+    mutating the cached instance.
+    """
+    df, meta = _load_and_validate_cached(path)
+    return df.copy(deep=True), meta
 
 if __name__ == "__main__":
     pins_file_path = "inputs/Platform/pins.yaml"

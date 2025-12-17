@@ -1926,15 +1926,53 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
                                    ppo_entropy_coef: float = 0.01,
                                    ppo_max_grad_norm: float = 0.5,
                                    validate_final: bool = False,
-                                   sa_moves_per_temp: int = 5000):
+                                   sa_moves_per_temp: int = 5000,
+                                   sa_cooling_rate: float = 0.95,
+                                   # Animation parameters
+                                   animation_enabled: bool = True,
+                                   animation_frames_dir: Optional[str] = None,
+                                   output_animation_path: Optional[str] = None,
+                                   design_name: str = "design"):
     """
     1) Run Greedy+SA to get initial placement (calls your place_cells_greedy_sim_anneal).
     2) Train a small full-placer PPO (optionally) or use greedy to produce assignment order.
     3) Train swap refiner PPO on batches (selected by x-window).
     4) Apply swap refiner across batches to produce final placement_df.
+    
+    Animation captures frames at key stages:
+    - After Greedy+SA placement
+    - After Full Placer training windows
+    - During Swap Refiner application
+    - Final refined placement
     """
     # Import your functions here (local import to avoid top-level dependency)
-    from src.placement.placer import place_cells_greedy_sim_anneal, assign_ports_to_pins, build_dependency_levels
+    from src.placement.placer import (
+        place_cells_greedy_sim_anneal, 
+        assign_ports_to_pins, 
+        build_dependency_levels,
+        capture_placement_frame,
+        create_placement_animation
+    )
+    from pathlib import Path
+    
+    # Animation setup
+    frame_counter = 0
+    if animation_enabled:
+        if animation_frames_dir is None:
+            anim_dir = Path("build") / design_name / "rl_placement_animation_frames"
+        else:
+            anim_dir = Path(animation_frames_dir)
+        anim_dir.mkdir(parents=True, exist_ok=True)
+        
+        if output_animation_path is None:
+            output_anim_path = Path("build") / design_name / f"{design_name}_rl_placement_animation.mp4"
+        else:
+            output_anim_path = Path(output_animation_path)
+        print(f"[RLPlacer] Animation enabled. Frames: {anim_dir}")
+    else:
+        anim_dir = None
+        output_anim_path = None
+    
     # Clean/semi-robust netlist: coerce net_bit to numeric and drop invalid rows
     if 'net_bit' in netlist_graph.columns:
         ng = netlist_graph.copy()
@@ -1947,7 +1985,7 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
     t_total_start = time.perf_counter()
     t_greedy_start = time.perf_counter()
     # place_cells_greedy_sim_anneal now returns (updated_pins, placement_df, validation_result, sa_hpwl)
-    updated_pins, placement_df, _greedy_validation, baseline_sa_hpwl = place_cells_greedy_sim_anneal(fabric, fabric_df, pins_df, ports_df, netlist_graph, sa_moves_per_temp=sa_moves_per_temp)
+    updated_pins, placement_df, _greedy_validation, baseline_sa_hpwl = place_cells_greedy_sim_anneal(fabric, fabric_df, pins_df, ports_df, netlist_graph, sa_moves_per_temp=sa_moves_per_temp, sa_cooling_rate=sa_cooling_rate)
     t_greedy_end = time.perf_counter()
     
     # Keep a copy of the pure Greedy+SA placement for returning as baseline
@@ -1957,6 +1995,20 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
     sites_df = build_sites_from_fabric_df(fabric_df)
     sites_map = {int(r.site_id): (float(r.x_um), float(r.y_um)) for r in sites_df.itertuples(index=False)}
     fixed_pins = fixed_points_from_pins(updated_pins)
+    
+    # Capture Greedy+SA placement frame
+    if animation_enabled and anim_dir is not None:
+        pos_cells = {str(r.cell_name): (float(r.x_um), float(r.y_um)) for r in placement_df.itertuples(index=False)}
+        frame_counter += 1
+        capture_placement_frame(
+            pos_cells=pos_cells,
+            sites_df=sites_df,
+            frame_path=anim_dir / f"frame_{frame_counter:04d}.png",
+            frame_number=frame_counter,
+            total_cells=len(pos_cells),
+            title_suffix=f" | Greedy+SA | HPWL: {baseline_sa_hpwl:.0f} μm"
+        )
+        print(f"[RLPlacer] Captured frame {frame_counter}: Greedy+SA baseline")
     t_level_start = time.perf_counter()
     g_levels = build_dependency_levels(updated_pins, netlist_graph)
     t_level_end = time.perf_counter()
@@ -2333,6 +2385,49 @@ def run_greedy_sa_then_rl_pipeline(fabric, fabric_df, pins_df, ports_df, netlist
     for cell_name, (x,y,sid) in placement_map.items():
         rows.append({"cell_name": cell_name, "site_id": int(sid), "x_um": float(x), "y_um": float(y)})
     refined_df = pd.DataFrame(rows)
+    
+    # Calculate final HPWL for animation title
+    if animation_enabled and anim_dir is not None:
+        # Get final HPWL
+        nets_map_final = nets_map_from_graph_df(netlist_graph)
+        pos_cells_final = {c: (x, y) for c, (x, y, _) in placement_map.items()}
+        final_hpwl = hpwl_of_nets(nets_map_final, pos_cells_final, fixed_pins)
+        
+        # Capture final refined placement frame
+        frame_counter += 1
+        capture_placement_frame(
+            pos_cells=pos_cells_final,
+            sites_df=sites_df,
+            frame_path=anim_dir / f"frame_{frame_counter:04d}.png",
+            frame_number=frame_counter,
+            total_cells=len(pos_cells_final),
+            title_suffix=f" | RL Refined | HPWL: {final_hpwl:.0f} μm (Δ={final_hpwl - baseline_sa_hpwl:.0f})"
+        )
+        print(f"[RLPlacer] Captured frame {frame_counter}: Final RL-refined placement")
+        
+        # Create animation
+        create_placement_animation(
+            frame_dir=anim_dir,
+            output_path=output_anim_path,
+            frame_prefix="frame_",
+            duration=0.3,  # 300ms per frame (slower for RL stages)
+            loop=0,
+            format="mp4",
+        )
+        print(f"[RLPlacer] Animation saved to: {output_anim_path}")
+        
+        # Also create GIF version
+        gif_path = output_anim_path.with_suffix('.gif')
+        create_placement_animation(
+            frame_dir=anim_dir,
+            output_path=gif_path,
+            frame_prefix="frame_",
+            duration=0.5,
+            loop=0,
+            format="gif",
+        )
+        print(f"[RLPlacer] GIF animation saved to: {gif_path}")
+    
     t_total_end = time.perf_counter()
     if enable_timing:
         print(f"[RLTiming] summary total={t_total_end - t_total_start:.3f}s greedy_sa={t_greedy_end - t_greedy_start:.3f}s levelize={t_level_end - t_level_start:.3f}s full_train={t_full_train_total:.3f}s swap_train={t_swap_train_total:.3f}s swap_apply={t_swap_apply_total:.3f}s")

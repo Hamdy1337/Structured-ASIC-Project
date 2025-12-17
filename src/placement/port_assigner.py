@@ -120,16 +120,14 @@ def assign_ports_to_pins(pins_df: pd.DataFrame, ports_df: pd.DataFrame) -> Tuple
     t_pools_end = time.perf_counter()
     print(f"[DEBUG] [Seeding] Built candidate pools for {len(candidates_by_dir)} directions in {t_pools_end - t_pools_start:.3f}s")
 
-    # Use ports['net_name'] as the grouping base exactly (per-signal matching),
-    # and ports['net_bit'] for ordering; fallback to port_name only if net_name missing.
-    if "net_name" in ports.columns:
-        ports["_bus_base"] = ports["net_name"].astype(str)
+    # Use ports['port_name'] and PARSE it to extract the base (just like we do for pins)
+    # This ensures port "oeb_0" has base "oeb" (matching pin "oeb_0" -> base "oeb")
+    if "port_name" in ports.columns:
+        ports["_bus_base"] = ports["port_name"].apply(lambda x: _parse_bus(str(x))[0])
+    elif "net_name" in ports.columns:
+        ports["_bus_base"] = ports["net_name"].apply(lambda x: _parse_bus(str(x))[0])
     else:
-        # Fallback: derive base from port_name (still no bit parsing)
-        if "port_name" in ports.columns:
-            ports["_bus_base"] = ports["port_name"].astype(str)
-        else:
-            ports["_bus_base"] = pd.Series(ports.index.astype(str), index=ports.index)
+        ports["_bus_base"] = pd.Series(ports.index.astype(str), index=ports.index)
     # Bit ordering comes from synthesized net_bit column
     ports["_bus_bit"] = ports["net_bit"] if "net_bit" in ports.columns else None
 
@@ -226,12 +224,8 @@ def assign_ports_to_pins(pins_df: pd.DataFrame, ports_df: pd.DataFrame) -> Tuple
     residual_ports = ports[~ports.index.isin(used_port_indices)].copy()  # type: ignore[arg-type]
     print(f"[DEBUG] [Seeding] Processing {len(residual_ports)} residual ports...")
 
-    # Direction override for certain bases (e.g., oeb ports drive input pins)
-    def _dir_for_port_base(dir_label: Any, base_label: Any) -> str:
-        base_s = str(base_label).lower() if isinstance(base_label, str) else str(base_label)
-        if base_s == "oeb":
-            return "input"
-        return str(dir_label)
+    # Now removed: _dir_for_port_base - we no longer override directions
+    # Instead, we look for pins with matching base names across all directions
 
     # Group ports by (direction, base)
     t_regular_start = time.perf_counter()
@@ -248,11 +242,33 @@ def assign_ports_to_pins(pins_df: pd.DataFrame, ports_df: pd.DataFrame) -> Tuple
             pct = (group_idx / total_groups) * 100
             print(f"[PROGRESS] [Seeding] Groups: {group_idx}/{total_groups} ({pct:.1f}%) | Assigned: {regular_count}", flush=True)
             last_progress = group_idx
-        # Retrieve candidate pool for this direction
-        dir_key: str = _dir_for_port_base(dir_l, base)  # type: ignore[arg-type]
+        
+        # Get base key
         base_key: str = str(base)  # type: ignore[arg-type]
-        pool_dir = candidates_by_dir.get(dir_key, [])
-        pool_base = candidates_by_dir_base.get(dir_key, {}).get(base_key, [])
+        dir_key: str = str(dir_l)  # type: ignore[arg-type]
+        
+        # FIXED: For ports with a specific base name (like 'oeb'), first look for pins
+        # with the SAME base name regardless of direction, since the pin definitions
+        # know the correct direction for that base.
+        pool_base = []
+        pool_dir = []
+        
+        # First, try to find pins with matching base name in ANY direction
+        for d_key, d_bins in candidates_by_dir_base.items():
+            if base_key in d_bins and d_bins[base_key]:
+                pool_base = d_bins[base_key]
+                dir_key = d_key  # Use the direction where matching pins exist
+                break
+        
+        # If no base match, fall back to direction pool
+        if not pool_base:
+            pool_dir = candidates_by_dir.get(dir_key, [])
+        
+        # Debug: log oeb assignment for troubleshooting
+        if base_key == "oeb" and pool_base:
+            print(f"[DEBUG] [Seeding] Found {len(pool_base)} pins for base 'oeb' in direction '{dir_key}'")
+        
+        # Skip if no pins available in either pool
         if not pool_dir and not pool_base:
             continue
 
