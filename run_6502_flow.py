@@ -60,7 +60,7 @@ def main():
         
         # Step 1: Run Placement (with slow SA cooling for thorough optimization)
         print("[Step 1] Running Placement...")
-        run_placement(design_name, sa_moves_per_temp=30000, sa_cooling_rate=0.995)
+        run_placement(design_name, sa_moves_per_temp=30000, sa_cooling_rate=0.995, enable_sa_animation=True)
         print()
         
         # Step 2: Run CTS/ECO Flow

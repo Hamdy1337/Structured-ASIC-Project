@@ -46,10 +46,10 @@ def main():
         print(f"=== Starting Flow for {design_name} ===")
         print(f"Time: {datetime.datetime.now()}")
     
-        # 1. Run Placement (Greedy + SA)
+        # 1. Run Placement (Greedy + SA) with slow cooling for thorough optimization
         # This also generates the placement heatmap
         print("\n[Step 1] Running Placement...")
-        run_placement(design_name)
+        run_placement(design_name, sa_moves_per_temp=30000, sa_cooling_rate=0.995, spreading_factor=0.5, enable_sa_animation=True)
         
         # 2. Run CTS & ECO
         print("\n[Step 2] Running CTS & ECO...")

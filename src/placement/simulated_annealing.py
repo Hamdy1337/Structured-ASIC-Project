@@ -140,17 +140,25 @@ def anneal_batch(
     iters: int = 200,
     alpha: float = 0.90,
     T_initial: Optional[float] = None,
-    p_refine: float = 0.7,
-    p_explore: float = 0.3,
+    p_refine: float = 0.6,
+    p_explore: float = 0.2,
+    p_relocate: float = 0.2,  # NEW: Probability of relocation to free site
     refine_max_distance: float = 100.0,
     W_initial: float = 0.5,
     seed: int = 42,
     cell_types: Optional[Dict[str, Optional[str]]] = None,
-    net_to_cells: Optional[Dict[int, List[str]]] = None
-) -> None:
+    net_to_cells: Optional[Dict[int, List[str]]] = None,
+    frame_callback: Optional[callable] = None,  # Animation callback: fn(iteration, hpwl, temp, relocations)
+    frame_interval: int = 50,  # Capture frame every N iterations
+) -> Tuple[float, int]:
     """Perform simulated annealing on a batch of cells with hybrid move set.
     
     OPTIMIZED VERSION: Uses NumPy arrays for fast lookups and vectorized operations.
+    
+    Move Types:
+        - Refine: Swap two nearby cells (within refine_max_distance)
+        - Explore: Swap two cells within exploration window
+        - Relocate: Move a cell from dense area to a FREE site in less dense area
     
     Args:
         batch_cells: List of cell names to optimize
@@ -162,8 +170,9 @@ def anneal_batch(
         iters: Number of SA iterations (moves per temperature step)
         alpha: Cooling rate (temperature multiplier per cooling step). Also used for window cooling.
         T_initial: Initial temperature. If None, auto-calculates from initial HPWL
-        p_refine: Probability of choosing a refine move (default: 0.7)
-        p_explore: Probability of choosing an explore move (default: 0.3)
+        p_refine: Probability of choosing a refine move (default: 0.6)
+        p_explore: Probability of choosing an explore move (default: 0.2)
+        p_relocate: Probability of choosing a relocate move (default: 0.2) - moves cell to free site
         refine_max_distance: Maximum Manhattan distance for refine moves in microns (default: 100.0)
         W_initial: Initial exploration window size as fraction of die size (default: 0.5 = 50%)
         seed: Random seed for reproducibility
@@ -172,7 +181,7 @@ def anneal_batch(
                       If None, will be computed from pos_cells (slow).
     """
     if len(batch_cells) < 2:
-        return
+        return (0.0, 0)
     
     # ===== OPTIMIZATION 1: Precompute NumPy arrays for site lookups =====
     # Convert sites_df to NumPy arrays for O(1) access instead of O(log n) DataFrame.at[]
@@ -247,31 +256,162 @@ def anneal_batch(
     W0 = W_initial * die_size
     window_size = W0
     
-    # Normalize probabilities
-    total_prob = p_refine + p_explore
+    # Track free sites for relocation moves
+    assigned_sites = set(assignments.values())
+    all_site_ids = set(range(len(site_x_arr)))
+    free_sites = list(all_site_ids - assigned_sites)
+    
+    # Precompute density bins for efficient relocation target selection
+    density_grid_size = 10  # 10x10 grid over die
+    bin_width = die_width / density_grid_size
+    bin_height = die_height / density_grid_size
+    
+    def _get_density_bin(x: float, y: float) -> Tuple[int, int]:
+        bx = min(int(x / bin_width), density_grid_size - 1)
+        by = min(int(y / bin_height), density_grid_size - 1)
+        return (bx, by)
+    
+    def _pick_relocate_move(rng: random.Random) -> Optional[Tuple[str, int]]:
+        """Pick a cell from dense area and a free site from less dense area."""
+        if not free_sites:
+            return None
+        
+        # Pick a random cell from the batch
+        cell = rng.choice(batch_cells)
+        cell_type = cell_types.get(cell) if cell_types else None
+        
+        # Find compatible free sites in less dense areas
+        # Get current cell position and density
+        cx, cy = pos_cells.get(cell, (die_width/2, die_height/2))
+        
+        # Find sites far from current position (spreading)
+        # and away from dense center of placement
+        centroid_x = sum(p[0] for p in pos_cells.values()) / max(1, len(pos_cells))
+        centroid_y = sum(p[1] for p in pos_cells.values()) / max(1, len(pos_cells))
+        
+        # Score free sites by distance from centroid (prefer far from center)
+        best_site = None
+        best_score = -float('inf')
+        
+        # Sample up to 50 free sites for efficiency
+        sample_sites = rng.sample(free_sites, min(50, len(free_sites)))
+        for sid in sample_sites:
+            sx, sy = float(site_x_arr[sid]), float(site_y_arr[sid])
+            
+            # Check type compatibility
+            if cell_type and site_type_arr is not None:
+                try:
+                    st = site_type_arr[sid]
+                    if not (pd.isna(st) or str(st) == str(cell_type)):
+                        continue
+                except:
+                    pass
+            
+            # Score: distance from centroid (prefer spreading) - distance from current (not too far)
+            dist_from_center = ((sx - centroid_x)**2 + (sy - centroid_y)**2) ** 0.5
+            dist_from_current = abs(sx - cx) + abs(sy - cy)
+            
+            # Prefer sites that are far from center but not too far from current position
+            score = dist_from_center - 0.3 * dist_from_current
+            
+            if score > best_score:
+                best_score = score
+                best_site = sid
+        
+        if best_site is not None:
+            return (cell, best_site)
+        return None
+    
+    # Normalize probabilities for three move types
+    total_prob = p_refine + p_explore + p_relocate
     if total_prob > 0:
         p_refine_norm = p_refine / total_prob
+        p_explore_norm = (p_refine + p_explore) / total_prob
+        # p_relocate is the remaining probability
     else:
-        p_refine_norm = 1.0
+        p_refine_norm = 0.5
+        p_explore_norm = 0.75
     
     accepted_moves = 0
+    relocation_moves = 0
     
     for i in range(iters):
         # Choose move type based on probability
         move_type_rand = rng.random()
+        is_relocate = False
+        
         if move_type_rand < p_refine_norm:
             # Refine move: swap nearby cells
             move_result = _pick_refine_move_optimized(
                 batch_cells, cell_pos_x, cell_pos_y, cell_to_idx, 
                 refine_max_distance, rng
             )
-        else:
+        elif move_type_rand < p_explore_norm:
             # Explore move: swap cells within current window (using optimized version)
             move_result = _pick_explore_move_optimized(
                 batch_cells, cell_pos_x, cell_pos_y, cell_to_idx, 
                 window_size, rng
             )
+        else:
+            # Relocate move: move a cell to a free site in less dense area
+            is_relocate = True
+            relocate_result = _pick_relocate_move(rng)
+            move_result = None  # Use relocate_result instead
         
+        # Handle RELOCATE move separately (move to free site, not swap)
+        if is_relocate:
+            if relocate_result is None:
+                continue
+            
+            cell, new_site = relocate_result
+            old_site = assignments[cell]
+            
+            # Calculate HPWL before relocation
+            nets_aff = cell_nets.get(cell, set())
+            old_hpwl = _hpwl_for_nets_optimized(nets_aff, pos_cells, net_to_cells, fixed_pts)
+            
+            # Apply relocation
+            old_x, old_y = pos_cells[cell]
+            new_x, new_y = float(site_x_arr[new_site]), float(site_y_arr[new_site])
+            assignments[cell] = new_site
+            pos_cells[cell] = (new_x, new_y)
+            
+            # Update cell position arrays
+            idx = cell_to_idx.get(cell)
+            if idx is not None:
+                cell_pos_x[idx] = new_x
+                cell_pos_y[idx] = new_y
+            
+            # Calculate HPWL after relocation
+            new_hpwl = _hpwl_for_nets_optimized(nets_aff, pos_cells, net_to_cells, fixed_pts)
+            delta = new_hpwl - old_hpwl
+            
+            # Accept or reject based on SA criterion
+            if delta < 0:
+                accept = True
+            else:
+                if temp > 1e-9:
+                    accept = rng.random() < math.exp(-delta / temp)
+                else:
+                    accept = False
+            
+            if accept:
+                # Update free sites list
+                free_sites.remove(new_site)
+                free_sites.append(old_site)
+                accepted_moves += 1
+                relocation_moves += 1
+            else:
+                # Revert
+                assignments[cell] = old_site
+                pos_cells[cell] = (old_x, old_y)
+                if idx is not None:
+                    cell_pos_x[idx] = old_x
+                    cell_pos_y[idx] = old_y
+            
+            continue
+        
+        # Handle SWAP moves (refine and explore)
         if move_result is None:
             continue
         
@@ -346,9 +486,18 @@ def anneal_batch(
         if (i + 1) % 20 == 0:
             temp *= alpha
             window_size *= alpha
+        
+        # Animation frame capture
+        if frame_callback is not None and (i + 1) % frame_interval == 0:
+            try:
+                frame_callback(i + 1, cur, temp, relocation_moves)
+            except Exception as e:
+                pass  # Don't let animation errors break SA
             
         if (i + 1) % 200 == 0:
-            print(f"        [SA] Iter {i+1}: T={temp:.3f} HPWL={cur:.1f} Acc={accepted_moves/(i+1):.1%}")
+            print(f"        [SA] Iter {i+1}: T={temp:.3f} HPWL={cur:.1f} Acc={accepted_moves/(i+1):.1%} Reloc={relocation_moves}")
 
-    print(f"      [SA] End Batch: {start_hpwl:.1f} -> {cur:.1f} ({cur-start_hpwl:+.1f})")
+    print(f"      [SA] End Batch: {start_hpwl:.1f} -> {cur:.1f} ({cur-start_hpwl:+.1f}) Relocations={relocation_moves}")
+    
+    return (cur, relocation_moves)
 

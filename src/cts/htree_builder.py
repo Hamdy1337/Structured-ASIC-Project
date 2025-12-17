@@ -588,13 +588,20 @@ def run_eco_flow(design_name: str, netlist_path: str, map_file_path: str, fabric
                         return
                     
                     # Determine type - use template_to_type for proper Liberty cell type
-                    ctype = 'sky130_fd_sc_hd__dfbbp_1' # Default for actual DFFs
+                    ctype = None
                     if node.physical_name in physical_to_type:
                         ctype = physical_to_type[node.physical_name]
                     elif '__' in node.physical_name:
                         # Extract template and lookup in template_to_type map
                         template = node.physical_name.split('__', 1)[1]
-                        ctype = template_to_type.get(template, 'sky130_fd_sc_hd__dfbbp_1')
+                        ctype = template_to_type.get(template, None)
+                    
+                    # CRITICAL: Only add as unused_dff if it's actually a DFF
+                    # Skip non-DFF cells entirely - they'll be added during Power-Down ECO
+                    if ctype is None:
+                        return  # Can't determine type, skip
+                    if 'dfbbp' not in ctype.lower() and 'dff' not in ctype.lower():
+                        return  # Not a DFF, skip - will be handled by unused logic ECO
                         
                     # Add to netlist - control pins (RESET_B, SET_B, D) will be connected 
                     # in Power-Down ECO phase using NEAREST tie cell for better routing

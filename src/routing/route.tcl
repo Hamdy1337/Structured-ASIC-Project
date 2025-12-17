@@ -134,7 +134,8 @@ set_routing_layers -signal met1-met5 -clock met1-met5
 detailed_route \
                -output_drc $drc_rpt \
                -output_maze $::env(OUTPUT_DIR)/${design_name}${output_suffix}_maze.log \
-               -output_guide $::env(OUTPUT_DIR)/${design_name}${output_suffix}.guide
+               -output_guide $::env(OUTPUT_DIR)/${design_name}${output_suffix}.guide \
+               -droute_end_iter 64
 
 # 4. Extract Parasitics
 puts "\[Generic-Route\] Extracting parasitics..."
