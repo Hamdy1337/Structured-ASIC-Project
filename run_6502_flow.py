@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """
-run_6502_flow.py: Run the complete placement and CTS flow for the 6502 design.
+run_6502_flow.py: Run the complete Phase 1-3 flow for the 6502 design.
+
+Phases:
+  Phase 1: Validation - Check if design fits on fabric
+  Phase 2: Placement - Assign logical cells to physical slots (with slow SA)
+  Phase 3: CTS & ECO - Clock tree synthesis and power-down ECO
 
 Usage:
     python run_6502_flow.py
@@ -15,6 +20,9 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parent
 sys.path.insert(0, str(project_root))
 
+from src.validation.validator import validate_design, print_validation_report
+from src.parsers.fabric_db import get_fabric_db
+from src.parsers.netlist_parser import get_logical_db
 from src.placement.placer import run_placement
 from src.cts.htree_builder import run_eco_flow
 from src.Visualization.cts_plotter import plot_cts_tree_interactive
@@ -58,13 +66,51 @@ def main():
         print(f"Time: {datetime.datetime.now()}")
         print()
         
-        # Step 1: Run Placement (with slow SA cooling for thorough optimization)
-        print("[Step 1] Running Placement...")
+        # ============================================================
+        # PHASE 1: Validation
+        # ============================================================
+        print("[Phase 1] Validating Design...")
+        print("  Checking if design fits on fabric...")
+        
+        # Load fabric database (available slots)
+        _, fabric_db = get_fabric_db(
+            str(project_root / "inputs" / "Platform" / "fabric.yaml"),
+            str(project_root / "inputs" / "Platform" / "fabric_cells.yaml")
+        )
+        
+        # Load logical database (required cells)
+        logical_db = get_logical_db(
+            str(project_root / "inputs" / "designs" / f"{design_name}_mapped.json")
+        )
+        
+        # Validate design
+        validation_result = validate_design(fabric_db, logical_db)
+        
+        # Print validation report
+        print()
+        print_validation_report(validation_result)
+        print()
+        
+        if not validation_result.passed:
+            print(f"ERROR: Design '{design_name}' cannot be implemented on this fabric!")
+            print("Aborting flow.")
+            sys.exit(1)
+        
+        print("[Phase 1] Validation PASSED!")
+        print()
+        
+        # ============================================================
+        # PHASE 2: Placement (with slow SA cooling for thorough optimization)
+        # ============================================================
+        print("[Phase 2] Running Placement...")
+        print("  Using slow SA cooling (sa_moves_per_temp=30000, sa_cooling_rate=0.995)")
         run_placement(design_name, sa_moves_per_temp=30000, sa_cooling_rate=0.995, enable_sa_animation=True)
         print()
         
-        # Step 2: Run CTS/ECO Flow
-        print("[Step 2] Running CTS and ECO Flow...")
+        # ============================================================
+        # PHASE 3: CTS & ECO
+        # ============================================================
+        print("[Phase 3] Running CTS and ECO Flow...")
         
         netlist_path = project_root / f"inputs/designs/{design_name}_mapped.json"
         map_file_path = project_root / "build" / design_name / f"{design_name}.map"
@@ -88,9 +134,9 @@ def main():
             pins_path=str(pins_path),
         )
         
-        # Step 3: Visualize CTS
+        # Visualize CTS (part of Phase 3)
         print()
-        print("[Step 3] Visualizing CTS...")
+        print("[Phase 3] Visualizing CTS...")
         cts_json_path = output_dir / f"{design_name}_cts.json"
         placement_csv_path = output_dir / f"{design_name}_placement.csv"
         cts_html_path = output_dir / f"{design_name}_cts.html"
