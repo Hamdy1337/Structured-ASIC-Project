@@ -457,7 +457,7 @@ Each knob tested with 10 experiments:
 
 #### Cooling Rate (α) Analysis
 
-![Cooling Rate Effect](build/knob_analysis_6502_cooling_rate_effect.png)
+![Cooling Rate Effect](build/6502/effect_cooling_rate.png)
 
 **Experimental Data** (10 experiments, α from 0.8 to 0.99):
 
@@ -482,7 +482,7 @@ Each knob tested with 10 experiments:
 
 #### Moves Per Temperature (N) Analysis
 
-![Moves Per Temp Effect](build/knob_analysis_6502_moves_per_temp_effect.png)
+![Moves Per Temp Effect](build/6502/effect_moves_per_temp.png)
 
 **Experimental Data** (10 experiments, N from 100 to 1900):
 
@@ -508,7 +508,7 @@ Each knob tested with 10 experiments:
 
 #### P_Refine Analysis
 
-![P_Refine Effect](build/knob_analysis_6502_p_refine_effect.png)
+![P_Refine Effect](build/6502/effect_p_refine.png)
 
 **Findings**:
 - **HPWL**: Relatively stable across range (290k-295k μm)
@@ -517,7 +517,7 @@ Each knob tested with 10 experiments:
 
 #### W_Initial (Exploration Window) Analysis
 
-![W_Initial Effect](build/knob_analysis_6502_W_initial_effect.png)
+![W_Initial Effect](build/6502/effect_W_initial.png)
 
 **Findings**:
 - **HPWL**: Minor variation (290k-296k μm)
@@ -526,7 +526,7 @@ Each knob tested with 10 experiments:
 
 #### Batch Size Analysis
 
-![Batch Size Effect](build/knob_analysis_6502_batch_size_effect.png)
+![Batch Size Effect](build/6502/effect_batch_size.png)
 
 **Experimental Data** (10 experiments, batch_size from 50 to 950):
 
@@ -671,9 +671,9 @@ Based on comprehensive analysis of 50 experiments, we recommend:
 
 #### Placement Density Heatmap
 
-![6502 Placement Heatmap](build/6502/6502_greedy_sa_placement_heatmap.png)
+![6502 Placement Heatmap](build/6502/6502_placement_heatmap.png)
 
-**File**: `build/6502/6502_greedy_sa_placement_heatmap.png`
+**File**: `build/6502/6502_placement_heatmap.png`
 
 **Description**: 2D histogram showing cell placement density across the chip. Color intensity represents the number of cells placed in each region.
 
@@ -704,9 +704,9 @@ Based on comprehensive analysis of 50 experiments, we recommend:
 
 ### 10.3 Phase 3: CTS Visualization
 
-![6502 CTS Tree](build/6502/6502_cts_tree.png)
+![6502 CTS Tree](build/6502/6502_cts.png)
 
-**File**: `build/6502/6502_cts_tree.png`
+**File**: `build/6502/6502_cts.png`
 
 **Description**: Visual representation of the synthesized H-tree clock distribution overlaid on the chip layout.
 
@@ -723,7 +723,7 @@ Based on comprehensive analysis of 50 experiments, we recommend:
 - Tree depth: 4-5 levels typical for 6502 design
 - ~150 buffers used for ~800 DFFs
 
-**Interactive Version**: `build/6502/6502_cts_tree.html` (if available)
+**Interactive Version**: `build/6502/6502_cts.html` (if available)
 
 ### 10.4 SA Knob Analysis Plots
 
@@ -733,31 +733,31 @@ All individual knob effect plots show two subplots:
 
 #### Cooling Rate Effect
 
-![Cooling Rate Effect](build/knob_analysis_6502_cooling_rate_effect.png)
+![Cooling Rate Effect](build/6502/effect_cooling_rate.png)
 
 **Key Insight**: Lower cooling rates (0.8-0.9) give significantly better HPWL than very slow cooling (0.95-0.99).
 
 #### Moves Per Temperature Effect
 
-![Moves Per Temp Effect](build/knob_analysis_6502_moves_per_temp_effect.png)
+![Moves Per Temp Effect](build/6502/effect_moves_per_temp.png)
 
 **Key Insight**: Clear quality vs. speed trade-off. More moves = better HPWL but slower runtime.
 
 #### P_Refine Effect
 
-![P_Refine Effect](build/knob_analysis_6502_p_refine_effect.png)
+![P_Refine Effect](build/6502/effect_p_refine.png)
 
 **Key Insight**: Minimal impact on HPWL quality, but runtime varies significantly.
 
 #### W_Initial Effect
 
-![W_Initial Effect](build/knob_analysis_6502_W_initial_effect.png)
+![W_Initial Effect](build/6502/effect_W_initial.png)
 
 **Key Insight**: Minimal impact on both quality and runtime.
 
 #### Batch Size Effect
 
-![Batch Size Effect](build/knob_analysis_6502_batch_size_effect.png)
+![Batch Size Effect](build/6502/effect_batch_size.png)
 
 **Key Insight**: **Most impactful parameter!** Smaller batches (50-150) give 20%+ HPWL improvement over larger batches (500+).
 
@@ -782,19 +782,19 @@ For the final submission, the following visualizations must be included in the R
   - Shows die, core, all pins, and all fabric cells color-coded by type
 
 ### Phase 2 Visualizations
-- ✅ **Placement Density Heatmap**: `build/6502/6502_greedy_sa_placement_heatmap.png`
+- ✅ **Placement Density Heatmap**: `build/6502/6502_placement_heatmap.png`
   - 2D histogram showing cell density across chip
 - ✅ **Net Length Histogram**: `build/6502/6502_net_length.png`
   - 1D histogram of all net HPWLs
 - ✅ **SA Knob Analysis Plot**: Individual plots for each knob (5 plots total)
-  - `build/knob_analysis_6502_cooling_rate_effect.png`
-  - `build/knob_analysis_6502_moves_per_temp_effect.png`
-  - `build/knob_analysis_6502_p_refine_effect.png`
-  - `build/knob_analysis_6502_W_initial_effect.png`
-  - `build/knob_analysis_6502_batch_size_effect.png`
+  - `build/6502/effect_cooling_rate.png`
+  - `build/6502/effect_moves_per_temp.png`
+  - `build/6502/effect_p_refine.png`
+  - `build/6502/effect_W_initial.png`
+  - `build/6502/effect_batch_size.png`
 
 ### Phase 3 Visualizations
-- ✅ **CTS Tree Plot**: `build/6502/6502_cts_tree.png`
+- ✅ **CTS Tree Plot**: `build/6502/6502_cts.png`
   - Shows DFFs, buffers, and tree connections overlaid on layout
 
 ### Phase 4-5 Visualizations (When Available)
