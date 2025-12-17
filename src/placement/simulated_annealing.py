@@ -229,11 +229,8 @@ def anneal_batch(
         T0 = T_initial
     else:
         # Auto-calculate T0 based on initial HPWL
-        # We want initial acceptance probability of bad moves to be low for refinement
-        # If typical delta is ~1% of HPWL, say delta = cur * 0.01
-        # We want exp(-delta/T) to be small, e.g. 0.1
-        # -delta/T = ln(0.1) ~ -2.3 => T = delta/2.3 ~ 0.004 * cur
-        # Let's use T0 = cur / 500.0 (0.2%)
+        # T0 should accept ~80% of bad moves initially? Or just be proportional to delta.
+        # Fixed logic: T0 = cur / 500.0
         T0 = max(0.1, cur / 500.0)
         print(f"      [SA] Start Batch: Cells={len(batch_cells)} T0={T0:.3f} HPWL={cur:.1f}")
 
@@ -255,100 +252,112 @@ def anneal_batch(
         p_refine_norm = 1.0
     
     accepted_moves = 0
+    total_moves = 0
     
-    for i in range(iters):
-        # Choose move type based on probability
-        move_type_rand = rng.random()
-        if move_type_rand < p_refine_norm:
-            # Refine move: swap nearby cells
-            move_result = _pick_refine_move_optimized(
-                batch_cells, cell_pos_x, cell_pos_y, cell_to_idx, 
-                refine_max_distance, rng
-            )
-        else:
-            # Explore move: swap cells within current window (using optimized version)
-            move_result = _pick_explore_move_optimized(
-                batch_cells, cell_pos_x, cell_pos_y, cell_to_idx, 
-                window_size, rng
-            )
+    # Stopping condition: T < T_min
+    # We want to cool down until T is small enough that acceptance is negligible
+    T_min = T0 * 1e-4
+    
+    step_idx = 0
+    
+    while temp > T_min:
+        step_accepted = 0
         
-        if move_result is None:
-            continue
-        
-        a, b = move_result
-        if a == b:
-            continue
-        
-        sa = assignments[a]
-        sb = assignments[b]
-        
-        # Enforce site-type compatibility on proposed swap
-        if not (_is_compatible(a, sb) and _is_compatible(b, sa)):
-            continue
-        
-        # Nets affected by swap
-        nets_aff: Set[int] = set()
-        nets_aff |= cell_nets.get(a, set())
-        nets_aff |= cell_nets.get(b, set())
-        
-        # Calculate HPWL before swap (using optimized version)
-        old = _hpwl_for_nets_optimized(nets_aff, pos_cells, net_to_cells, fixed_pts)
-        
-        # Apply swap (using NumPy array lookups - O(1) instead of O(log n))
-        assignments[a], assignments[b] = sb, sa
-        new_x_a = float(site_x_arr[sb])
-        new_y_a = float(site_y_arr[sb])
-        new_x_b = float(site_x_arr[sa])
-        new_y_b = float(site_y_arr[sa])
-        
-        pos_cells[a] = (new_x_a, new_y_a)
-        pos_cells[b] = (new_x_b, new_y_b)
-        
-        # Update NumPy arrays for move picking (for next iteration)
-        idx_a = cell_to_idx.get(a)
-        idx_b = cell_to_idx.get(b)
-        if idx_a is not None:
-            cell_pos_x[idx_a] = new_x_a
-            cell_pos_y[idx_a] = new_y_a
-        if idx_b is not None:
-            cell_pos_x[idx_b] = new_x_b
-            cell_pos_y[idx_b] = new_y_b
-        
-        # Calculate HPWL after swap (using optimized version)
-        new = _hpwl_for_nets_optimized(nets_aff, pos_cells, net_to_cells, fixed_pts)
-        d = new - old
-        
-        # Accept or reject
-        accept = d <= 0 or rng.random() < math.exp(-d / max(temp, 1e-6))
-        if accept:
-            cur += d
-            accepted_moves += 1
-        else:
-            # Revert swap (using NumPy array lookups)
-            assignments[a], assignments[b] = sa, sb
-            old_x_a = float(site_x_arr[sa])
-            old_y_a = float(site_y_arr[sa])
-            old_x_b = float(site_x_arr[sb])
-            old_y_b = float(site_y_arr[sb])
+        # Run 'iters' moves at this temperature (as per docstring)
+        for _ in range(iters):
+            # Choose move type based on probability
+            move_type_rand = rng.random()
+            if move_type_rand < p_refine_norm:
+                # Refine move: swap nearby cells
+                move_result = _pick_refine_move_optimized(
+                    batch_cells, cell_pos_x, cell_pos_y, cell_to_idx, 
+                    refine_max_distance, rng
+                )
+            else:
+                # Explore move: swap cells within current window
+                move_result = _pick_explore_move_optimized(
+                    batch_cells, cell_pos_x, cell_pos_y, cell_to_idx, 
+                    window_size, rng
+                )
             
-            pos_cells[a] = (old_x_a, old_y_a)
-            pos_cells[b] = (old_x_b, old_y_b)
+            if move_result is None:
+                continue
             
-            # Update NumPy arrays
+            a, b = move_result
+            if a == b:
+                continue
+            
+            sa = assignments[a]
+            sb = assignments[b]
+            
+            # Enforce site-type compatibility
+            if not (_is_compatible(a, sb) and _is_compatible(b, sa)):
+                continue
+            
+            # Nets affected by swap
+            nets_aff: Set[int] = set()
+            nets_aff |= cell_nets.get(a, set())
+            nets_aff |= cell_nets.get(b, set())
+            
+            # Calculate HPWL before swap
+            old = _hpwl_for_nets_optimized(nets_aff, pos_cells, net_to_cells, fixed_pts)
+            
+            # Apply swap (optimistic)
+            assignments[a], assignments[b] = sb, sa
+            new_x_a = float(site_x_arr[sb])
+            new_y_a = float(site_y_arr[sb])
+            new_x_b = float(site_x_arr[sa])
+            new_y_b = float(site_y_arr[sa])
+            
+            pos_cells[a] = (new_x_a, new_y_a)
+            pos_cells[b] = (new_x_b, new_y_b)
+            
+            idx_a = cell_to_idx.get(a)
+            idx_b = cell_to_idx.get(b)
             if idx_a is not None:
-                cell_pos_x[idx_a] = old_x_a
-                cell_pos_y[idx_a] = old_y_a
+                cell_pos_x[idx_a] = new_x_a
+                cell_pos_y[idx_a] = new_y_a
             if idx_b is not None:
-                cell_pos_x[idx_b] = old_x_b
-                cell_pos_y[idx_b] = old_y_b
-        
-        # Cool down every 20 iterations (temperature and window shrink together)
-        if (i + 1) % 20 == 0:
-            temp *= alpha
-            window_size *= alpha
+                cell_pos_x[idx_b] = new_x_b
+                cell_pos_y[idx_b] = new_y_b
             
-        if (i + 1) % 200 == 0:
-            print(f"        [SA] Iter {i+1}: T={temp:.3f} HPWL={cur:.1f} Acc={accepted_moves/(i+1):.1%}")
+            # Calculate HPWL after swap
+            new = _hpwl_for_nets_optimized(nets_aff, pos_cells, net_to_cells, fixed_pts)
+            d = new - old
+            
+            # Accept or reject
+            accept = d <= 0 or rng.random() < math.exp(-d / max(temp, 1e-6))
+            if accept:
+                cur += d
+                accepted_moves += 1
+                step_accepted += 1
+            else:
+                # Revert swap
+                assignments[a], assignments[b] = sa, sb
+                old_x_a = float(site_x_arr[sa])
+                old_y_a = float(site_y_arr[sa])
+                old_x_b = float(site_x_arr[sb])
+                old_y_b = float(site_y_arr[sb])
+                
+                pos_cells[a] = (old_x_a, old_y_a)
+                pos_cells[b] = (old_x_b, old_y_b)
+                
+                if idx_a is not None:
+                    cell_pos_x[idx_a] = old_x_a
+                    cell_pos_y[idx_a] = old_y_a
+                if idx_b is not None:
+                    cell_pos_x[idx_b] = old_x_b
+                    cell_pos_y[idx_b] = old_y_b
+        
+        total_moves += iters
+        
+        if (step_idx + 1) % 10 == 0:
+             print(f"        [SA] Step {step_idx+1}: T={temp:.4f} HPWL={cur:.1f} Acc={step_accepted/iters:.1%}")
+        
+        # Cool down
+        temp *= alpha
+        window_size *= alpha
+        step_idx += 1
 
-    print(f"      [SA] End Batch: {start_hpwl:.1f} -> {cur:.1f} ({cur-start_hpwl:+.1f})")
+    print(f"      [SA] End Batch: steps={step_idx} moves={total_moves} {start_hpwl:.1f} -> {cur:.1f} ({cur-start_hpwl:+.1f})")
 
