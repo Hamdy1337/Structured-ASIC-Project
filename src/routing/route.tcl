@@ -106,13 +106,12 @@ read_def -incremental $::env(DEF_FILE)
 
 puts "\[Debug\] Instance Count after DEF load: [llength [get_cells *]]"
 
-# Explicitly generate tracks since they are missing from TLEF/DEF
-make_tracks li1 -x_offset 0.23 -x_pitch 0.46 -y_offset 0.17 -y_pitch 0.34
-make_tracks met1 -x_offset 0.17 -x_pitch 0.34 -y_offset 0.17 -y_pitch 0.34
-make_tracks met2 -x_offset 0.23 -x_pitch 0.46 -y_offset 0.23 -y_pitch 0.46
-make_tracks met3 -x_offset 0.34 -x_pitch 0.68 -y_offset 0.34 -y_pitch 0.68
-make_tracks met4 -x_offset 0.46 -x_pitch 0.92 -y_offset 0.46 -y_pitch 0.92
-make_tracks met5 -x_offset 0.80 -x_pitch 1.60 -y_offset 0.80 -y_pitch 1.60
+make_tracks li1 -x_offset 0.24 -x_pitch 0.48 -y_offset 0.185 -y_pitch 0.37
+make_tracks met1 -x_offset 0.185 -x_pitch 0.37 -y_offset 0.185 -y_pitch 0.37
+make_tracks met2 -x_offset 0.24 -x_pitch 0.48 -y_offset 0.24 -y_pitch 0.48
+make_tracks met3 -x_offset 0.37 -x_pitch 0.74 -y_offset 0.37 -y_pitch 0.74
+make_tracks met4 -x_offset 0.48 -x_pitch 0.96 -y_offset 0.48 -y_pitch 0.96
+make_tracks met5 -x_offset 1.85 -x_pitch 3.33 -y_offset 1.85 -y_pitch 3.33
 
 # 2. Global Routing
 puts "\[Generic-Route\] Starting Global Route..."
@@ -138,19 +137,76 @@ detailed_route \
                -output_guide $::env(OUTPUT_DIR)/${design_name}${output_suffix}.guide
 
 # 4. Extract Parasitics
-puts "\[Generic-Route\] Skipping parasitic extraction due to missing RCX rules."
-# if {[info exists ::env(RCX_RULES_FILE)]} {
-#     extract_parasitics -ext_model_file $::env(RCX_RULES_FILE)
-# } else {
-#     puts "Warning: RCX_RULES_FILE not set. Running extract_parasitics with default/loaded tech info."
-#     # Fallback or just run it if tech matched
-#     # extract_parasitics
-# }
+puts "\[Generic-Route\] Extracting parasitics..."
+set spef_file $::env(OUTPUT_DIR)/${design_name}${output_suffix}.spef
 
-# 5. Report Congestion (optional - command may not exist in all OpenROAD versions)
-puts "\[Generic-Route\] Reporting Congestion..."
-if {[catch {report_congestion -histogram > $::env(OUTPUT_DIR)/${design_name}${output_suffix}_congestion.rpt} err]} {
-    puts "\[Generic-Route\] Warning: report_congestion not available ($err)"
+# Auto-detect RCX rules file if not provided
+set rcx_rules_file ""
+if {[info exists ::env(RCX_RULES_FILE)] && [file exists $::env(RCX_RULES_FILE)]} {
+    set rcx_rules_file $::env(RCX_RULES_FILE)
+} else {
+    # Try to find RCX file in common locations
+    set rcx_candidates {
+        "inputs/Platform/rcx_patterns.rules"
+        "inputs/Platform/sky130_rcx_rules"
+        "inputs/Platform/sky130hd.rcx"
+        "inputs/Platform/rcx_rules"
+    }
+    foreach candidate $rcx_candidates {
+        if {[file exists $candidate]} {
+            set rcx_rules_file $candidate
+            puts "\[Generic-Route\] Auto-detected RCX rules file: $rcx_rules_file"
+            break
+        }
+    }
+}
+
+if {$rcx_rules_file != "" && [file exists $rcx_rules_file]} {
+    puts "\[Generic-Route\] Using RCX rules file: $rcx_rules_file"
+    if {[catch {extract_parasitics -ext_model_file $rcx_rules_file} error_msg]} {
+        puts "\[Generic-Route\] Warning: extract_parasitics with RCX file failed: $error_msg"
+        puts "\[Generic-Route\] Attempting extract_parasitics without RCX file..."
+        if {[catch {extract_parasitics} error_msg2]} {
+            puts "\[Generic-Route\] Error: extract_parasitics failed: $error_msg2"
+            puts "\[Generic-Route\] Continuing without parasitic extraction..."
+        } else {
+            puts "\[Generic-Route\] Parasitic extraction completed (without RCX file)"
+        }
+    } else {
+        puts "\[Generic-Route\] Parasitic extraction completed (with RCX file)"
+    }
+} else {
+    puts "\[Generic-Route\] RCX rules file not found. Running extract_parasitics with default tech info..."
+    puts "\[Generic-Route\] (To use RCX file, place it at: inputs/Platform/rcx_patterns.rules)"
+    if {[catch {extract_parasitics} error_msg]} {
+        puts "\[Generic-Route\] Warning: extract_parasitics failed: $error_msg"
+        puts "\[Generic-Route\] Continuing without parasitic extraction..."
+    } else {
+        puts "\[Generic-Route\] Parasitic extraction completed (using default tech info)"
+    }
+}
+
+# Write SPEF file if extraction was successful
+if {[catch {write_spef $spef_file} error_msg]} {
+    puts "\[Generic-Route\] Warning: Failed to write SPEF file: $error_msg"
+    puts "\[Generic-Route\] SPEF file may not be available for STA"
+} else {
+    puts "\[Generic-Route\] SPEF file written: $spef_file"
+}
+
+# 5. Congestion report
+# Note: report_congestion command was removed in newer OpenROAD versions
+# Congestion data is now available in the GUI or via global_route -congestion_report_file
+# The congestion report file should have been generated during global_route above
+if {[file exists $congestion_rpt]} {
+    puts "\[Generic-Route\] Congestion report available: $congestion_rpt"
+    puts "\[Generic-Route\] To view congestion heatmap, use OpenROAD GUI:"
+    puts "\[Generic-Route\]   1. Load design: openroad -gui"
+    puts "\[Generic-Route\]   2. View → Heat Maps → Routing Congestion"
+} else {
+    puts "\[Generic-Route\] NOTE: Congestion report not generated."
+    puts "\[Generic-Route\] Congestion data is available in the routing database (ODB file)."
+    puts "\[Generic-Route\] View it in GUI: View → Heat Maps → Routing Congestion"
 }
 
 # Save Outputs
@@ -174,4 +230,6 @@ if {[file exists $drc_rpt]} {
     exit 2
 }
 
+
 puts "\[Generic-Route\] Completed."
+
